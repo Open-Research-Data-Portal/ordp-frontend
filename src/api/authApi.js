@@ -98,6 +98,34 @@ export async function updateProfile(patch) {
     throw normalizeError(err);
   }
 }
+/**
+ * @param {{full_name: string, email: string, username: string, password: string}} payload
+ * @returns {Promise<{detail: string}>}
+ * @throws {AuthApiError}
+ */
+export async function register(payload) {
+  try {
+    const { data } = await client.post(`${BASE}/register/`, payload);
+    return data;
+  } catch (err) {
+    throw normalizeError(err);
+  }
+}
+
+/**
+ * @param {string} uid
+ * @param {string} token
+ * @returns {Promise<{detail: string}>}
+ * @throws {AuthApiError}
+ */
+export async function verifyEmail(uid, token) {
+  try {
+    const { data } = await client.post(`${BASE}/verify-email/`, { uid, token });
+    return data;
+  } catch (err) {
+    throw normalizeError(err);
+  }
+}
 
 export async function verifyEmail(uid, token) {
   try {

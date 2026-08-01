@@ -6,6 +6,7 @@ import TextInput from "../../components/ui/TextInput";
 import Button from "../../components/ui/Button";
 import * as authApi from "../../api/authApi";
 import logo from "../../assets/aastulogo.png";
+import { register, AuthApiError } from "../../api/authApi";
 
 const INSTITUTIONAL_DOMAINS = ["@aastu.edu.et", "@aastustudent.edu.et"];
 
@@ -61,22 +62,21 @@ export default function RegisterPage() {
       setApiError("That username is already taken.");
       return;
     }
-
     setSubmitting(true);
     try {
-      await authApi.register({
-        full_name: fullName.trim(),
-        email: email.trim(),
-        username: username.trim(),
+      await register({
+        full_name: fullName,
+        email,
+        username,
         password,
       });
       navigate("/verify-email", { state: { email } });
     } catch (err) {
-      setApiError(
-        err instanceof authApi.AuthApiError
-          ? err.message
-          : err?.message || "Registration failed. Please try again."
-      );
+      if (err instanceof AuthApiError) {
+        setApiError(err.message);
+      } else {
+        setApiError("Registration failed. Please try again.");
+      }
     } finally {
       setSubmitting(false);
     }

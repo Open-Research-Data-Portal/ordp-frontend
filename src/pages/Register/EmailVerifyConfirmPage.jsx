@@ -2,33 +2,41 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Loader2, CheckCircle2 } from "lucide-react";
 import AuthSplitCard from "../../components/auth/AuthSplitCard";
+import * as authApi from "../../api/authApi";
 
 export default function EmailVerifyConfirmPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const uid = searchParams.get("uid");
   const token = searchParams.get("token");
 
-  const [status, setStatus] = useState(() => (token ? "verifying" : "error")); // verifying | success | error
+  const [status, setStatus] = useState(() => (uid && token ? "verifying" : "error")); // verifying | success | error
+  const [message, setMessage] = useState("");
   const [error, setError] = useState(() =>
-    token ? null : "Invalid verification link. Please register again or request a new link."
+    uid && token ? null : "Invalid verification link. Please register again or request a new link."
   );
 
   useEffect(() => {
-    if (!token) return;
+    if (!uid || !token) return;
 
     let cancelled = false;
 
     async function verify() {
       try {
-        // TODO(backend): POST /api/accounts/verify-email/ { token }
-        await new Promise((r) => setTimeout(r, 900));
+        const data = await authApi.verifyEmail(uid, token);
         if (cancelled) return;
+        const nextMessage = data?.detail || "Email verified. You can now log in.";
+        setMessage(nextMessage);
         setStatus("success");
-        setTimeout(() => navigate("/dashboard", { replace: true }), 1500);
+        setTimeout(() => navigate("/login", { replace: true, state: { message: nextMessage } }), 1500);
       } catch (err) {
         if (cancelled) return;
         setStatus("error");
-        setError(err?.message || "Verification failed. The link may have expired.");
+        setError(
+          err instanceof authApi.AuthApiError
+            ? err.message
+            : err?.message || "Verification failed. The link may have expired."
+        );
       }
     }
 
@@ -36,7 +44,7 @@ export default function EmailVerifyConfirmPage() {
     return () => {
       cancelled = true;
     };
-  }, [token, navigate]);
+  }, [uid, token, navigate]);
 
   return (
     <AuthSplitCard logoSize="xlarge">
@@ -57,7 +65,7 @@ export default function EmailVerifyConfirmPage() {
           </div>
           <h1 className="text-2xl font-bold text-[#0B1526] mb-2">Email verified!</h1>
           <p className="text-sm text-slate-500 max-w-sm">
-            Your account is active. Redirecting you to your dashboard…
+            {message || "Your account is active. Redirecting you to sign in…"}
           </p>
         </>
       )}

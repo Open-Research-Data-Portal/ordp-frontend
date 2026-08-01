@@ -28,6 +28,20 @@ export async function login(identifier, password) {
   }
 }
 
+export async function register({ full_name, email, username, password }) {
+  try {
+    const { data } = await client.post(`${BASE}/register/`, {
+      full_name,
+      email,
+      username,
+      password,
+    });
+    return data;
+  } catch (err) {
+    throw normalizeError(err, { allowDjangoFieldErrors: true });
+  }
+}
+
 /**
  * @param {string} refreshToken
  */
@@ -85,6 +99,15 @@ export async function updateProfile(patch) {
   }
 }
 
+export async function verifyEmail(uid, token) {
+  try {
+    const { data } = await client.post(`${BASE}/verify-email/`, { uid, token });
+    return data;
+  } catch (err) {
+    throw normalizeError(err);
+  }
+}
+
 /**
  * Normalizes both error shapes documented in the API reference into one
  * consistent object the UI layer can rely on:
@@ -100,7 +123,10 @@ export class AuthApiError extends Error {
   }
 }
 
-function normalizeError(err, { isRefreshEndpoint = false } = {}) {
+function normalizeError(
+  err,
+  { isRefreshEndpoint = false, allowDjangoFieldErrors = false } = {}
+) {
   const status = err?.response?.status;
   const body = err?.response?.data;
 
@@ -122,6 +148,17 @@ function normalizeError(err, { isRefreshEndpoint = false } = {}) {
     });
   }
 
+  if (allowDjangoFieldErrors && body && typeof body === "object") {
+    const message = pickFirstFieldErrorMessage(body);
+    if (message) {
+      return new AuthApiError({
+        code: "VALIDATION_ERROR",
+        message,
+        status,
+      });
+    }
+  }
+
   // Network error, timeout, or an unexpected shape — fail safe with a
   // generic message rather than leaking a raw stack trace to the UI.
   return new AuthApiError({
@@ -129,4 +166,15 @@ function normalizeError(err, { isRefreshEndpoint = false } = {}) {
     message: "Something went wrong. Please try again.",
     status,
   });
+}
+
+function pickFirstFieldErrorMessage(body) {
+  const keys = Object.keys(body || {});
+  for (const key of keys) {
+    const value = body[key];
+    if (Array.isArray(value) && value.length && typeof value[0] === "string") {
+      return value[0];
+    }
+  }
+  return null;
 }

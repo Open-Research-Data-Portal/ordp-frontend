@@ -1,7 +1,9 @@
-import { Search } from "lucide-react";
+import { Search, UserRound } from "lucide-react";
+import { Link } from "react-router-dom";
 
 export default function TopBar({ title, user }) {
-  const initials = (user?.name || "Dr. Abebe A.")
+  const name = user?.name?.trim() ? user.name : "User";
+  const initials = name
     .split(" ")
     .map((w) => w[0])
     .slice(0, 2)
@@ -20,13 +22,17 @@ export default function TopBar({ title, user }) {
                        focus:outline-none focus:ring-2 focus:ring-[#0B1526]/15 w-64"
           />
         </div>
-        <div className="flex items-center gap-2.5">
-          <span className="w-9 h-9 rounded-full bg-[#0B1526] text-white text-xs font-bold
-                            flex items-center justify-center">
+        <Link
+          to="/profile"
+          aria-label="Open profile"
+          className="flex items-center gap-2.5 rounded-xl px-2 py-1 focus:outline-none focus:ring-2 focus:ring-[#0B1526]/15 hover:bg-white/60"
+        >
+          <span className="w-9 h-9 rounded-full bg-[#0B1526] text-white text-xs font-bold flex items-center justify-center">
             {initials}
           </span>
-          <span className="text-sm font-medium text-slate-700">{user?.name || "Dr. Abebe A."}</span>
-        </div>
+          <span className="text-sm font-medium text-slate-700">{name}</span>
+          <UserRound className="w-4 h-4 text-slate-500" />
+        </Link>
       </div>
     </header>
   );

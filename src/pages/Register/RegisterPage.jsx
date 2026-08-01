@@ -4,6 +4,7 @@ import { GraduationCap, Database, Users } from "lucide-react";
 import AuthLayout from "../../components/auth/AuthLayout";
 import TextInput from "../../components/ui/TextInput";
 import Button from "../../components/ui/Button";
+import * as authApi from "../../api/authApi";
 import logo from "../../assets/aastulogo.png";
 
 const INSTITUTIONAL_DOMAINS = ["@aastu.edu.et", "@aastustudent.edu.et"];
@@ -52,6 +53,10 @@ export default function RegisterPage() {
       setApiError("Please fill in all required fields with valid values.");
       return;
     }
+    if (!emailIsInstitutional) {
+      setApiError("Please use your AASTU institutional email address.");
+      return;
+    }
     if (usernameStatus === "taken") {
       setApiError("That username is already taken.");
       return;
@@ -59,9 +64,19 @@ export default function RegisterPage() {
 
     setSubmitting(true);
     try {
+      await authApi.register({
+        full_name: fullName.trim(),
+        email: email.trim(),
+        username: username.trim(),
+        password,
+      });
       navigate("/verify-email", { state: { email } });
     } catch (err) {
-      setApiError(err?.message || "Registration failed. Please try again.");
+      setApiError(
+        err instanceof authApi.AuthApiError
+          ? err.message
+          : err?.message || "Registration failed. Please try again."
+      );
     } finally {
       setSubmitting(false);
     }

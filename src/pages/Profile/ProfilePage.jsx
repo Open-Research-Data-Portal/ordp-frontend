@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Camera, User as UserIcon, GraduationCap, Database, Save, RotateCcw } from "lucide-react";
 import Sidebar from "../../layouts/Sidebar";
 import TopBar from "../../layouts/TopBar";
@@ -7,6 +7,8 @@ import TextArea from "../../components/ui/TextArea";
 import Select from "../../components/ui/Select";
 import MultiSelectTags from "../../components/ui/MultiSelectTags";
 import Button from "../../components/ui/Button";
+import { useAuth } from "../../context/useAuth";
+import * as authApi from "../../api/authApi";
 import {
   OCCUPATION_OPTIONS,
   ACADEMIC_TITLE_OPTIONS,
@@ -24,11 +26,31 @@ const PROFILE_VISIBILITY_OPTIONS = [
   { value: "private", label: "Only Me (Private)" },
 ];
 
+function getNameParts(source) {
+  const full =
+    source?.full_name ?? [source?.first_name, source?.last_name].filter(Boolean).join(" ").trim();
+
+  if (!full) {
+    return {
+      firstName: source?.first_name ?? "",
+      fatherName: source?.last_name ?? "",
+      grandFatherName: "",
+    };
+  }
+
+  const parts = full.split(/\s+/).filter(Boolean);
+  return {
+    firstName: parts[0] ?? "",
+    fatherName: parts[1] ?? "",
+    grandFatherName: parts.slice(2).join(" "),
+  };
+}
+
 function SectionCard({ icon: Icon, title, children }) {
   return (
     <div className="bg-white border border-slate-200 rounded-2xl mb-6 shadow-sm">
       <div className="flex items-center gap-2.5 px-6 py-4 border-b border-slate-100">
-        <Icon className="w-4 h-4 text-olive" />
+        <Icon className="w-4 h-4 text-[#8B6F1F]" />
         <h2 className="text-sm font-bold text-[#0B1526]">{title}</h2>
       </div>
       <div className="p-6">{children}</div>
@@ -37,12 +59,13 @@ function SectionCard({ icon: Icon, title, children }) {
 }
 
 export default function ProfilePage() {
+  const { user, isAuthenticated } = useAuth();
   const [avatarUrl, setAvatarUrl] = useState(null);
-  const [firstName, setFirstName] = useState("Abebe");
-  const [fatherName, setFatherName] = useState("Kebede");
-  const [grandFatherName, setGrandFatherName] = useState("Alemu");
-  const email = "abebe.k@aastu.edu.et";
-  const username = "abebe_k_research";
+  const [firstName, setFirstName] = useState("");
+  const [fatherName, setFatherName] = useState("");
+  const [grandFatherName, setGrandFatherName] = useState("");
+  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
 
   const [affiliation, setAffiliation] = useState(DEFAULT_AFFILIATION);
   const [academicRole, setAcademicRole] = useState("Researcher");
@@ -67,6 +90,38 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
+  useEffect(() => {
+    const parts = getNameParts(user);
+    setFirstName(parts.firstName);
+    setFatherName(parts.fatherName);
+    setGrandFatherName(parts.grandFatherName);
+
+    setEmail(user?.email ?? "");
+    setUsername(user?.username ?? "");
+  }, [user]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    let cancelled = false;
+    authApi
+      .getProfile()
+      .then((profile) => {
+        if (cancelled) return;
+        const parts = getNameParts(profile);
+        setFirstName(parts.firstName);
+        setFatherName(parts.fatherName);
+        setGrandFatherName(parts.grandFatherName);
+        setEmail(profile?.email ?? "");
+        setUsername(profile?.username ?? "");
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated]);
+
   function handleAvatarChange(e) {
     const file = e.target.files?.[0];
     if (file) setAvatarUrl(URL.createObjectURL(file));
@@ -83,11 +138,13 @@ export default function ProfilePage() {
     }
   }
 
+  const displayName = [firstName, fatherName, grandFatherName].filter(Boolean).join(" ").trim() || username || email;
+
   return (
     <div className="min-h-screen flex bg-[#F5F5F3]">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
-        <TopBar title="User Profile" user={{ name: "Dr. Abebe A." }} />
+        <TopBar title="User Profile" user={{ name: displayName }} />
 
         <main className="flex-1 px-8 py-6 overflow-y-auto">
           <div className="max-w-4xl">

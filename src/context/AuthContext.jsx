@@ -20,6 +20,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import * as authApi from "../api/authApi";
+import client from "../api/client";
 import AuthContext from "./AuthContextInstance";
 
 const REFRESH_STORAGE_KEY = "ordp_refresh_token";
@@ -32,6 +33,14 @@ export function AuthProvider({ children }) {
     Boolean(sessionStorage.getItem(REFRESH_STORAGE_KEY))
   );
 
+  useEffect(() => {
+    if (accessToken) {
+      client.defaults.headers.common.Authorization = `Bearer ${accessToken}`;
+    } else {
+      delete client.defaults.headers.common.Authorization;
+    }
+  }, [accessToken]);
+
   // On mount: if a refresh token survived (sessionStorage, "stay logged
   // in" case), silently exchange it for a fresh access token instead of
   // forcing a re-login.
@@ -43,6 +52,7 @@ export function AuthProvider({ children }) {
     authApi
       .refresh(stored)
       .then(({ access, refresh: newRefresh }) => {
+        client.defaults.headers.common.Authorization = `Bearer ${access}`;
         setAccessToken(access);
         setRefreshToken(newRefresh);
         sessionStorage.setItem(REFRESH_STORAGE_KEY, newRefresh);
@@ -57,9 +67,15 @@ export function AuthProvider({ children }) {
 
   const login = useCallback(async (identifier, password, stayLoggedIn) => {
     const data = await authApi.login(identifier, password); // throws AuthApiError on failure
+    client.defaults.headers.common.Authorization = `Bearer ${data.access}`;
     setAccessToken(data.access);
     setRefreshToken(data.refresh);
-    setUser(data.user);
+    try {
+      const profile = await authApi.getProfile();
+      setUser(profile);
+    } catch {
+      setUser(data.user);
+    }
     if (stayLoggedIn) {
       sessionStorage.setItem(REFRESH_STORAGE_KEY, data.refresh);
     }
@@ -73,6 +89,7 @@ export function AuthProvider({ children }) {
       // Clear client-side state regardless of whether the API call
       // succeeded — per the API reference, the backend can't reach into
       // the browser to do this for us.
+      delete client.defaults.headers.common.Authorization;
       setAccessToken(null);
       setRefreshToken(null);
       setUser(null);

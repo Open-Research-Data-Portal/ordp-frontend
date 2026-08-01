@@ -6,7 +6,7 @@ import TextInput from "../../components/ui/TextInput";
 import Button from "../../components/ui/Button";
 import logo from "../../assets/aastulogo.png";
 
-const INSTITUTIONAL_DOMAIN = "@aastu.edu.et";
+const INSTITUTIONAL_DOMAINS = ["@aastu.edu.et", "@aastustudent.edu.et"];
 
 export default function RegisterPage() {
   const navigate = useNavigate();
@@ -19,7 +19,9 @@ export default function RegisterPage() {
   const [apiError, setApiError] = useState(null);
 
   const emailIsValid = /^\S+@\S+\.\S+$/.test(email);
-  const emailIsInstitutional = email.toLowerCase().endsWith(INSTITUTIONAL_DOMAIN);
+  const emailIsInstitutional = INSTITUTIONAL_DOMAINS.some((domain) =>
+    email.toLowerCase().endsWith(domain)
+  );
 
   useEffect(() => {
     if (!username.trim()) return;

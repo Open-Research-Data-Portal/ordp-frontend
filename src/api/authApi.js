@@ -14,14 +14,14 @@ import client from "./client"; // <-- the shared axios instance from PR #36
 const BASE = "/api/accounts";
 
 /**
- * @param {string} email
+ * @param {string} identifier
  * @param {string} password
  * @returns {Promise<{access: string, refresh: string, user: {id: number, email: string}}>}
  * @throws {AuthApiError}
  */
-export async function login(email, password) {
+export async function login(identifier, password) {
   try {
-    const { data } = await client.post(`${BASE}/login/`, { email, password });
+    const { data } = await client.post(`${BASE}/login/`, { identifier, password });
     return data;
   } catch (err) {
     throw normalizeError(err);

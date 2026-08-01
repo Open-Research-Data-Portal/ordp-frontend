@@ -55,8 +55,8 @@ export function AuthProvider({ children }) {
       .finally(() => setLoading(false));
   }, []);
 
-  const login = useCallback(async (email, password, stayLoggedIn) => {
-    const data = await authApi.login(email, password); // throws AuthApiError on failure
+  const login = useCallback(async (identifier, password, stayLoggedIn) => {
+    const data = await authApi.login(identifier, password); // throws AuthApiError on failure
     setAccessToken(data.access);
     setRefreshToken(data.refresh);
     setUser(data.user);

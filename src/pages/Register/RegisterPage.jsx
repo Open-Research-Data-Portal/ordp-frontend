@@ -5,6 +5,7 @@ import AuthLayout from "../../components/auth/AuthLayout";
 import TextInput from "../../components/ui/TextInput";
 import Button from "../../components/ui/Button";
 import logo from "../../assets/aastulogo.png";
+import { register, AuthApiError } from "../../api/authApi";
 
 const INSTITUTIONAL_DOMAINS = ["@aastu.edu.et", "@aastustudent.edu.et"];
 
@@ -59,9 +60,19 @@ export default function RegisterPage() {
 
     setSubmitting(true);
     try {
+      await register({
+        full_name: fullName,
+        email,
+        username,
+        password,
+      });
       navigate("/verify-email", { state: { email } });
     } catch (err) {
-      setApiError(err?.message || "Registration failed. Please try again.");
+      if (err instanceof AuthApiError) {
+        setApiError(err.message);
+      } else {
+        setApiError("Registration failed. Please try again.");
+      }
     } finally {
       setSubmitting(false);
     }

@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { GraduationCap, Database, Users } from "lucide-react";
-import AuthLayout from "../../components/auth/AuthLayout";
-import TextInput from "../../components/ui/TextInput";
-import Button from "../../components/ui/Button";
-import * as authApi from "../../api/authApi";
-import logo from "../../assets/aastulogo.png";
-import { register, AuthApiError } from "../../api/authApi";
+import AuthLayout from "../components/AuthLayout";
+import TextInput from "../../../components/ui/TextInput";
+import Button from "../../../components/ui/Button";
+// import * as authApi from "../../api/authApi";
+import logo from "../../../assets/aastulogo.png";
+import { register, AuthApiError } from "../api/authApi";
 
 const INSTITUTIONAL_DOMAINS = ["@aastu.edu.et", "@aastustudent.edu.et"];
 

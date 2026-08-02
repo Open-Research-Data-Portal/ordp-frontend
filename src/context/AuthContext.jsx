@@ -19,7 +19,7 @@
  * whatever the team decides instead.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import * as authApi from "../api/authApi";
+import * as authApi from "../features/accounts/api/authApi";
 import client from "../api/client";
 import AuthContext from "./AuthContextInstance";
 

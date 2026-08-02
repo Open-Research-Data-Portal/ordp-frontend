@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import { Camera, User as UserIcon, GraduationCap, Database, Save, RotateCcw } from "lucide-react";
-import Sidebar from "../../layouts/Sidebar";
-import TopBar from "../../layouts/TopBar";
-import TextInput from "../../components/ui/TextInput";
-import TextArea from "../../components/ui/TextArea";
-import Select from "../../components/ui/Select";
-import MultiSelectTags from "../../components/ui/MultiSelectTags";
-import Button from "../../components/ui/Button";
-import { useAuth } from "../../context/useAuth";
-import * as authApi from "../../api/authApi";
+import Sidebar from "../../../layouts/Sidebar";
+import TopBar from "../../../layouts/TopBar";
+import TextInput from "../../../components/ui/TextInput";
+import TextArea from "../../../components/ui/TextArea";
+import Select from "../../../components/ui/Select";
+import MultiSelectTags from "../../../components/ui/MultiSelectTags";
+import Button from "../../../components/ui/Button";
+import { useAuth } from "../../../context/useAuth";
+import * as authApi from "../api/authApi";
 import {
   OCCUPATION_OPTIONS,
   ACADEMIC_TITLE_OPTIONS,

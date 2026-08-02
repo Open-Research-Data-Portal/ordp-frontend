@@ -5,7 +5,7 @@
  */
 import client from "../../../api/client"; // shared axios instance
 
-const BASE = "/api/accounts";
+const BASE = "/accounts";
 
 /**
  * @param {string} identifier
@@ -106,6 +106,37 @@ export async function verifyEmail(uid, token) {
   }
 }
 
+/**
+ * @param {string} email
+ * @returns {Promise<{detail: string}>}
+ * @throws {AuthApiError}
+ */
+export async function requestPasswordReset(email) {
+  try {
+    const { data } = await client.post(`${BASE}/password-reset/`, { email });
+    return data;
+  } catch (err) {
+    throw normalizeError(err);
+  }
+}
+
+/**
+ * @param {string} token
+ * @param {string} password
+ * @returns {Promise<{detail: string}>}
+ * @throws {AuthApiError}
+ */
+export async function confirmPasswordReset(token, password) {
+  try {
+    const { data } = await client.post(`${BASE}/password-reset/confirm/`, {
+      token,
+      password,
+    });
+    return data;
+  } catch (err) {
+    throw normalizeError(err, { allowDjangoFieldErrors: true });
+  }
+}
 /**
  * Normalizes both error shapes documented in the API reference into one
  * consistent object the UI layer can rely on:

@@ -4,6 +4,7 @@ import { Lock, ArrowRight, ArrowLeft } from "lucide-react";
 import AuthSplitCard from "../components/AuthSplitCard";
 import TextInput from "../../../components/ui/TextInput";
 import Button from "../../../components/ui/Button";
+import * as authApi from "../api/authApi";
 
 export default function ResetPasswordPage() {
   const navigate = useNavigate();
@@ -33,8 +34,7 @@ export default function ResetPasswordPage() {
     setError(null);
     setSubmitting(true);
     try {
-      // TODO(backend): POST /api/accounts/password-reset/confirm/ { token, password }
-      await new Promise((r) => setTimeout(r, 600));
+      await authApi.confirmPasswordReset(token, password);
       navigate("/login", { state: { message: "Password reset successfully. You can now sign in." } });
     } catch (err) {
       setError(err?.message || "Failed to reset password. Please try again.");

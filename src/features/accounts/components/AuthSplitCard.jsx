@@ -1,4 +1,4 @@
-import logo from "../../assets/aastulogo.png";
+import logo from "../../../assets/aastulogo.png";
 
 /**
  * Split-card layout used on check-email, verify-email, and reset-password pages.

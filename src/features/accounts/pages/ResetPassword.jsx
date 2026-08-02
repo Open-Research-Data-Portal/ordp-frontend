@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Lock, ArrowRight, ArrowLeft } from "lucide-react";
-import AuthSplitCard from "../../components/auth/AuthSplitCard";
-import TextInput from "../../components/ui/TextInput";
-import Button from "../../components/ui/Button";
+import AuthSplitCard from "../components/AuthSplitCard";
+import TextInput from "../../../components/ui/TextInput";
+import Button from "../../../components/ui/Button";
 
 export default function ResetPasswordPage() {
   const navigate = useNavigate();

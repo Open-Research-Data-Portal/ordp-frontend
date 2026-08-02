@@ -1,4 +1,3 @@
-import { useNavigate } from "react-router-dom";
 import Sidebar from "../../layouts/Sidebar";
 import TopBar from "../../layouts/TopBar";
 import { useAuth } from "../../context/useAuth";
@@ -11,7 +10,6 @@ function getDisplayName(user) {
 }
 
 export default function DashboardPage() {
-  const navigate = useNavigate();
   const { user } = useAuth();
 
   return (

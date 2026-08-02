@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, Send, ShieldCheck, Mail } from "lucide-react";
-import TextInput from "../../components/ui/TextInput";
-import Button from "../../components/ui/Button";
-import logo from "../../assets/aastulogo.png";
+import TextInput from "../../../components/ui/TextInput";
+import Button from "../../../components/ui/Button";
+import logo from "../../../assets/aastulogo.png";
 
 export default function ForgotPasswordPage() {
   const navigate = useNavigate();

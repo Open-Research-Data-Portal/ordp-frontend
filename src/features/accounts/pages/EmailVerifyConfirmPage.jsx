@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Loader2, CheckCircle2 } from "lucide-react";
-import AuthSplitCard from "../../components/auth/AuthSplitCard";
-import * as authApi from "../../api/authApi";
+import AuthSplitCard from "../components/AuthSplitCard";
+import * as authApi from "../api/authApi";
 
 export default function EmailVerifyConfirmPage() {
   const navigate = useNavigate();

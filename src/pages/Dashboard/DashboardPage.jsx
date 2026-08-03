@@ -1,5 +1,8 @@
+import { ArrowRight, Database, UserRound } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import Sidebar from "../../layouts/Sidebar";
 import TopBar from "../../layouts/TopBar";
+import Button from "../../components/ui/Button";
 import { useAuth } from "../../context/useAuth";
 
 function getDisplayName(user) {
@@ -10,6 +13,7 @@ function getDisplayName(user) {
 }
 
 export default function DashboardPage() {
+  const navigate = useNavigate();
   const { user } = useAuth();
 
   return (
@@ -26,9 +30,33 @@ export default function DashboardPage() {
                     Welcome to your research dashboard
                   </h2>
                   <p className="text-sm text-slate-500 leading-relaxed">
-                    Your email has been verified. From here you can manage projects, submissions,
-                    and access university research resources.
+                    From here you can manage projects, submissions, and access university research
+                    resources.
                   </p>
+                </div>
+                <div className="shrink-0 flex items-center gap-3">
+                  <Button
+                    variant="gold"
+                    fullWidth={false}
+                    icon={ArrowRight}
+                    onClick={() => navigate("/data-upload")}
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <Database className="w-4 h-4" />
+                      Data Upload
+                    </span>
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    fullWidth={false}
+                    icon={ArrowRight}
+                    onClick={() => navigate("/profile")}
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <UserRound className="w-4 h-4" />
+                      Profile
+                    </span>
+                  </Button>
                 </div>
               </div>
             </div>

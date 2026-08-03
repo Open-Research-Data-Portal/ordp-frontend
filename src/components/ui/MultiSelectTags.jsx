@@ -98,7 +98,7 @@ export default function MultiSelectTags({
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search..."
-                className="w-full px-3 py-2 text-sm border-b border-slate-100 focus:outline-none"
+                className="w-full px-3 py-2 text-sm border-b border-slate-100 bg-[#F7F6F2] focus:outline-none"
               />
               {available.length === 0 && (
                 <p className="px-3 py-2 text-xs text-slate-400">No matches.</p>
@@ -131,7 +131,7 @@ export default function MultiSelectTags({
           }
         }}
         placeholder={placeholder}
-        className="w-full rounded-lg border border-slate-200 text-sm py-2.5 px-3
+        className="w-full rounded-lg border border-slate-200 text-sm py-2.5 px-3 bg-[#F7F6F2]
                    focus:outline-none focus:ring-2 focus:ring-[#0B1526]/20 focus:border-[#0B1526]"
       />
     </div>

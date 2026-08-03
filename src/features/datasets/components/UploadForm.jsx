@@ -26,8 +26,8 @@ export default function UploadForm({ initialValues = {}, onNext, onBack }) {
 
   return (
     <form className="bg-white border border-[#E3E1DA] shadow-lg rounded-lg p-10" onSubmit={handleContinue}>
-      <h1 className="text-3xl text-navy m-0 mb-2">Upload Research Data</h1>
-      <p className="text-base text-gray-500 mb-8">Finalize your submission by uploading files and setting visibility permissions.</p>
+      <h2 className="text-xl font-serif font-bold text-[#0B1526] mb-2">Upload Research Data</h2>
+      <p className="text-sm text-gray-500 mb-8">Finalize your submission by uploading files and setting visibility permissions.</p>
 
       <div
         className={`border-2 border-dashed rounded-lg py-14 px-6 text-center cursor-pointer
@@ -40,7 +40,7 @@ export default function UploadForm({ initialValues = {}, onNext, onBack }) {
         <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-[#F2E7C4] flex items-center justify-center text-gold-dark text-xl">⬆</div>
         <p className="text-lg font-semibold m-0 mb-1.5">Drag and drop files here</p>
         <p className="text-sm text-gray-500 m-0 mb-5">Supported formats: CSV, JSON, HDF5, XLSX, PDF (Max 2GB per file)</p>
-        <button type="button" className="bg-navy text-white rounded-md px-6 py-3 text-base font-semibold">Browse Files</button>
+        <button type="button" className="bg-[#A67A0D] hover:bg-[#8f690b] text-white rounded-md px-6 py-3 text-base font-semibold">Browse Files</button>
         <input ref={fileInputRef} type="file" multiple hidden onChange={(e) => addFiles(e.target.files)} />
       </div>
 
@@ -81,7 +81,7 @@ export default function UploadForm({ initialValues = {}, onNext, onBack }) {
 
       <div className="flex justify-between items-center mt-10 pt-6 border-t border-[#E3E1DA]">
         <button type="button" className="text-gray-500 text-base font-semibold" onClick={onBack}>← Back</button>
-        <button type="submit" className="bg-gold hover:bg-gold-dark text-white rounded-md px-7 py-3.5 text-base font-semibold">Continue →</button>
+        <button type="submit" className="bg-[#A67A0D] hover:bg-[#8f690b] text-white rounded-md px-7 py-3.5 text-base font-semibold">Continue →</button>
       </div>
     </form>
   );

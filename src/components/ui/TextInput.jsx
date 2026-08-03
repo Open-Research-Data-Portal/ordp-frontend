@@ -43,7 +43,7 @@ export default function TextInput({
           readOnly={readOnly}
           maxLength={maxLength}
           className={[
-            "w-full rounded-xl border text-sm py-2.5 bg-[#F8F7F4]",
+            "w-full rounded-xl border text-sm py-2.5 bg-[#F7F6F2]",
             Icon ? "pl-10" : "pl-3.5",
             "pr-10",
             readOnly

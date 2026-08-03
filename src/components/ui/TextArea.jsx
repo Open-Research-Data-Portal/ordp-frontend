@@ -27,7 +27,7 @@ export default function TextArea({
         onChange={onChange}
         placeholder={placeholder}
         maxLength={maxLength}
-        className="w-full rounded-xl border border-slate-200 text-sm p-3.5 resize-none bg-[#F8F7F4]
+        className="w-full rounded-xl border border-slate-200 text-sm p-3.5 resize-none bg-[#F7F6F2]
                    focus:outline-none focus:ring-2 focus:ring-[#0B1526]/15 focus:border-[#0B1526]"
       />
       <div className="flex items-center justify-between mt-1.5">

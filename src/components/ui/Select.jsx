@@ -29,7 +29,7 @@ export default function Select({
           value={value ?? ""}
           onChange={onChange}
           className="w-full appearance-none rounded-xl border border-slate-200 text-sm py-2.5 pl-3.5 pr-9
-                     bg-[#F8F7F4] focus:outline-none focus:ring-2 focus:ring-[#0B1526]/15 focus:border-[#0B1526]"
+                     bg-[#F7F6F2] focus:outline-none focus:ring-2 focus:ring-[#0B1526]/15 focus:border-[#0B1526]"
         >
           <option value="" disabled>
             {placeholder}

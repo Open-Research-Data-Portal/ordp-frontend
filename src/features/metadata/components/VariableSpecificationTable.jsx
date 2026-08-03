@@ -16,8 +16,8 @@ export default function VariableSpecificationTable({ variables, onChange }) {
   return (
     <div>
       <div className="flex justify-between items-center mb-5">
-        <h2 className="text-xl text-navy m-0">Variable Specification (Tabular Only)</h2>
-        <button type="button" className="bg-white border border-[#E3E1DA] rounded-md px-4 py-2 text-sm font-semibold" onClick={addRow}>
+       <h2 className="text-xl font-serif font-bold text-[#0B1526] mb-2">Variable Specifications(Tabular Only)</h2>
+        <button type="button" className="bg-[#A67A0D] hover:bg-[#8f690b] text-white rounded-md px-4 py-2 text-sm font-semibold" onClick={addRow}>
           + Add Row
         </button>
       </div>

@@ -9,30 +9,31 @@ const DEPARTMENTS = [
   "Civil Engineering",
 ];
 
-export default function DetailsForm({ initialValues = {}, onNext }) {
+export default function DetailsForm({ initialValues = {}, onNext, isSubmitting, submitError }) {
   const [title, setTitle] = useState(initialValues.title || "");
   const [description, setDescription] = useState(initialValues.description || "");
   const [department, setDepartment] = useState(initialValues.department || "");
   const [language, setLanguage] = useState(initialValues.language || "English");
   const [authors, setAuthors] = useState(initialValues.authors || []);
   const [relatedPublication, setRelatedPublication] = useState(initialValues.relatedPublication || "");
-  const [error, setError] = useState("");
+  const [localError, setLocalError] = useState("");
 
-  const handleContinue = (e) => {
+  const handleContinue = async (e) => {
     e.preventDefault();
     if (!title.trim()) {
-      setError("Dataset title is required.");
+      setLocalError("Dataset title is required.");
       return;
     }
-    onNext({ title, description, department, language, authors, relatedPublication });
+    setLocalError("");
+    await onNext({ title, description, department, language, authors, relatedPublication });
   };
 
-  const inputClass = "w-full px-4 py-3 border border-[#E3E1DA] rounded-md text-base bg-white focus:outline-none focus:border-navy";
+  const inputClass = "w-full px-4 py-3 border border-[#E3E1DA] rounded-md text-sm bg-[#F7F6F2] focus:outline-none focus:border-navy";
 
   return (
     <form className="bg-white border border-[#E3E1DA] shadow-lg rounded-lg p-10" onSubmit={handleContinue}>
-      <h1 className="text-3xl text-navy m-0 mb-2">Details Entry</h1>
-      <p className="text-base text-gray-500 mb-8">
+      <h2 className="text-xl font-serif font-bold text-[#0B1526] mb-2">Details Entry</h2>
+      <p className="text-sm text-gray-500 mb-8">
         Provide core information about your research dataset to help others discover and cite your work.
       </p>
 
@@ -69,11 +70,13 @@ export default function DetailsForm({ initialValues = {}, onNext }) {
           placeholder="DOI, URL, or Citation string of the primary paper" className={inputClass} />
       </FormField>
 
-      {error && <p className="text-danger text-sm mt-2">{error}</p>}
+      {localError && <p className="text-danger text-sm mt-2">{localError}</p>}
+      {submitError && <p className="text-danger text-sm mt-2">{submitError}</p>}
 
       <div className="flex justify-end mt-10 pt-6 border-t border-[#E3E1DA]">
-        <button type="submit" className="bg-gold hover:bg-gold-dark text-white rounded-md px-7 py-3.5 text-base font-semibold">
-          Continue →
+        <button type="submit" disabled={isSubmitting}
+          className="bg-[#A67A0D] hover:bg-[#8f690b] text-white rounded-md px-7 py-3.5 text-base font-semibold disabled:opacity-60">
+          {isSubmitting ? "Saving…" : "Continue →"}
         </button>
       </div>
     </form>

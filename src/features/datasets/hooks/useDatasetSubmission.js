@@ -1,34 +1,44 @@
 import { useState } from "react";
-import { createDataset } from "../../../api/datasets";
-
-const initialFormData = { details: {}, metadata: {}, upload: {}, policy: {} };
+import * as datasetsApi from "./datasetsApi";
 
 export default function useDatasetSubmission() {
   const [step, setStep] = useState(1);
-  const [formData, setFormData] = useState(initialFormData);
+  const [formData, setFormData] = useState({ details: {}, metadata: {}, upload: {}, policy: {} });
+  const [datasetId, setDatasetId] = useState(null);
+  const [uploadSessionId, setUploadSessionId] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
 
-  const goToNextStep = (key, data) => {
-    setFormData((prev) => ({ ...prev, [key]: data }));
-    setStep((prev) => Math.min(prev + 1, 4));
-  };
+  const goToPreviousStep = () => setStep((s) => Math.max(s - 1, 1));
 
-  const goToPreviousStep = () => setStep((prev) => Math.max(prev - 1, 1));
-
-  const submitDataset = async (policyData) => {
+  const submitDetails = async (detailsData) => {
     setIsSubmitting(true);
     setSubmitError(null);
-    const finalPayload = { ...formData, policy: policyData };
     try {
-      return await createDataset(finalPayload);
+      const result = await datasetsApi.initUpload(detailsData);
+      setDatasetId(result.dataset_id);
+      setUploadSessionId(result.upload_session_id);
+      setFormData((prev) => ({ ...prev, details: detailsData }));
+      setStep(2);
     } catch (err) {
-      setSubmitError(err.response?.data?.detail || "Submission failed. Please try again.");
-      return null;
+      const status = err.response?.status;
+      const detail = err.response?.data?.detail;
+
+      if (status === 401) {
+        setSubmitError(detail || "You need to sign in before starting a dataset submission.");
+      } else if (status === 403) {
+        setSubmitError(detail || "You do not have permission to start a dataset submission with this account.");
+      } else {
+        setSubmitError(detail || "Couldn't start the submission. Please try again.");
+      }
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  return { step, formData, goToNextStep, goToPreviousStep, submitDataset, isSubmitting, submitError };
+  return {
+    step, formData, datasetId, uploadSessionId,
+    goToPreviousStep, submitDetails,
+    isSubmitting, submitError,
+  };
 }

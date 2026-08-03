@@ -21,7 +21,7 @@ export default function PolicyForm({ initialValues = {}, onSubmit, onBack, isSub
 
   return (
     <form className="bg-white border border-[#E3E1DA] shadow-lg rounded-lg p-10" onSubmit={handleSubmit}>
-      <h1 className="text-3xl text-navy m-0 mb-2">Finalize Your Submission</h1>
+      <h2 className="text-xl font-serif font-bold text-[#0B1526] mb-2">Finalize Your Submission</h2>
       <p className="text-base text-gray-500 mb-8">
         Please review the institutional policies regarding data donation and provide your final legal consent to publish this dataset on the AASTU repository.
       </p>
@@ -66,7 +66,7 @@ export default function PolicyForm({ initialValues = {}, onSubmit, onBack, isSub
 
       <div className="bg-[#EAF0FB] rounded-lg px-5 py-4 text-sm text-[#2C5AAE] my-5">
         ⓘ Static Review Notice: Your submission will enter a 48-hour administrative review queue.
-        AASTU Librarians will verify metadata accuracy and file integrity before the dataset becomes
+        AASTU Review Commite will verify metadata accuracy and file integrity before the dataset becomes
         public. You will be notified via email once the review is complete.
       </div>
 
@@ -76,11 +76,11 @@ export default function PolicyForm({ initialValues = {}, onSubmit, onBack, isSub
       <div className="flex justify-between items-center mt-10 pt-6 border-t border-[#E3E1DA]">
         <button type="button" className="text-gray-500 text-base font-semibold" onClick={onBack}>← Back</button>
         <div className="flex gap-4">
-          <button type="button" className="bg-white border border-[#E3E1DA] rounded-md px-6 py-3.5 text-base font-semibold disabled:opacity-60"
+          <button type="button" className="bg-[#A67A0D] hover:bg-[#8f690b] text-white rounded-md px-6 py-3.5 text-base font-semibold disabled:opacity-60"
             onClick={handleSaveDraft} disabled={isSubmitting}>
             Save as Draft
           </button>
-          <button type="submit" className="bg-gold hover:bg-gold-dark text-white rounded-md px-7 py-3.5 text-base font-semibold disabled:opacity-60"
+          <button type="submit" className="bg-[#A67A0D] hover:bg-[#8f690b] text-white rounded-md px-7 py-3.5 text-base font-semibold disabled:opacity-60"
             disabled={isSubmitting}>
             {isSubmitting ? "Submitting…" : "Submit for Review"}
           </button>

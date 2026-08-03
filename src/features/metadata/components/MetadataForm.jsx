@@ -38,15 +38,15 @@ export default function MetadataForm({ initialValues = {}, onNext, onBack }) {
     });
   };
 
-  const inputClass = "w-full px-4 py-3 border border-[#E3E1DA] rounded-md text-base bg-white focus:outline-none focus:border-navy";
+  const inputClass = "w-full px-4 py-3 border border-[#E3E1DA] rounded-md text-sm bg-[#F7F6F2] focus:outline-none focus:border-navy";
   const sectionClass = "my-9 pt-6 border-t border-[#E3E1DA]";
-  const sectionTitleClass = "text-xl text-navy m-0 mb-5";
+  const sectionTitleClass = "text-xl font-serif font-bold text-[#0B1526] mb-2"
   const checkboxLabelClass = "flex items-center gap-2 text-base";
 
   return (
     <form className="bg-white border border-[#E3E1DA] shadow-lg rounded-lg p-10" onSubmit={handleContinue}>
-      <h1 className="text-3xl text-navy m-0 mb-2">Metadata Entry</h1>
-      <p className="text-base text-gray-500 mb-8">
+      <h2 className="text-xl font-serif font-bold text-[#0B1526] mb-2">Metadata Entry</h2>
+      <p className="text-sm text-gray-500 mb-8">
         Provide technical details and characteristics to help other researchers find and use your dataset.
       </p>
 
@@ -143,7 +143,7 @@ export default function MetadataForm({ initialValues = {}, onNext, onBack }) {
 
       <div className="flex justify-between items-center mt-10 pt-6 border-t border-[#E3E1DA]">
         <button type="button" className="text-gray-500 text-base font-semibold" onClick={onBack}>← Back</button>
-        <button type="submit" className="bg-gold hover:bg-gold-dark text-white rounded-md px-7 py-3.5 text-base font-semibold">Continue →</button>
+        <button type="submit" className="bg-[#A67A0D] hover:bg-[#8f690b] text-white rounded-md px-7 py-3.5 text-base font-semibold">Continue →</button>
       </div>
     </form>
   );

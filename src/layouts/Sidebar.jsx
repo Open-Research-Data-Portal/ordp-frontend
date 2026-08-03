@@ -43,7 +43,7 @@ export default function Sidebar() {
 
         <div className="px-3 mt-6">
           <Link
-            to="/submissions/new"
+            to="/datasets/contribute"
             className="flex items-center justify-center gap-2 bg-[#F5C453] text-[#0B1526] font-semibold
                        text-sm rounded-xl py-3 hover:bg-[#e8b73f] transition"
           >

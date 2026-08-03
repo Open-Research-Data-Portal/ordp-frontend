@@ -18,6 +18,7 @@ export default function MultiSelectTags({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [textValue, setTextValue] = useState("");
   const containerRef = useRef(null);
 
   const available = useMemo(
@@ -25,9 +26,9 @@ export default function MultiSelectTags({
       options.filter(
         (opt) =>
           !value.includes(opt) &&
-          opt.toLowerCase().includes(query.toLowerCase())
+          opt.toLowerCase().includes(query.toLowerCase()),
       ),
-    [options, value, query]
+    [options, value, query],
   );
 
   useEffect(() => {
@@ -43,6 +44,7 @@ export default function MultiSelectTags({
   function addTag(tag) {
     if (!value.includes(tag)) onChange([...value, tag]);
     setQuery("");
+    setTextValue("");
     setOpen(false);
   }
 
@@ -91,8 +93,10 @@ export default function MultiSelectTags({
           </button>
 
           {open && (
-            <div className="absolute z-10 mt-1 w-64 max-h-56 overflow-y-auto rounded-lg border
-                             border-slate-200 bg-white shadow-lg">
+            <div
+              className="absolute z-10 mt-1 w-64 max-h-56 overflow-y-auto rounded-lg border
+                             border-slate-200 bg-white shadow-lg"
+            >
               <input
                 autoFocus
                 value={query}
@@ -121,8 +125,8 @@ export default function MultiSelectTags({
       {/* Free-text fallback input, matching the "Other (type to add)..." row in the screenshot */}
       <input
         id={id}
-        value=""
-        onChange={() => {}}
+        value={textValue}
+        onChange={(e) => setTextValue(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter" && e.target.value.trim()) {
             e.preventDefault();

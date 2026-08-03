@@ -9,7 +9,8 @@ import Select from "../../components/ui/Select";
 import MultiSelectTags from "../../components/ui/MultiSelectTags";
 import Button from "../../components/ui/Button";
 import { useAuth } from "../../context/useAuth";
-import * as authApi from "../../api/authApi";
+import * as authApi from "../../features/accounts/api/authApi";
+
 import {
   OCCUPATION_OPTIONS,
   ACADEMIC_TITLE_OPTIONS,
@@ -19,8 +20,8 @@ import {
   RESEARCH_INTEREST_OPTIONS,
   DEFAULT_AFFILIATION,
   BIO_MAX_LENGTH,
-} from "../Profile/constants";
 
+} from "../../features/accounts/pages/constants";
 function getNameParts(source) {
   const full =
     source?.full_name ?? [source?.first_name, source?.last_name].filter(Boolean).join(" ").trim();

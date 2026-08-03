@@ -2,16 +2,10 @@
  * Auth API client — wraps the endpoints documented in
  * ORDP_Auth_API_Reference_for_Sosina.md (owner: Rebika, branch:
  * feature/login-session-auth).
- *
- * If PR #36 already exports a configured axios instance (baseURL,
- * interceptors, etc.), import and use *that* instead of raw axios below
- * — check `src/api/client.js` or similar in the scaffold first. This
- * file assumes that instance is available at `src/api/client`; adjust
- * the import path to match whatever PR #36 actually named it.
  */
-import client from "./client"; // <-- the shared axios instance from PR #36
+import client from "../../../api/client"; // shared axios instance
 
-const BASE = "/api/accounts";
+const BASE = "/accounts";
 
 /**
  * @param {string} identifier
@@ -28,6 +22,11 @@ export async function login(identifier, password) {
   }
 }
 
+/**
+ * @param {{full_name: string, email: string, username: string, password: string}} payload
+ * @returns {Promise<{detail: string}>}
+ * @throws {AuthApiError}
+ */
 export async function register({ full_name, email, username, password }) {
   try {
     const { data } = await client.post(`${BASE}/register/`, {
@@ -47,10 +46,7 @@ export async function register({ full_name, email, username, password }) {
  */
 export async function logout(refreshToken) {
   try {
-    const { data } = await client.post(
-      `${BASE}/logout/`,
-      { refresh: refreshToken }
-    );
+    const { data } = await client.post(`${BASE}/logout/`, { refresh: refreshToken });
     return data;
   } catch (err) {
     throw normalizeError(err);
@@ -65,13 +61,9 @@ export async function logout(refreshToken) {
  */
 export async function refresh(refreshToken) {
   try {
-    const { data } = await client.post(`${BASE}/refresh/`, {
-      refresh: refreshToken,
-    });
+    const { data } = await client.post(`${BASE}/refresh/`, { refresh: refreshToken });
     return data; // { access, refresh }
   } catch (err) {
-    // Note: this endpoint's error shape comes from the underlying JWT
-    // library, not our custom { error: {...} } envelope — handled below.
     throw normalizeError(err, { isRefreshEndpoint: true });
   }
 }
@@ -114,9 +106,46 @@ export async function verifyEmail(uid, token) {
   }
 }
 
+/**
+ * @param {object} payload
+ * @returns {Promise<{detail: string}>}
+ * @throws {AuthApiError}
+ */
 export async function submitResearcherRequest(payload) {
   try {
     const { data } = await client.post(`${BASE}/researcher-request/`, payload);
+    return data;
+  } catch (err) {
+    throw normalizeError(err, { allowDjangoFieldErrors: true });
+  }
+}
+
+/**
+ * @param {string} email
+ * @returns {Promise<{detail: string}>}
+ * @throws {AuthApiError}
+ */
+export async function requestPasswordReset(email) {
+  try {
+    const { data } = await client.post(`${BASE}/password-reset/`, { email });
+    return data;
+  } catch (err) {
+    throw normalizeError(err, { allowDjangoFieldErrors: true });
+  }
+}
+
+/**
+ * @param {string} token
+ * @param {string} password
+ * @returns {Promise<{detail: string}>}
+ * @throws {AuthApiError}
+ */
+export async function confirmPasswordReset(token, password) {
+  try {
+    const { data } = await client.post(`${BASE}/password-reset/confirm/`, {
+      token,
+      password,
+    });
     return data;
   } catch (err) {
     throw normalizeError(err, { allowDjangoFieldErrors: true });
@@ -146,7 +175,6 @@ function normalizeError(
   const body = err?.response?.data;
 
   if (isRefreshEndpoint && body?.code) {
-    // /refresh/ uses { detail, code } from the JWT library, not our envelope.
     return new AuthApiError({
       code: body.code.toUpperCase(),
       message: body.detail || "Your session has expired. Please log in again.",
@@ -174,8 +202,6 @@ function normalizeError(
     }
   }
 
-  // Network error, timeout, or an unexpected shape — fail safe with a
-  // generic message rather than leaking a raw stack trace to the UI.
   return new AuthApiError({
     code: "UNKNOWN_ERROR",
     message: "Something went wrong. Please try again.",

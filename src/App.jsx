@@ -1,14 +1,14 @@
 import { BrowserRouter, Navigate, Route, Routes, useSearchParams } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext.jsx";
-import LoginPage from "./pages/Login/LoginPage";
-import RegisterPage from "./pages/Register/RegisterPage";
-import VerifyEmailPage from "./pages/Register/VerifyEmailPage";
-import EmailVerifyConfirmPage from "./pages/Register/EmailVerifyConfirmPage";
-import ForgotPasswordPage from "./pages/ForgotPassword/ForgotPasswordPage";
-import CheckEmailPage from "./pages/ForgotPassword/CheckEmailPage";
-import ResetPasswordPage from "./pages/ForgotPassword/ResetPasswordPage";
-import DashboardPage from "./pages/Dashboard/DashboardPage";
-import ProfilePage from "./pages/Profile/ProfilePage";
+import LoginPage from "./features/accounts/pages/Login.jsx";
+import RegisterPage from "./features/accounts/pages/RegisterPage.jsx";
+import VerifyEmailPage from "./features/accounts/pages/VerifyEmailPage.jsx";
+import EmailVerifyConfirmPage from "./features/accounts/pages/EmailVerifyConfirmPage.jsx";
+import ForgotPasswordPage from "./features/accounts/pages/ForgotPassword.jsx";
+import CheckEmailPage from "./features/accounts/pages/CheckEmail.jsx";
+import ResetPasswordPage from "./features/accounts/pages/ResetPassword.jsx";
+import DashboardPage from "./pages/Dashboard/DashboardPage.jsx";
+import ProfilePage from "./features/accounts/pages/ProfilePage.jsx";
 import DataUploadPage from "./pages/DataUpload/DataUploadPage";
 
 function VerifyEmailRoute() {

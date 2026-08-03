@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { CheckCircle2, ArrowLeft, ArrowRight, RotateCw } from "lucide-react";
-import AuthSplitCard from "../../components/auth/AuthSplitCard";
+import AuthSplitCard from "../components/AuthSplitCard";
 
-export default function CheckEmailPage() {
+export default function VerifyEmailPage() {
   const location = useLocation();
   const email = location.state?.email;
   const [resent, setResent] = useState(false);
@@ -12,7 +12,7 @@ export default function CheckEmailPage() {
   async function handleResend() {
     setResending(true);
     try {
-      // TODO(backend): POST /api/accounts/password-reset/ { email }
+      // TODO(backend): POST /api/accounts/resend-verification/ { email }
       await new Promise((r) => setTimeout(r, 600));
       setResent(true);
     } finally {
@@ -27,13 +27,13 @@ export default function CheckEmailPage() {
       </div>
       <h1 className="text-2xl font-bold text-[#0B1526] mb-3">Check your email</h1>
       <p className="text-sm text-slate-500 mb-8 leading-relaxed max-w-sm">
-        A password reset link has been sent to{" "}
+        We&apos;ve sent a verification link to{" "}
         {email ? (
           <span className="font-medium text-slate-700">{email}</span>
         ) : (
           "your university inbox"
         )}
-        . Click the link in the email to set a new password, then sign in.
+        . Click the link in the email to activate your account and access your dashboard.
       </p>
 
       <div className="w-full max-w-sm border-t border-slate-100 pt-6">
@@ -44,7 +44,7 @@ export default function CheckEmailPage() {
           disabled={resending}
           className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#B8860B] hover:underline disabled:opacity-60"
         >
-          {resending ? "Resending…" : resent ? "Link resent ✓" : "Resend link"}
+          {resending ? "Resending…" : resent ? "Link resent ✓" : "Resend verification link"}
           {!resending && !resent && <ArrowRight className="w-3.5 h-3.5" />}
           {resending && <RotateCw className="w-3.5 h-3.5 animate-spin" />}
         </button>

@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { Mail, Lock, ArrowRight } from "lucide-react";
-import { useAuth } from "../../context/useAuth";
-import { AuthApiError } from "../../api/authApi";
-import AuthLayout from "../../components/auth/AuthLayout";
-import TextInput from "../../components/ui/TextInput";
-import Button from "../../components/ui/Button";
-import logo from "../../assets/aastulogo.png";
+import { useAuth } from "../../../context/useAuth";
+import { AuthApiError } from "../api/authApi";
+import AuthLayout from "../components/AuthLayout";
+import TextInput from "../../../components/ui/TextInput";
+import Button from "../../../components/ui/Button";
+import logo from "../../../assets/aastulogo.png";
 
 export default function LoginPage() {
   const { login } = useAuth();

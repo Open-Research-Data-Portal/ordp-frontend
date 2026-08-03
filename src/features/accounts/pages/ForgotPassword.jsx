@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, Send, ShieldCheck, Mail } from "lucide-react";
-import TextInput from "../../components/ui/TextInput";
-import Button from "../../components/ui/Button";
-import logo from "../../assets/aastulogo.png";
+import TextInput from "../../../components/ui/TextInput";
+import Button from "../../../components/ui/Button";
+import logo from "../../../assets/aastulogo.png";
+import * as authApi from "../api/authApi";
 
 export default function ForgotPasswordPage() {
   const navigate = useNavigate();
@@ -20,6 +21,7 @@ export default function ForgotPasswordPage() {
     setError(null);
     setSubmitting(true);
     try {
+      await authApi.requestPasswordReset(email);
       navigate("/check-email", { state: { email } });
     } catch (err) {
       setError(err?.message || "Something went wrong. Please try again.");
@@ -46,7 +48,7 @@ export default function ForgotPasswordPage() {
             <ShieldCheck className="w-5 h-5 text-[#D4AF37] shrink-0 mt-0.5" />
             <div>
               <p className="text-slate-300 tracking-widest font-medium">VERIFIED PORTAL</p>
-              <p className="mt-0.5">Institutional Research Office © 2024</p>
+              <p className="mt-0.5">Institutional Research Office © 2026</p>
             </div>
           </div>
         </div>

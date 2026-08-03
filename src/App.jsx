@@ -9,6 +9,7 @@ import CheckEmailPage from "./pages/ForgotPassword/CheckEmailPage";
 import ResetPasswordPage from "./pages/ForgotPassword/ResetPasswordPage";
 import DashboardPage from "./pages/Dashboard/DashboardPage";
 import ProfilePage from "./pages/Profile/ProfilePage";
+import DataUploadPage from "./pages/DataUpload/DataUploadPage";
 
 function VerifyEmailRoute() {
   const [searchParams] = useSearchParams();
@@ -33,6 +34,7 @@ export default function App() {
           <Route path="/check-email" element={<CheckEmailPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/data-upload" element={<DataUploadPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>

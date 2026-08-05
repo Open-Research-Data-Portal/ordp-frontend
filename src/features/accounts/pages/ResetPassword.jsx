@@ -9,6 +9,7 @@ import * as authApi from "../api/authApi";
 export default function ResetPasswordPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const uid = searchParams.get("uid");
   const token = searchParams.get("token");
 
   const [password, setPassword] = useState("");
@@ -17,7 +18,7 @@ export default function ResetPasswordPage() {
   const [error, setError] = useState(null);
 
   function validate() {
-    if (!token) return "Invalid or missing reset link. Please request a new one.";
+    if (!uid || !token) return "Invalid or missing reset link. Please request a new one.";
     if (password.length < 8) return "Password must be at least 8 characters.";
     if (password !== confirmPassword) return "Passwords do not match.";
     return null;
@@ -34,7 +35,12 @@ export default function ResetPasswordPage() {
     setError(null);
     setSubmitting(true);
     try {
-      await authApi.confirmPasswordReset(token, password);
+      await authApi.confirmPasswordReset({
+        uid,
+        token,
+        new_password: password,
+        confirm_password: confirmPassword,
+      });
       navigate("/login", { state: { message: "Password reset successfully. You can now sign in." } });
     } catch (err) {
       setError(err?.message || "Failed to reset password. Please try again.");

@@ -67,8 +67,8 @@ export default function LoginPage() {
             tools, and peer-reviewed publications.
           </p>
           <div className="flex gap-4">
-            <StatCard value="500+" label="Researchers" />
-            <StatCard value="1.2k" label="Publications" />
+            <StatCard value="0" label="Researchers" />
+            <StatCard value="0" label="Publications" />
           </div>
         </>
       }

@@ -6,7 +6,6 @@ import TopBar from "../../layouts/TopBar";
 import TextInput from "../../components/ui/TextInput";
 import TextArea from "../../components/ui/TextArea";
 import Select from "../../components/ui/Select";
-import MultiSelectTags from "../../components/ui/MultiSelectTags";
 import Button from "../../components/ui/Button";
 import { useAuth } from "../../context/useAuth";
 import * as authApi from "../../features/accounts/api/authApi";
@@ -15,9 +14,7 @@ import {
   OCCUPATION_OPTIONS,
   ACADEMIC_TITLE_OPTIONS,
   ACADEMIC_RANK_OPTIONS,
-  HIGHEST_DEGREE_OPTIONS,
   STUDENT_TYPE_OPTIONS,
-  RESEARCH_INTEREST_OPTIONS,
   DEFAULT_AFFILIATION,
   BIO_MAX_LENGTH,
 
@@ -62,7 +59,6 @@ export default function DataUploadPage() {
   const [bio, setBio] = useState("");
   const [orcidId, setOrcidId] = useState("");
   const [additionalLink, setAdditionalLink] = useState("");
-  const [researchInterests, setResearchInterests] = useState([]);
   const [projectWork, setProjectWork] = useState("");
 
   const [submitting, setSubmitting] = useState(false);
@@ -114,11 +110,13 @@ export default function DataUploadPage() {
     username.trim() &&
     affiliation.trim() &&
     academicRole.trim() &&
-    (academicRole !== "Student" || studentType.trim()) &&
-    researchInterests.length > 0;
+    (academicRole !== "Student" || studentType.trim());
 
   async function handleSubmit() {
-    if (!canSubmit) return;
+    if (!canSubmit) {
+      setSubmitError("Please fill all required fields before sending the request.");
+      return;
+    }
     setSubmitting(true);
     setSubmitError("");
     setSubmitted(false);
@@ -137,7 +135,6 @@ export default function DataUploadPage() {
         bio,
         orcid_id: orcidId,
         additional_link: additionalLink,
-        research_interests: researchInterests,
         project_work: projectWork,
       });
       setSubmitted(true);
@@ -302,18 +299,6 @@ export default function DataUploadPage() {
                 />
 
                 <div className="md:col-span-2">
-                  <MultiSelectTags
-                    id="researchInterests"
-                    label="Research Interests"
-                    required
-                    value={researchInterests}
-                    onChange={setResearchInterests}
-                    options={RESEARCH_INTEREST_OPTIONS}
-                    placeholder="Other (type to add)..."
-                  />
-                </div>
-
-                <div className="md:col-span-2">
                   <TextArea
                     id="projectWork"
                     label="Research & project work"
@@ -326,7 +311,7 @@ export default function DataUploadPage() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-3 mt-4">
+                <div className="flex items-center justify-end gap-3 mt-4">
                 <Button variant="secondary" fullWidth={false} onClick={() => navigate("/dashboard")}>
                   Cancel
                 </Button>
@@ -336,7 +321,6 @@ export default function DataUploadPage() {
                   icon={Send}
                   loading={submitting}
                   onClick={handleSubmit}
-                  disabled={!canSubmit}
                 >
                   Send Request
                 </Button>

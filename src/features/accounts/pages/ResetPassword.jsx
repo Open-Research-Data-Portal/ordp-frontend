@@ -71,6 +71,7 @@ export default function ResetPasswordPage() {
           required
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          showToggle
           placeholder="••••••••"
           helperText="At least 8 characters."
         />
@@ -82,6 +83,7 @@ export default function ResetPasswordPage() {
           required
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
+          showToggle
           placeholder="••••••••"
         />
         <Button type="submit" loading={submitting} icon={ArrowRight}>

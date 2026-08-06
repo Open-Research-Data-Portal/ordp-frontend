@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { Mail, Lock, ArrowRight } from "lucide-react";
 import { useAuth } from "../../../context/useAuth";
@@ -40,8 +40,18 @@ export default function LoginPage() {
     setSubmitting(true);
 
     try {
-      await login(identifier, password, stayLoggedIn);
-      navigate("/dashboard");
+      const result = await login(identifier, password, stayLoggedIn);
+      const completed = Boolean(
+        result.profile?.researchInterestsCompleted ||
+        result.profile?.onboardingCompleted ||
+        result.profile?.research_interests_completed ||
+        result.profile?.onboarding_completed
+      );
+      if (!completed) {
+        navigate("/research-interests-onboarding");
+      } else {
+        navigate("/dashboard");
+      }
     } catch (err) {
       setApiError(
         err instanceof AuthApiError
@@ -52,6 +62,14 @@ export default function LoginPage() {
       setSubmitting(false);
     }
   }
+
+  useEffect(() => {
+    // If redirected from reset password flow with a success message,
+    // ensure the password field is empty.
+    if (location.state?.message) {
+      setPassword("");
+    }
+  }, [location.state]);
 
   return (
     <AuthLayout
@@ -120,6 +138,7 @@ export default function LoginPage() {
             id="password"
             icon={Lock}
             type="password"
+            showToggle
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="••••••••"

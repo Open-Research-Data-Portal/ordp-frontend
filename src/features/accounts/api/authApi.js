@@ -5,7 +5,7 @@
  */
 import client from "../../../api/client"; // shared axios instance
 
-const BASE = "/accounts";
+const BASE = "/api/accounts";
 
 /**
  * @param {string} identifier
@@ -107,6 +107,20 @@ export async function verifyEmail(uid, token) {
 }
 
 /**
+ * @param {object} payload
+ * @returns {Promise<{detail: string}>}
+ * @throws {AuthApiError}
+ */
+export async function submitResearcherRequest(payload) {
+  try {
+    const { data } = await client.post(`${BASE}/researcher-request/`, payload);
+    return data;
+  } catch (err) {
+    throw normalizeError(err, { allowDjangoFieldErrors: true });
+  }
+}
+
+/**
  * @param {string} email
  * @returns {Promise<{detail: string}>}
  * @throws {AuthApiError}
@@ -116,7 +130,7 @@ export async function requestPasswordReset(email) {
     const { data } = await client.post(`${BASE}/password-reset/`, { email });
     return data;
   } catch (err) {
-    throw normalizeError(err);
+    throw normalizeError(err, { allowDjangoFieldErrors: true });
   }
 }
 
@@ -126,17 +140,20 @@ export async function requestPasswordReset(email) {
  * @returns {Promise<{detail: string}>}
  * @throws {AuthApiError}
  */
-export async function confirmPasswordReset(token, password) {
+export async function confirmPasswordReset({ uid, token, new_password, confirm_password }) {
   try {
     const { data } = await client.post(`${BASE}/password-reset/confirm/`, {
+      uid,
       token,
-      password,
+      new_password,
+      confirm_password,
     });
     return data;
   } catch (err) {
     throw normalizeError(err, { allowDjangoFieldErrors: true });
   }
 }
+
 /**
  * Normalizes both error shapes documented in the API reference into one
  * consistent object the UI layer can rely on:

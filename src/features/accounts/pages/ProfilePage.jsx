@@ -92,12 +92,13 @@ export default function ProfilePage() {
 
   useEffect(() => {
     const parts = getNameParts(user);
-    setFirstName(parts.firstName);
-    setFatherName(parts.fatherName);
-    setGrandFatherName(parts.grandFatherName);
-
-    setEmail(user?.email ?? "");
-    setUsername(user?.username ?? "");
+    queueMicrotask(() => {
+      setFirstName(parts.firstName);
+      setFatherName(parts.fatherName);
+      setGrandFatherName(parts.grandFatherName);
+      setEmail(user?.email ?? "");
+      setUsername(user?.username ?? "");
+    });
   }, [user]);
 
   useEffect(() => {

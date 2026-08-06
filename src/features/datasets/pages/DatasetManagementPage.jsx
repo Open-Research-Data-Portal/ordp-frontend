@@ -117,25 +117,27 @@ export default function DatasetManagementPage() {
   );
 
   useEffect(() => {
-    if (!selectedDataset) {
-      setDescription("");
-      setCategoryId("");
-      setSubjectId("");
-      setKeywordValues([]);
-      return;
-    }
+    queueMicrotask(() => {
+      if (!selectedDataset) {
+        setDescription("");
+        setCategoryId("");
+        setSubjectId("");
+        setKeywordValues([]);
+        return;
+      }
 
-    const metadata = selectedDataset.metadata;
-    setDescription(metadata?.description || "");
-    setCategoryId(metadata?.category || "");
-    setSubjectId(metadata?.subject || "");
-    setKeywordValues(
-      (metadata?.keywords || [])
-        .map(
-          (keywordId) => keywords.find((item) => item.id === keywordId)?.word,
-        )
-        .filter(Boolean),
-    );
+      const metadata = selectedDataset.metadata;
+      setDescription(metadata?.description || "");
+      setCategoryId(metadata?.category || "");
+      setSubjectId(metadata?.subject || "");
+      setKeywordValues(
+        (metadata?.keywords || [])
+          .map(
+            (keywordId) => keywords.find((item) => item.id === keywordId)?.word,
+          )
+          .filter(Boolean),
+      );
+    });
   }, [selectedDataset, keywords]);
 
   async function refreshDatasets(nextSelectedId = selectedDatasetId) {

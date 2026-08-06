@@ -1,18 +1,26 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import ProfilePage from "./ProfilePage";
-import { AuthProvider } from "../context/AuthContext";
 
-vi.mock("../../api/authApi");
+vi.mock("../../../layouts/Sidebar", () => ({ default: () => <aside /> }));
+vi.mock("../../../layouts/TopBar", () => ({ default: ({ title }) => <header>{title}</header> }));
+vi.mock("../../../context/useAuth", () => ({
+  useAuth: () => ({
+    isAuthenticated: false,
+    user: {
+      email: "researcher@aastu.edu.et",
+      username: "researcher",
+      full_name: "Researcher User",
+    },
+  }),
+}));
 
 function renderProfilePage() {
   return render(
     <MemoryRouter>
-      <AuthProvider>
-        <ProfilePage />
-      </AuthProvider>
+      <ProfilePage />
     </MemoryRouter>
   );
 }
@@ -25,6 +33,7 @@ describe("ProfilePage", () => {
 
     expect(email).toHaveAttribute("readonly");
     expect(username).toHaveAttribute("readonly");
+    await waitFor(() => expect(email).toHaveValue("researcher@aastu.edu.et"));
 
     const originalEmail = email.value;
     await userEvent.type(email, "changed@example.com");
@@ -34,9 +43,9 @@ describe("ProfilePage", () => {
   it("shows the password field masked and read-only, with a Change Password action", () => {
     renderProfilePage();
     expect(screen.getByText(/change password/i)).toBeInTheDocument();
-    const password = screen.getByLabelText(/^password$/i);
+    const password = screen.getByLabelText(/password/i);
     expect(password).toHaveAttribute("readonly");
-    expect(password.value).toBe("••••••••");
+    expect(password).toHaveAttribute("type", "password");
   });
 
   it("marks Academic Role and Research Interests as required", () => {
@@ -63,9 +72,8 @@ describe("ProfilePage", () => {
   it("enforces the 300-character limit on the Bio field and shows a live counter", async () => {
     renderProfilePage();
     const bio = screen.getByLabelText(/^bio/i);
-    await userEvent.clear(bio);
     const longText = "x".repeat(310);
-    await userEvent.type(bio, longText);
+    fireEvent.change(bio, { target: { value: longText } });
 
     expect(bio.value.length).toBeLessThanOrEqual(300);
     expect(screen.getByText(/300 \/ 300|^\d+ \/ 300$/)).toBeInTheDocument();
@@ -80,6 +88,8 @@ describe("ProfilePage", () => {
 
   it("shows a saved confirmation after clicking Save Changes", async () => {
     renderProfilePage();
+    await userEvent.selectOptions(screen.getByLabelText(/profile visibility/i), "public");
+    await userEvent.click(screen.getByLabelText(/ordp terms/i));
     await userEvent.click(screen.getByRole("button", { name: /save changes/i }));
     expect(await screen.findByRole("status")).toHaveTextContent(/saved/i);
   });

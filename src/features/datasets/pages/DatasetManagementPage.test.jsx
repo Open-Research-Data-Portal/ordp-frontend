@@ -5,11 +5,11 @@ import userEvent from "@testing-library/user-event";
 
 import DatasetManagementPage from "./DatasetManagementPage";
 
-const mockUser = {
+const mockUser = vi.hoisted(() => ({
   email: "owner@aastu.edu.et",
   username: "owner",
   role: "researcher",
-};
+}));
 
 const datasetList = [
   {

@@ -15,6 +15,7 @@ export default function MultiSelectTags({
   onChange,
   options,
   placeholder = "Add interest...",
+  addButtonLabel = "+ Add Interest",
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -42,7 +43,8 @@ export default function MultiSelectTags({
   }, []);
 
   function addTag(tag) {
-    if (!value.includes(tag)) onChange([...value, tag]);
+    const normalized = tag.trim();
+    if (normalized && !value.includes(normalized)) onChange([...value, normalized]);
     setQuery("");
     setTextValue("");
     setOpen(false);
@@ -88,7 +90,7 @@ export default function MultiSelectTags({
             className="inline-flex items-center gap-1 border border-dashed border-[#B8860B] text-[#B8860B]
                        text-xs font-medium rounded-full px-3 py-1 hover:bg-amber-50"
           >
-            + Add Interest
+            {addButtonLabel}
             <ChevronDown className="w-3 h-3" />
           </button>
 
@@ -128,10 +130,9 @@ export default function MultiSelectTags({
         value={textValue}
         onChange={(e) => setTextValue(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter" && e.target.value.trim()) {
+          if (e.key === "Enter" && textValue.trim()) {
             e.preventDefault();
-            addTag(e.target.value.trim());
-            e.target.value = "";
+            addTag(textValue);
           }
         }}
         placeholder={placeholder}

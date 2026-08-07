@@ -70,16 +70,24 @@ export function AuthProvider({ children }) {
     client.defaults.headers.common.Authorization = `Bearer ${data.access}`;
     setAccessToken(data.access);
     setRefreshToken(data.refresh);
+    let profile;
     try {
-      const profile = await authApi.getProfile();
+      profile = await authApi.getProfile();
       setUser(profile);
     } catch {
-      setUser(data.user);
+      profile = data.user;
+      setUser(profile);
     }
     if (stayLoggedIn) {
       sessionStorage.setItem(REFRESH_STORAGE_KEY, data.refresh);
     }
-    return data;
+    return { ...data, profile };
+  }, []);
+
+  const updateProfile = useCallback(async (patch) => {
+    const updated = await authApi.updateProfile(patch);
+    setUser((current) => ({ ...current, ...(updated || patch) }));
+    return updated;
   }, []);
 
   const logout = useCallback(async () => {
@@ -105,8 +113,9 @@ export function AuthProvider({ children }) {
       loading,
       login,
       logout,
+      updateProfile,
     }),
-    [user, accessToken, loading, login, logout]
+    [user, accessToken, loading, login, logout, updateProfile]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

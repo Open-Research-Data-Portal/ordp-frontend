@@ -10,6 +10,7 @@ import ResetPasswordPage from "./features/accounts/pages/ResetPassword.jsx";
 import DashboardPage from "./pages/Dashboard/DashboardPage.jsx";
 import ProfilePage from "./features/accounts/pages/ProfilePage.jsx";
 import DataUploadPage from "./pages/DataUpload/DataUploadPage";
+import ResearchInterestsOnboardingPage from "./features/accounts/pages/ResearchInterestsOnboardingPage.jsx";
 
 function VerifyEmailRoute() {
   const [searchParams] = useSearchParams();
@@ -34,6 +35,7 @@ export default function App() {
           <Route path="/check-email" element={<CheckEmailPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/research-interests-onboarding" element={<ResearchInterestsOnboardingPage />} />
           <Route path="/data-upload" element={<DataUploadPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="*" element={<Navigate to="/login" replace />} />

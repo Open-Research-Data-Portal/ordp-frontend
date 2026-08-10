@@ -11,6 +11,8 @@ import DashboardPage from "./pages/Dashboard/DashboardPage.jsx";
 import ProfilePage from "./features/accounts/pages/ProfilePage.jsx";
 import DataUploadPage from "./pages/DataUpload/DataUploadPage";
 import ResearchInterestsOnboardingPage from "./features/accounts/pages/ResearchInterestsOnboardingPage.jsx";
+import DatasetListPage from "./features/datasets/pages/DatasetListPage.jsx";
+import ResearcherDashboardPage from "./features/datasets/pages/ResearcherDashboardPage.jsx";
 
 function VerifyEmailRoute() {
   const [searchParams] = useSearchParams();
@@ -39,6 +41,8 @@ export default function App() {
           <Route path="/data-upload" element={<DataUploadPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="*" element={<Navigate to="/login" replace />} />
+          <Route path="/datasets" element={<DatasetListPage />} />
+          <Route path="/researcher-dashboard" element={<ResearcherDashboardPage />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

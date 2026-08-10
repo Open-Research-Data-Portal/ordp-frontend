@@ -5,7 +5,7 @@
  */
 import client from "../../../api/client"; // shared axios instance
 
-const BASE = "/api/accounts";
+const BASE = "/accounts";
 
 /**
  * @param {string} identifier

@@ -54,9 +54,90 @@ const MOCK_DATASETS = [
   },
 ];
 
+// TODO(backend): replace with real GET /api/datasets/recommended/ once available.
+const MOCK_FEED = [
+  {
+    id: "101",
+    title: "Machine Learning Approaches to Drought Prediction in the Horn of Africa",
+    description: "Satellite-derived vegetation indices paired with rainfall records for ML-based forecasting.",
+    owner_name: "Dr. Meron Tadesse",
+    visibility: "public",
+    download_count: 312,
+    updated_at: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+    match_reason: "Based on your interest in Climate Data",
+  },
+  {
+    id: "102",
+    title: "Reinforcement Learning Benchmarks for Multi-Objective Optimization",
+    description: "Evaluation suite and reward-shaping data for RL research across five environments.",
+    owner_name: "iCog Labs Research Team",
+    visibility: "public",
+    download_count: 89,
+    updated_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+    match_reason: "Based on your interest in Machine Learning",
+  },
+  {
+    id: "103",
+    title: "Seismic Hazard Mapping — East African Rift System",
+    description: "Compiled fault-line and tremor-frequency data for regional hazard modeling.",
+    owner_name: "Dr. Solomon Girma",
+    visibility: "restricted",
+    download_count: 54,
+    updated_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+    match_reason: "Similar to datasets you've viewed",
+  },
+  {
+    id: "104",
+    title: "Crop Yield Response to Soil Moisture — Rift Valley Farms",
+    description: "Field-measured soil moisture and yield outcomes across three growing seasons.",
+    owner_name: "Dr. Hanna Bekele",
+    visibility: "public",
+    download_count: 176,
+    updated_at: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(),
+    match_reason: "Based on your interest in Climate Data",
+  },
+];
+
+// TODO(backend): replace with real GET /api/activity/mine/ once available.
+const MOCK_ACTIVITY = [
+  {
+    id: "a1",
+    type: "download",
+    message: "You downloaded \"Groundwater Quality Survey — Oromia Region\"",
+    timestamp: new Date(Date.now() - 25 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "a2",
+    type: "upload",
+    message: "You uploaded \"Urban Traffic Flow — Addis Ababa Ring Road\"",
+    timestamp: new Date(Date.now() - 40 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "a3",
+    type: "comment",
+    message: "New comment on \"Climate Variability Analysis in the Ethiopian Highlands\"",
+    timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: "a4",
+    type: "approval",
+    message: "\"Seismic Activity Patterns in Northern Ethiopia 2020-2023\" was approved by an admin",
+    timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+];
+
+const ACTIVITY_STYLE = {
+  download: { icon: "⬇", bg: "bg-blue-50", text: "text-blue-600" },
+  upload: { icon: "📤", bg: "bg-emerald-50", text: "text-emerald-600" },
+  comment: { icon: "💬", bg: "bg-amber-50", text: "text-amber-600" },
+  approval: { icon: "✅", bg: "bg-violet-50", text: "text-violet-600" },
+};
+
 export default function ResearcherDashboardPage() {
   const { user } = useAuth();
   const [datasets] = useState(MOCK_DATASETS);
+  const [feed] = useState(MOCK_FEED);
+  const [activity] = useState(MOCK_ACTIVITY);
   const [loading] = useState(false);
   const [error] = useState(null);
   const navigate = useNavigate();
@@ -101,7 +182,7 @@ export default function ResearcherDashboardPage() {
           )}
 
           {/* Stats row */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-7">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-8">
             <div className="bg-white rounded-xl p-5 shadow-sm">
               <span className="text-xs text-gray-500 tracking-wide">MY DATASETS</span>
               <div className="text-2xl font-bold text-slate-900 mt-1">
@@ -125,98 +206,111 @@ export default function ResearcherDashboardPage() {
             </div>
           </div>
 
-          {/* Body */}
-          <div className="grid grid-cols-1 lg:grid-cols-[2.2fr_1fr] gap-5">
-            <div className="bg-white rounded-xl p-5">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-base font-semibold text-slate-900">My Datasets</h2>
-                <button
-                  onClick={() => navigate("/datasets")}
-                  className="text-amber-600 font-medium text-sm hover:underline"
+          {/* Feed — datasets based on interest */}
+          <div className="mb-8">
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h2 className="text-base font-semibold text-slate-900">Recommended For You</h2>
+                <p className="text-xs text-gray-500 mt-0.5">Datasets matched to your research interests</p>
+              </div>
+              <button
+                onClick={() => navigate("/datasets/explore")}
+                className="text-amber-600 font-medium text-sm hover:underline shrink-0"
+              >
+                View all
+              </button>
+            </div>
+
+            {loading && <p className="text-gray-500">Loading feed…</p>}
+
+            {!loading && feed.length === 0 && (
+              <div className="bg-white rounded-xl p-10 text-center text-gray-500">
+                No recommendations yet.
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {feed.map((item) => (
+                <div
+                  key={item.id}
+                  onClick={() => navigate(`/datasets/${item.id}`)}
+                  role="button"
+                  tabIndex={0}
+                  className="group bg-white rounded-xl p-5 shadow-sm border border-transparent hover:border-amber-200 hover:shadow-md cursor-pointer transition"
                 >
-                  View all
-                </button>
-              </div>
-
-              {loading && <p className="text-gray-500">Loading datasets…</p>}
-
-              {!loading && activeDatasets.length === 0 && (
-                <p className="text-gray-500">No active datasets yet.</p>
-              )}
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {activeDatasets.slice(0, 4).map((dataset) => (
-                  <div
-                    key={dataset.id}
-                    onClick={() => navigate(`/datasets/${dataset.id}`)}
-                    role="button"
-                    tabIndex={0}
-                    className="border border-gray-200 rounded-lg p-4 cursor-pointer hover:shadow-md transition"
-                  >
-                    <div className="flex justify-between items-center">
-                      <span
-                        className={`text-[11px] font-semibold px-2 py-0.5 rounded ${
-                          dataset.visibility === "public"
-                            ? "bg-slate-900 text-white"
-                            : "bg-gray-200 text-gray-700"
-                        }`}
-                      >
-                        {dataset.visibility === "public" ? "PUBLIC" : "PRIVATE"}
-                      </span>
-                      <div className="flex gap-1.5">
-                        <button
-                          aria-label="Edit dataset"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate(`/datasets/${dataset.id}/edit`);
-                          }}
-                          className="text-gray-500 hover:text-slate-900"
-                        >
-                          ✎
-                        </button>
-                        <button
-                          aria-label={dataset.visibility === "public" ? "Share dataset" : "Restricted"}
-                          onClick={(e) => e.stopPropagation()}
-                          className="text-gray-500 hover:text-slate-900"
-                        >
-                          {dataset.visibility === "public" ? "⤴" : "🔒"}
-                        </button>
-                      </div>
-                    </div>
-
-                    <h3 className="text-sm font-semibold text-slate-900 mt-3">{dataset.title}</h3>
-                    <p className="text-xs text-gray-500 mt-1 line-clamp-2">{dataset.description}</p>
-
-                    <div className="flex items-center justify-between mt-3 text-xs text-gray-500">
-                      <span>⬇ {dataset.download_count ?? 0}</span>
-                      <span>🕒 {dataset.updated_at ? timeAgo(dataset.updated_at) : "—"}</span>
-                      <button
-                        aria-label="Open dataset"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/datasets/${dataset.id}`);
-                        }}
-                        className="bg-gray-100 rounded-md w-7 h-7 flex items-center justify-center hover:bg-gray-200"
-                      >
-                        →
-                      </button>
-                    </div>
+                  <div className="flex justify-between items-center mb-3">
+                    <span
+                      className={`text-[11px] font-semibold px-2 py-0.5 rounded ${
+                        item.visibility === "public"
+                          ? "bg-slate-900 text-white"
+                          : "bg-gray-200 text-gray-700"
+                      }`}
+                    >
+                      {item.visibility === "public" ? "PUBLIC" : "PRIVATE"}
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
+                      ✨ {item.match_reason}
+                    </span>
                   </div>
-                ))}
-              </div>
-            </div>
 
-            {/* Tip panel */}
-            <div className="bg-slate-900 text-white rounded-xl p-5 h-fit">
-              <h3 className="font-semibold mb-2">Researcher Tip</h3>
-              <p className="text-sm text-slate-300">
-                You can increase your citation impact by tagging your datasets with standard DOI
-                identifiers from the library portal.
-              </p>
-              <a href="/help/doi" className="text-amber-400 text-sm font-medium mt-2 inline-block">
-                Learn more →
-              </a>
+                  <h3 className="text-sm font-semibold text-slate-900 leading-snug group-hover:text-amber-700 transition">
+                    {item.title}
+                  </h3>
+                  <p className="text-xs text-gray-500 mt-1.5 line-clamp-2">{item.description}</p>
+
+                  <div className="flex items-center gap-2 mt-4 text-xs text-gray-400">
+                    <span className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center text-[10px] font-semibold text-gray-600">
+                      {item.owner_name.charAt(0)}
+                    </span>
+                    <span className="text-gray-600 font-medium">{item.owner_name}</span>
+                  </div>
+
+                  <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100 text-xs text-gray-500">
+                    <span className="flex items-center gap-1">⬇ {item.download_count}</span>
+                    <span className="flex items-center gap-1">🕒 {timeAgo(item.updated_at)}</span>
+                    <span className="w-7 h-7 rounded-md bg-gray-100 flex items-center justify-center group-hover:bg-amber-100 group-hover:text-amber-700 transition">
+                      →
+                    </span>
+                  </div>
+                </div>
+              ))}
             </div>
+          </div>
+
+          {/* Recent Activity */}
+          <div className="bg-white rounded-xl p-5 shadow-sm">
+            <h2 className="text-base font-semibold text-slate-900 mb-5">Recent Activity</h2>
+
+            {loading && <p className="text-gray-500">Loading activity…</p>}
+
+            {!loading && activity.length === 0 && (
+              <p className="text-gray-500">No recent activity.</p>
+            )}
+
+            <ol className="relative border-l-2 border-gray-100 ml-3">
+              {activity.map((item) => {
+                const style = ACTIVITY_STYLE[item.type] ?? {
+                  icon: "•",
+                  bg: "bg-gray-50",
+                  text: "text-gray-600",
+                };
+                return (
+                  <li key={item.id} className="mb-6 last:mb-0 ml-6">
+                    <span
+                      className={`absolute -left-[19px] flex items-center justify-center w-9 h-9 rounded-full ring-4 ring-white ${style.bg} ${style.text}`}
+                    >
+                      {style.icon}
+                    </span>
+                    <div className="flex items-center justify-between gap-4 pt-1">
+                      <p className="text-sm text-slate-800">{item.message}</p>
+                      <span className="text-xs text-gray-400 whitespace-nowrap">
+                        {timeAgo(item.timestamp)}
+                      </span>
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
           </div>
         </div>
       </div>

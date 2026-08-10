@@ -1,9 +1,9 @@
 import { Link, useLocation } from "react-router-dom";
-import { LayoutGrid, FolderKanban, BarChart3, Settings, HelpCircle, LogOut, Plus } from "lucide-react";
+import { LayoutGrid, FolderKanban, BarChart3, Settings, HelpCircle, LogOut} from "lucide-react";
 import { useAuth } from "../context/useAuth";
 
 const NAV_ITEMS = [
-  { label: "Dashboard", icon: LayoutGrid, to: "/dashboard" },
+  { label: "Dashboard", icon: LayoutGrid, to: "/researcher-dashboard" },
   { label: "My Datasets", icon: FolderKanban, to: "/datasets" },
   { label: "Analytics", icon: BarChart3, to: "/analytics" },
   { label: "Settings", icon: Settings, to: "/profile" },
@@ -40,15 +40,6 @@ export default function Sidebar() {
           })}
         </nav>
 
-        <div className="px-3 mt-6">
-          <Link
-            to="/submissions/new"
-            className="flex items-center justify-center gap-2 bg-[#F5C453] text-navy font-semibold
-                       text-sm rounded-xl py-3 hover:bg-[#e8b73f] transition"
-          >
-            <Plus className="w-4 h-4" /> New Submission
-          </Link>
-        </div>
       </div>
 
       <div className="px-3 pb-6 space-y-1">

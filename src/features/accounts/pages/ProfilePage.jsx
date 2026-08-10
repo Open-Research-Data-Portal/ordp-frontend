@@ -5,7 +5,7 @@ import TopBar from "../../../layouts/TopBar";
 import TextInput from "../../../components/ui/TextInput";
 import TextArea from "../../../components/ui/TextArea";
 import Select from "../../../components/ui/Select";
-import MultiSelectTags from "../../../components/ui/MultiSelectTags";
+import ResearchInterests from "../../../components/ui/ResearchInterests";
 import Button from "../../../components/ui/Button";
 import { useAuth } from "../../../context/useAuth";
 import * as authApi from "../api/authApi";
@@ -15,7 +15,8 @@ import {
   ACADEMIC_RANK_OPTIONS,
   HIGHEST_DEGREE_OPTIONS,
   STUDENT_TYPE_OPTIONS,
-  RESEARCH_INTEREST_OPTIONS,
+  //RESEARCH_INTEREST_OPTIONS,
+  RESEARCH_INTEREST_CATEGORIES,
   DEFAULT_AFFILIATION,
   BIO_MAX_LENGTH,
 } from "./constants";
@@ -179,6 +180,14 @@ export default function ProfilePage() {
                     className="hidden"
                     onChange={handleAvatarChange}
                   />
+                  <button
+                    type="button"
+                    onClick={() => setAvatarUrl(null)}
+                    className="absolute -bottom-1 -left-1 w-auto px-2 h-7 rounded-md bg-white border border-slate-200 text-xs text-slate-600 flex items-center gap-1 shadow-sm"
+                    aria-label="Delete profile picture"
+                  >
+                    Delete
+                  </button>
                 </div>
                 <p className="text-xs text-slate-400 pt-8">Allowed: JPG, PNG. Max 2MB.</p>
               </div>
@@ -228,12 +237,14 @@ export default function ProfilePage() {
                     type="password"
                     value="••••••••"
                   />
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1 text-xs font-semibold text-[#B8860B] hover:underline -mt-2"
-                  >
-                    <RotateCcw className="w-3 h-3" /> Change Password
-                  </button>
+                  <div className="mt-1">
+                    <a
+                      href="/forgot-password"
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-[#B8860B] hover:underline"
+                    >
+                      <RotateCcw className="w-3 h-3" /> Change Password
+                    </a>
+                  </div>
                 </div>
               </div>
             </SectionCard>
@@ -330,14 +341,13 @@ export default function ProfilePage() {
                 helperText="Personal website, institutional staff page, or other professional social media links."
               />
 
-              <MultiSelectTags
+              <ResearchInterests
                 id="researchInterests"
                 label="Research Interests"
                 required
                 value={researchInterests}
                 onChange={setResearchInterests}
-                options={RESEARCH_INTEREST_OPTIONS}
-                placeholder="Other (type to add)..."
+                categories={RESEARCH_INTEREST_CATEGORIES}
               />
 
               <TextArea

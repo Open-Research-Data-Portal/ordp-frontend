@@ -173,6 +173,7 @@ export default function RegisterPage() {
           label="Password"
           required
           type="password"
+          showToggle
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder="••••••••"

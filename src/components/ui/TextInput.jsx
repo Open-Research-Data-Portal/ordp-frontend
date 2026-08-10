@@ -1,4 +1,5 @@
-import { Loader2, CheckCircle2 } from "lucide-react";
+import { Loader2, CheckCircle2, Eye, EyeOff } from "lucide-react";
+import { useState } from "react";
 
 export default function TextInput({
   id,
@@ -17,7 +18,9 @@ export default function TextInput({
   helperText = null,
   maxLength,
   showCount = false,
+  showToggle = false,
 }) {
+  const [visible, setVisible] = useState(false);
   return (
     <div className="mb-4">
       {(label || required || optional) && (
@@ -36,7 +39,7 @@ export default function TextInput({
         )}
         <input
           id={id}
-          type={type}
+          type={type === "password" && showToggle ? (visible ? "text" : "password") : type}
           value={value ?? ""}
           onChange={onChange}
           placeholder={placeholder}
@@ -52,6 +55,17 @@ export default function TextInput({
             error ? "border-red-300" : "",
           ].join(" ")}
         />
+        {type === "password" && showToggle && (
+          <button
+            type="button"
+            onClick={() => setVisible((v) => !v)}
+            aria-pressed={visible}
+            className="absolute right-3.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-md flex items-center justify-center text-slate-500"
+            title={visible ? "Hide password" : "Show password"}
+          >
+            {visible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          </button>
+        )}
         {status === "checking" && (
           <Loader2 className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 animate-spin" />
         )}

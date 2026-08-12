@@ -17,6 +17,7 @@ import {
   STUDENT_TYPE_OPTIONS,
   DEFAULT_AFFILIATION,
   BIO_MAX_LENGTH,
+  HIGHEST_DEGREE_OPTIONS,
 
 } from "../../features/accounts/pages/constants";
 function getNameParts(source) {
@@ -87,15 +88,36 @@ export default function DataUploadPage() {
     };
   }, [isAuthenticated]);
 
-  useEffect(() => {
-    if (!user) return;
-    const parts = getNameParts(user);
-    setFirstName((v) => v || parts.firstName);
-    setFatherName((v) => v || parts.fatherName);
-    setGrandFatherName((v) => v || parts.grandFatherName);
-    setEmail((v) => v || user?.email || "");
-    setUsername((v) => v || user?.username || "");
-  }, [user]);
+ useEffect(() => {
+  if (!isAuthenticated) return;
+
+  let cancelled = false;
+
+  async function loadProfile() {
+    let profile = null;
+    try {
+      profile = await authApi.getProfile();
+    } catch {
+      // fall back to context user below
+    }
+    if (cancelled) return;
+
+    const source = profile ?? user;
+    if (!source) return;
+
+    const parts = getNameParts(source);
+    setFirstName(parts.firstName);
+    setFatherName(parts.fatherName);
+    setGrandFatherName(parts.grandFatherName);
+    setEmail(source?.email ?? "");
+    setUsername(source?.username ?? "");
+  }
+
+  loadProfile();
+  return () => {
+    cancelled = true;
+  };
+}, [isAuthenticated, user]);
 
   const displayName = useMemo(() => {
     const full = [firstName, fatherName, grandFatherName].filter(Boolean).join(" ").trim();

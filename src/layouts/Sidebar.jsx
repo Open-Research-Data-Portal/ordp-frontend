@@ -1,11 +1,10 @@
 import { Link, useLocation } from "react-router-dom";
-import { LayoutGrid, FolderKanban, Upload, BarChart3, Settings, HelpCircle, LogOut, Plus } from "lucide-react";
+import { LayoutGrid, FolderKanban, BarChart3, Settings, HelpCircle, LogOut} from "lucide-react";
 import { useAuth } from "../context/useAuth";
 
 const NAV_ITEMS = [
-  { label: "Dashboard", icon: LayoutGrid, to: "/dashboard" },
-  { label: "My Projects", icon: FolderKanban, to: "/projects" },
-  { label: "Submissions", icon: Upload, to: "/submissions" },
+  { label: "Dashboard", icon: LayoutGrid, to: "/researcher-dashboard" },
+  { label: "My Datasets", icon: FolderKanban, to: "/datasets" },
   { label: "Analytics", icon: BarChart3, to: "/analytics" },
   { label: "Settings", icon: Settings, to: "/profile" },
 ];
@@ -15,7 +14,7 @@ export default function Sidebar() {
   const { logout } = useAuth();
 
   return (
-    <aside className="w-64 shrink-0 bg-[#0B1526] text-slate-300 flex flex-col justify-between min-h-screen">
+    <aside className="w-64 shrink-0 bg-navy text-slate-300 flex flex-col justify-between min-h-screen">
       <div>
         <div className="px-6 py-6">
           <h1 className="text-lg font-serif font-bold text-white tracking-wide">Research Hub</h1>
@@ -41,15 +40,6 @@ export default function Sidebar() {
           })}
         </nav>
 
-        <div className="px-3 mt-6">
-          <Link
-            to="/submissions/new"
-            className="flex items-center justify-center gap-2 bg-[#F5C453] text-[#0B1526] font-semibold
-                       text-sm rounded-xl py-3 hover:bg-[#e8b73f] transition"
-          >
-            <Plus className="w-4 h-4" /> New Submission
-          </Link>
-        </div>
       </div>
 
       <div className="px-3 pb-6 space-y-1">

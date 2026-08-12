@@ -15,7 +15,6 @@ import {
   ACADEMIC_RANK_OPTIONS,
   HIGHEST_DEGREE_OPTIONS,
   STUDENT_TYPE_OPTIONS,
-  RESEARCH_INTEREST_OPTIONS,
   RESEARCH_INTEREST_CATEGORIES,
   DEFAULT_AFFILIATION,
   BIO_MAX_LENGTH,
@@ -71,18 +70,13 @@ export default function ProfilePage() {
   const [affiliation, setAffiliation] = useState(DEFAULT_AFFILIATION);
   const [academicRole, setAcademicRole] = useState("Researcher");
   const [studentType, setStudentType] = useState("");
-  const [academicTitle, setAcademicTitle] = useState("Dr.");
-  const [academicRank, setAcademicRank] = useState("Professor");
-  const [highestDegree, setHighestDegree] = useState("PhD");
+  const [academicTitle, setAcademicTitle] = useState("");
+  const [academicRank, setAcademicRank] = useState("");
+  const [highestDegree, setHighestDegree] = useState("");
 
-  const [researchInterests, setResearchInterests] = useState([
-    "Artificial Intelligence",
-    "Software Engineering",
-  ]);
-  const [bio, setBio] = useState(
-    "Leading research in NLP and Computer Vision within the East African context, focusing on low-resource language processing and agricultural computer vision models."
-  );
-  const [orcidId, setOrcidId] = useState("0000-0002-1825-0097");
+  const [researchInterests, setResearchInterests] = useState(user?.researchInterests || []);
+  const [bio, setBio] = useState("");
+  const [orcidId, setOrcidId] = useState("");
   const [projectWork, setProjectWork] = useState("");
   const [additionalLink, setAdditionalLink] = useState("");
   const [profileVisibility, setProfileVisibility] = useState("");
@@ -99,6 +93,12 @@ export default function ProfilePage() {
 
     setEmail(user?.email ?? "");
     setUsername(user?.username ?? "");
+    setAffiliation(user?.affiliation ?? DEFAULT_AFFILIATION);
+    setAcademicRole(user?.occupation ?? user?.academicRole ?? "Researcher");
+    setResearchInterests(user?.researchInterests ?? user?.research_interests ?? []);
+    setBio(user?.bio ?? "");
+    setOrcidId(user?.orcidId ?? user?.orcid_id ?? "");
+    setProfileVisibility(user?.profileVisibility ?? user?.profile_visibility ?? "");
   }, [user]);
 
   useEffect(() => {
@@ -115,6 +115,19 @@ export default function ProfilePage() {
         setGrandFatherName(parts.grandFatherName);
         setEmail(profile?.email ?? "");
         setUsername(profile?.username ?? "");
+        setAffiliation(profile?.affiliation ?? DEFAULT_AFFILIATION);
+        setAcademicRole(profile?.occupation ?? profile?.academicRole ?? "Researcher");
+        setStudentType(profile?.studentType ?? "");
+        setAcademicTitle(profile?.academicTitle ?? "");
+        setAcademicRank(profile?.academicRank ?? "");
+        setHighestDegree(profile?.highestDegree ?? "");
+        setResearchInterests(profile?.researchInterests ?? profile?.research_interests ?? []);
+        setBio(profile?.bio ?? "");
+        setOrcidId(profile?.orcidId ?? profile?.orcid_id ?? "");
+        setProjectWork(profile?.projectWork ?? profile?.project_work ?? "");
+        setAdditionalLink(profile?.additionalLink ?? profile?.additional_link ?? "");
+        setProfileVisibility(profile?.profileVisibility ?? profile?.profile_visibility ?? "");
+        setTermsAccepted(Boolean(profile?.termsAccepted ?? profile?.terms_accepted ?? false));
       })
       .catch(() => {});
 
@@ -132,8 +145,29 @@ export default function ProfilePage() {
     setSaving(true);
     setSaved(false);
     try {
-      await new Promise((r) => setTimeout(r, 500));
+      const fullName = [firstName, fatherName, grandFatherName].filter(Boolean).join(" ").trim();
+      await authApi.updateProfile({
+        first_name: firstName,
+        last_name: fatherName,
+        grand_father_name: grandFatherName,
+        full_name: fullName,
+        affiliation,
+        occupation: academicRole,
+        student_type: studentType,
+        academic_title: academicTitle,
+        academic_rank: academicRank,
+        highest_degree: highestDegree,
+        research_interests: researchInterests,
+        bio,
+        orcid_id: orcidId,
+        project_work: projectWork,
+        additional_link: additionalLink,
+        profile_visibility: profileVisibility,
+        terms_accepted: termsAccepted,
+      });
       setSaved(true);
+    } catch (err) {
+      console.error("Failed to save profile:", err);
     } finally {
       setSaving(false);
     }

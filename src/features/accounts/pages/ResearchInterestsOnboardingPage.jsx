@@ -11,7 +11,7 @@ import { RESEARCH_INTEREST_CATEGORIES } from "./constants";
 export default function ResearchInterestsOnboardingPage() {
   const navigate = useNavigate();
   const { user, updateProfile } = useAuth();
-  const [selectedInterests, setSelectedInterests] = useState(user?.researchInterests || []);
+  const [selectedInterests, setSelectedInterests] = useState(user?.researchInterests || user?.research_interests || []);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 

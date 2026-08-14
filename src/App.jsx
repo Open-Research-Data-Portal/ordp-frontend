@@ -29,22 +29,22 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Navigate to="/login" replace />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/verify-email" element={<VerifyEmailRoute />} />
-          <Route path="/verify-email/confirm" element={<EmailVerifyConfirmPage />} />
-          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-          <Route path="/check-email" element={<CheckEmailPage />} />
-          <Route path="/reset-password" element={<ResetPasswordPage />} />
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/research-interests-onboarding" element={<ResearchInterestsOnboardingPage />} />
-          <Route path="/data-upload" element={<DataUploadPage />} />
-          <Route path="/profile" element={<ProfilePage />} />
-          <Route path="*" element={<Navigate to="/login" replace />} />
-          <Route path="/datasets" element={<DatasetListPage />} />
-          <Route path="/researcher-dashboard" element={<ResearcherDashboardPage />} />
-          <Route path="/landing" element={<LandingPage />} />
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/verify-email" element={<VerifyEmailRoute />} />
+        <Route path="/verify-email/confirm" element={<EmailVerifyConfirmPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/check-email" element={<CheckEmailPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/research-interests-onboarding" element={<ResearchInterestsOnboardingPage />} />
+        <Route path="/data-upload" element={<DataUploadPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/datasets" element={<DatasetListPage />} />
+        <Route path="/researcher-dashboard" element={<ResearcherDashboardPage />} />
+        <Route path="/landing" element={<LandingPage />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

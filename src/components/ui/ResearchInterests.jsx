@@ -18,7 +18,10 @@ export default function ResearchInterests({
   const normalizedQuery = query.trim().toLowerCase();
 
   const filteredCategories = useMemo(() => {
-    if (!normalizedQuery) return categories;
+    if (!normalizedQuery) {
+      const selected = categories.find((c) => c.category === category);
+      return selected ? [selected] : [];
+    }
     return categories
       .map((categoryItem) => {
         const categoryMatches = categoryItem.category.toLowerCase().includes(normalizedQuery);
@@ -34,7 +37,7 @@ export default function ResearchInterests({
         return null;
       })
       .filter(Boolean);
-  }, [categories, normalizedQuery]);
+  }, [categories, normalizedQuery, category]);
 
   function addInterest(cat, sub) {
     const label = `${cat} — ${sub}`;
@@ -98,20 +101,18 @@ export default function ResearchInterests({
           </select>
         )}
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 gap-4">
           {filteredCategories.length === 0 ? (
-            <div className="text-sm text-slate-500 col-span-full py-3 rounded-lg border border-slate-200 bg-slate-50">
+            <div className="text-sm text-slate-500 py-3 rounded-lg border border-slate-200 bg-slate-50">
               No matching categories or subfields found.
             </div>
           ) : (
             filteredCategories.map((categoryItem) => (
-              <div key={categoryItem.category} className="space-y-2">
-                {normalizedQuery && (
-                  <div className="text-xs font-semibold uppercase text-slate-500 tracking-[0.2em]">
-                    {categoryItem.category}
-                  </div>
-                )}
-                <div className="grid grid-cols-1 gap-2">
+              <div key={categoryItem.category} className="space-y-3">
+                <div className="text-xs font-semibold uppercase text-slate-500 tracking-[0.2em]">
+                  {categoryItem.category}
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
                   {categoryItem.subcategories.map((sub) => (
                     <button
                       type="button"

@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes, useSearchParams } from "react-router-dom";
 
+import LandingPage from "../pages/LandingPage.jsx";
 import LoginPage from "../features/accounts/pages/Login.jsx";
 import RegisterPage from "../features/accounts/pages/RegisterPage.jsx";
 import VerifyEmailPage from "../features/accounts/pages/VerifyEmailPage.jsx";
@@ -30,7 +31,7 @@ export default function AppRoutes() {
   return (
     <Routes>
       {/* Root */}
-      <Route path="/" element={<Navigate to="/login" replace />} />
+      <Route path="/" element={<LandingPage />} />
 
       {/* Auth */}
       <Route path="/login" element={<LoginPage />} />

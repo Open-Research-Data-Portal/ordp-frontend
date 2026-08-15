@@ -3,7 +3,7 @@ import FileUploadItem from "./FileUploadItem";
 
 export default function UploadForm({ initialValues = {}, onNext, onBack }) {
   const [files, setFiles] = useState(initialValues.files || []);
-  const [visibility, setVisibility] = useState(initialValues.visibility || "institution");
+  const [access, setAccess] = useState(initialValues.access || "public");
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef(null);
 
@@ -21,13 +21,13 @@ export default function UploadForm({ initialValues = {}, onNext, onBack }) {
 
   const handleContinue = (e) => {
     e.preventDefault();
-    onNext({ files, visibility });
+    onNext({ files, access });
   };
 
   return (
     <form className="bg-white border border-[#E3E1DA] shadow-lg rounded-lg p-10" onSubmit={handleContinue}>
       <h2 className="text-xl font-serif font-bold text-[#0B1526] mb-2">Upload Research Data</h2>
-      <p className="text-sm text-gray-500 mb-8">Finalize your submission by uploading files and setting visibility permissions.</p>
+      <p className="text-sm text-gray-500 mb-8">Finalize your submission by uploading files and setting access permissions.</p>
 
       <div
         className={`border-2 border-dashed rounded-lg py-14 px-6 text-center cursor-pointer
@@ -39,7 +39,7 @@ export default function UploadForm({ initialValues = {}, onNext, onBack }) {
       >
         <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-[#F2E7C4] flex items-center justify-center text-gold-dark text-xl">⬆</div>
         <p className="text-lg font-semibold m-0 mb-1.5">Drag and drop files here</p>
-        <p className="text-sm text-gray-500 m-0 mb-5">Supported formats: CSV, JSON, HDF5, XLSX, PDF (Max 2GB per file)</p>
+        <p className="text-sm text-gray-500 m-0 mb-5">Supported formats: CSV, JSON/JSONL, Excel, Images, Parquet (Max 2GB per file)</p>
         <button type="button" className="bg-[#A67A0D] hover:bg-[#8f690b] text-white rounded-md px-6 py-3 text-base font-semibold">Browse Files</button>
         <input ref={fileInputRef} type="file" multiple hidden onChange={(e) => addFiles(e.target.files)} />
       </div>
@@ -54,27 +54,28 @@ export default function UploadForm({ initialValues = {}, onNext, onBack }) {
       )}
 
       <div className="mb-6">
-        <label className="block text-base font-semibold mb-2">Visibility & Access</label>
+        <label className="block text-base font-semibold mb-2">Access</label>
+        <p className="text-sm text-gray-500 mb-3">Every dataset is visible to all users. Access controls whether the file itself can be downloaded directly.</p>
         <div className="grid grid-cols-2 gap-5">
           <button
             type="button"
-            onClick={() => setVisibility("institution")}
+            onClick={() => setAccess("public")}
             className={`text-left p-5 border rounded-lg bg-white flex flex-col gap-1.5
-              ${visibility === "institution" ? "border-gold bg-[#FBF6E9]" : "border-[#E3E1DA]"}`}
+              ${access === "public" ? "border-gold bg-[#FBF6E9]" : "border-[#E3E1DA]"}`}
           >
-            <span className="text-2xl">🏛</span>
-            <span className="font-semibold text-base">Institution</span>
-            <span className="text-sm text-gray-500">Only verified AASTU faculty and students can access.</span>
+            <span className="text-2xl">🌐</span>
+            <span className="font-semibold text-base">Public</span>
+            <span className="text-sm text-gray-500">Anyone can view and download the dataset directly.</span>
           </button>
           <button
             type="button"
-            onClick={() => setVisibility("restricted")}
+            onClick={() => setAccess("private")}
             className={`text-left p-5 border rounded-lg bg-white flex flex-col gap-1.5
-              ${visibility === "restricted" ? "border-gold bg-[#FBF6E9]" : "border-[#E3E1DA]"}`}
+              ${access === "private" ? "border-gold bg-[#FBF6E9]" : "border-[#E3E1DA]"}`}
           >
             <span className="text-2xl">🔒</span>
-            <span className="font-semibold text-base">Restricted</span>
-            <span className="text-sm text-gray-500">Access granted via request and author approval only.</span>
+            <span className="font-semibold text-base">Private</span>
+            <span className="text-sm text-gray-500">Visible to everyone, but downloading requires the author's consent.</span>
           </button>
         </div>
       </div>

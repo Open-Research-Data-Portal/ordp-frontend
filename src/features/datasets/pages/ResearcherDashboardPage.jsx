@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Sidebar from "../../../layouts/Sidebar";
 import TopBar from "../../../layouts/TopBar";
 import { useAuth } from "../../../context/useAuth";
+import * as datasetsApi from "../hooks/datasetsApi";
 
 function timeAgo(dateString) {
+  if (!dateString) return "—";
   const diffMs = Date.now() - new Date(dateString).getTime();
   const mins = Math.floor(diffMs / 60000);
   if (mins < 60) return `${mins}m ago`;
@@ -14,118 +16,6 @@ function timeAgo(dateString) {
   return `${days}d ago`;
 }
 
-// TODO(backend): replace with real GET /api/datasets/mine/ once available.
-const MOCK_DATASETS = [
-  {
-    id: "1",
-    title: "Seismic Activity Patterns in Northern Ethiopia 2020-2023",
-    description: "Structured sensor readings covering four seismic monitoring stations.",
-    visibility: "public",
-    download_count: 128,
-    updated_at: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
-    is_active: true,
-  },
-  {
-    id: "2",
-    title: "Climate Variability Analysis in the Ethiopian Highlands",
-    description: "Decade-long rainfall and temperature dataset for highland agriculture research.",
-    visibility: "restricted",
-    download_count: 42,
-    updated_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    is_active: true,
-  },
-  {
-    id: "3",
-    title: "Urban Traffic Flow — Addis Ababa Ring Road",
-    description: "Vehicle count and congestion metrics collected via roadside sensors.",
-    visibility: "public",
-    download_count: 7,
-    updated_at: new Date(Date.now() - 40 * 60 * 1000).toISOString(),
-    is_active: true,
-  },
-  {
-    id: "4",
-    title: "Groundwater Quality Survey — Oromia Region",
-    description: "Chemical composition readings from 60 sampling wells.",
-    visibility: "public",
-    download_count: 15,
-    updated_at: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
-    is_active: true,
-  },
-];
-
-// TODO(backend): replace with real GET /api/datasets/recommended/ once available.
-const MOCK_FEED = [
-  {
-    id: "101",
-    title: "Machine Learning Approaches to Drought Prediction in the Horn of Africa",
-    description: "Satellite-derived vegetation indices paired with rainfall records for ML-based forecasting.",
-    owner_name: "Dr. Meron Tadesse",
-    visibility: "public",
-    download_count: 312,
-    updated_at: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
-    match_reason: "Based on your interest in Climate Data",
-  },
-  {
-    id: "102",
-    title: "Reinforcement Learning Benchmarks for Multi-Objective Optimization",
-    description: "Evaluation suite and reward-shaping data for RL research across five environments.",
-    owner_name: "iCog Labs Research Team",
-    visibility: "public",
-    download_count: 89,
-    updated_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-    match_reason: "Based on your interest in Machine Learning",
-  },
-  {
-    id: "103",
-    title: "Seismic Hazard Mapping — East African Rift System",
-    description: "Compiled fault-line and tremor-frequency data for regional hazard modeling.",
-    owner_name: "Dr. Solomon Girma",
-    visibility: "restricted",
-    download_count: 54,
-    updated_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-    match_reason: "Similar to datasets you've viewed",
-  },
-  {
-    id: "104",
-    title: "Crop Yield Response to Soil Moisture — Rift Valley Farms",
-    description: "Field-measured soil moisture and yield outcomes across three growing seasons.",
-    owner_name: "Dr. Hanna Bekele",
-    visibility: "public",
-    download_count: 176,
-    updated_at: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(),
-    match_reason: "Based on your interest in Climate Data",
-  },
-];
-
-// TODO(backend): replace with real GET /api/activity/mine/ once available.
-const MOCK_ACTIVITY = [
-  {
-    id: "a1",
-    type: "download",
-    message: "You downloaded \"Groundwater Quality Survey — Oromia Region\"",
-    timestamp: new Date(Date.now() - 25 * 60 * 1000).toISOString(),
-  },
-  {
-    id: "a2",
-    type: "upload",
-    message: "You uploaded \"Urban Traffic Flow — Addis Ababa Ring Road\"",
-    timestamp: new Date(Date.now() - 40 * 60 * 1000).toISOString(),
-  },
-  {
-    id: "a3",
-    type: "comment",
-    message: "New comment on \"Climate Variability Analysis in the Ethiopian Highlands\"",
-    timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: "a4",
-    type: "approval",
-    message: "\"Seismic Activity Patterns in Northern Ethiopia 2020-2023\" was approved by an admin",
-    timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-  },
-];
-
 const ACTIVITY_STYLE = {
   download: { icon: "⬇", bg: "bg-blue-50", text: "text-blue-600" },
   upload: { icon: "📤", bg: "bg-emerald-50", text: "text-emerald-600" },
@@ -133,17 +23,73 @@ const ACTIVITY_STYLE = {
   approval: { icon: "✅", bg: "bg-violet-50", text: "text-violet-600" },
 };
 
+function normalizeList(data) {
+  if (Array.isArray(data)) return data;
+  return data?.results || [];
+}
+
 export default function ResearcherDashboardPage() {
   const { user } = useAuth();
-  const [datasets] = useState(MOCK_DATASETS);
-  const [feed] = useState(MOCK_FEED);
-  const [activity] = useState(MOCK_ACTIVITY);
-  const [loading] = useState(false);
-  const [error] = useState(null);
+  const [datasets, setDatasets] = useState([]);
+  const [feed, setFeed] = useState([]);
+  const [activity, setActivity] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const navigate = useNavigate();
 
-  const activeDatasets = datasets.filter((d) => d.is_active);
-  const totalDownloads = datasets.reduce((sum, d) => sum + (d.download_count || 0), 0);
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadDashboard = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const [datasetsData, feedData, activityData, statsData] = await Promise.allSettled([
+          datasetsApi.getMyDatasets(),
+          datasetsApi.getDashboardFeed(),
+          datasetsApi.getDashboardRecentActivity(),
+          datasetsApi.getDashboardStats(),
+        ]);
+
+        if (!isMounted) return;
+
+        if (datasetsData.status === "fulfilled") {
+          setDatasets(normalizeList(datasetsData.value));
+        }
+        if (feedData.status === "fulfilled") {
+          setFeed(normalizeList(feedData.value));
+        }
+        if (activityData.status === "fulfilled") {
+          setActivity(normalizeList(activityData.value));
+        }
+        if (statsData.status === "fulfilled") {
+          setStats(statsData.value);
+        }
+
+        const failed = [datasetsData, feedData, activityData, statsData].filter((r) => r.status === "rejected");
+        if (failed.length > 0) {
+          setError("Some dashboard data failed to load.");
+        }
+      } catch (err) {
+        if (isMounted) {
+          setError(err.response?.data?.detail || "Failed to load your dashboard.");
+        }
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    loadDashboard();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const activeDatasets = datasets.filter((d) => d.is_active !== false);
+  const totalDownloads = stats?.total_downloads ?? datasets.reduce((sum, d) => sum + (d.download_count || 0), 0);
+  const profileViews = stats?.profile_views ?? user?.profile_views;
 
   const today = new Date().toLocaleDateString(undefined, {
     weekday: "long",
@@ -177,7 +123,7 @@ export default function ResearcherDashboardPage() {
 
           {error && (
             <p role="alert" className="text-red-700 mb-4">
-              Failed to load your datasets.
+              {error}
             </p>
           )}
 
@@ -186,21 +132,21 @@ export default function ResearcherDashboardPage() {
             <div className="bg-white rounded-xl p-5 shadow-sm">
               <span className="text-xs text-gray-500 tracking-wide">MY DATASETS</span>
               <div className="text-2xl font-bold text-slate-900 mt-1">
-                {loading ? "…" : activeDatasets.length}
+                {loading ? "…" : stats?.dataset_count ?? activeDatasets.length}
               </div>
             </div>
 
             <div className="bg-white rounded-xl p-5 shadow-sm">
               <span className="text-xs text-gray-500 tracking-wide">TOTAL DOWNLOADS</span>
               <div className="text-2xl font-bold text-slate-900 mt-1">
-                {loading ? "…" : totalDownloads.toLocaleString()}
+                {loading ? "…" : (totalDownloads ?? 0).toLocaleString()}
               </div>
             </div>
 
             <div className="bg-white rounded-xl p-5 shadow-sm">
               <span className="text-xs text-gray-500 tracking-wide">PROFILE VIEWS</span>
               <div className="text-2xl font-bold text-slate-900 mt-1">
-                {user?.profile_views ?? "—"}
+                {loading ? "…" : profileViews ?? "—"}
               </div>
               <span className="text-xs text-gray-500">Last 30 days</span>
             </div>
@@ -248,9 +194,11 @@ export default function ResearcherDashboardPage() {
                     >
                       {item.visibility === "public" ? "PUBLIC" : "PRIVATE"}
                     </span>
-                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
-                      ✨ {item.match_reason}
-                    </span>
+                    {item.match_reason && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
+                        ✨ {item.match_reason}
+                      </span>
+                    )}
                   </div>
 
                   <h3 className="text-sm font-semibold text-slate-900 leading-snug group-hover:text-amber-700 transition">
@@ -258,15 +206,17 @@ export default function ResearcherDashboardPage() {
                   </h3>
                   <p className="text-xs text-gray-500 mt-1.5 line-clamp-2">{item.description}</p>
 
-                  <div className="flex items-center gap-2 mt-4 text-xs text-gray-400">
-                    <span className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center text-[10px] font-semibold text-gray-600">
-                      {item.owner_name.charAt(0)}
-                    </span>
-                    <span className="text-gray-600 font-medium">{item.owner_name}</span>
-                  </div>
+                  {item.owner_name && (
+                    <div className="flex items-center gap-2 mt-4 text-xs text-gray-400">
+                      <span className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center text-[10px] font-semibold text-gray-600">
+                        {item.owner_name.charAt(0)}
+                      </span>
+                      <span className="text-gray-600 font-medium">{item.owner_name}</span>
+                    </div>
+                  )}
 
                   <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100 text-xs text-gray-500">
-                    <span className="flex items-center gap-1">⬇ {item.download_count}</span>
+                    <span className="flex items-center gap-1">⬇ {item.download_count ?? 0}</span>
                     <span className="flex items-center gap-1">🕒 {timeAgo(item.updated_at)}</span>
                     <span className="w-7 h-7 rounded-md bg-gray-100 flex items-center justify-center group-hover:bg-amber-100 group-hover:text-amber-700 transition">
                       →

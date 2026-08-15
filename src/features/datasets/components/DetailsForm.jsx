@@ -1,21 +1,17 @@
 import { useState } from "react";
 import FormField from "../../../components/FormField";
 import TagInput from "../../../components/TagInput";
-
-const DEPARTMENTS = [
-  "Software Engineering",
-  "HPC and Big Data Analytics CoE",
-  "Electrical & Computer Engineering",
-  "Civil Engineering",
-];
+// TODO: import your actual auth hook/context here, e.g.:
+// import { useAuth } from "../../../hooks/useAuth";
 
 export default function DetailsForm({ initialValues = {}, onNext, isSubmitting, submitError }) {
+  // TODO: replace with your real auth hook, e.g. const { user } = useAuth();
+  // const loggedInUser = user; // expects { id, name } or similar
+
   const [title, setTitle] = useState(initialValues.title || "");
   const [description, setDescription] = useState(initialValues.description || "");
-  const [department, setDepartment] = useState(initialValues.department || "");
   const [language, setLanguage] = useState(initialValues.language || "English");
-  const [authors, setAuthors] = useState(initialValues.authors || []);
-  const [relatedPublication, setRelatedPublication] = useState(initialValues.relatedPublication || "");
+  const [coAuthors, setCoAuthors] = useState(initialValues.coAuthors || []);
   const [localError, setLocalError] = useState("");
 
   const handleContinue = async (e) => {
@@ -24,8 +20,20 @@ export default function DetailsForm({ initialValues = {}, onNext, isSubmitting, 
       setLocalError("Dataset title is required.");
       return;
     }
+    if (!language) {
+      setLocalError("Language is required.");
+      return;
+    }
     setLocalError("");
-    await onNext({ title, description, department, language, authors, relatedPublication });
+    await onNext({
+      title,
+      description,
+      language,
+      // TODO: replace with the real logged-in user id once the auth hook is wired in,
+      // e.g. authorId: loggedInUser.id
+      authorId: initialValues.authorId,
+      coAuthors,
+    });
   };
 
   const inputClass = "w-full px-4 py-3 border border-[#E3E1DA] rounded-md text-sm bg-[#F7F6F2] focus:outline-none focus:border-navy";
@@ -48,27 +56,15 @@ export default function DetailsForm({ initialValues = {}, onNext, isSubmitting, 
           className={`${inputClass} resize-y`} rows={5} />
       </FormField>
 
-      <div className="grid grid-cols-2 gap-6">
-        <FormField label="Department / Research Group">
-          <select value={department} onChange={(e) => setDepartment(e.target.value)} className={inputClass}>
-            <option value="">Select Department</option>
-            {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
-          </select>
-        </FormField>
-        <FormField label="Language">
-          <select value={language} onChange={(e) => setLanguage(e.target.value)} className={inputClass}>
-            <option>English</option>
-            <option>Amharic</option>
-          </select>
-        </FormField>
-      </div>
-
-      <TagInput label="Authors / Contributors" tags={authors} onChange={setAuthors} placeholder="+ Add Author" />
-
-      <FormField label="Related Publication">
-        <input type="text" value={relatedPublication} onChange={(e) => setRelatedPublication(e.target.value)}
-          placeholder="DOI, URL, or Citation string of the primary paper" className={inputClass} />
+      <FormField label="Language" required>
+        <select value={language} onChange={(e) => setLanguage(e.target.value)} className={inputClass}>
+          <option>English</option>
+          <option>Amharic</option>
+        </select>
       </FormField>
+
+      {/* Author is auto-filled from the logged-in user — no manual entry needed. */}
+      <TagInput label="Co-Author(s)" tags={coAuthors} onChange={setCoAuthors} placeholder="+ Add Co-Author" />
 
       {localError && <p className="text-danger text-sm mt-2">{localError}</p>}
       {submitError && <p className="text-danger text-sm mt-2">{submitError}</p>}

@@ -19,7 +19,11 @@ export default function SubmissionSuccessPage() {
         <div className="w-14 h-14 rounded-full bg-gold text-white flex items-center justify-center text-2xl mx-auto mb-5">✓</div>
         <h1 className="text-navy m-0 mb-1.5">Dataset Submitted Successfully</h1>
         <p className="text-gray-500 m-0 mb-4">'{submission.title}'</p>
-        <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold bg-[#FBF0D6] text-[#8A6D1F]">◷ Pending Review</span>
+        {submission.isDraft ? (
+          <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold bg-[#E3E1DA] text-gray-600">◷ Draft Saved</span>
+        ) : (
+          <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold bg-[#FBF0D6] text-[#8A6D1F]">◷ Pending Review</span>
+        )}
 
         <div className="text-left bg-[#F7F5F0] rounded-lg p-5 my-6">
           <p className="text-[11px] text-gray-500 m-0 mb-3">SUBMISSION SUMMARY</p>

@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Sidebar from "../../../layouts/Sidebar";
 import TopBar from "../../../layouts/TopBar";
 import { useAuth } from "../../../context/useAuth";
+import * as datasetsApi from "../hooks/datasetsApi";
 
 function timeAgo(dateString) {
+  if (!dateString) return "—";
   const diffMs = Date.now() - new Date(dateString).getTime();
   const mins = Math.floor(diffMs / 60000);
   if (mins < 60) return `${mins}m ago`;
@@ -14,46 +16,43 @@ function timeAgo(dateString) {
   return `${days}d ago`;
 }
 
-// TODO(backend): replace with real GET /api/datasets/mine/ once available.
-// Placeholder data for UI-only development.
-const MOCK_DATASETS = [
-  {
-    id: "1",
-    title: "Seismic Activity Patterns in Northern Ethiopia 2020-2023",
-    description: "Structured sensor readings covering four seismic monitoring stations.",
-    visibility: "public",
-    download_count: 128,
-    updated_at: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
-    is_active: true,
-  },
-  {
-    id: "2",
-    title: "Climate Variability Analysis in the Ethiopian Highlands",
-    description: "Decade-long rainfall and temperature dataset for highland agriculture research.",
-    visibility: "restricted",
-    download_count: 42,
-    updated_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    is_active: true,
-  },
-  {
-    id: "3",
-    title: "Urban Traffic Flow — Addis Ababa Ring Road",
-    description: "Vehicle count and congestion metrics collected via roadside sensors.",
-    visibility: "public",
-    download_count: 7,
-    updated_at: new Date(Date.now() - 40 * 60 * 1000).toISOString(),
-    is_active: true,
-  },
-];
-
 export default function DatasetListPage() {
-  const [datasets] = useState(MOCK_DATASETS);
-  const [loading] = useState(false);
-  const [error] = useState(null);
+  const [datasets, setDatasets] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  const activeDatasets = datasets.filter((d) => d.is_active);
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadDatasets = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await datasetsApi.getMyDatasets();
+        if (isMounted) {
+          // Handle both array responses and { results: [...] } paginated responses
+          const list = Array.isArray(data) ? data : data?.results || [];
+          setDatasets(list);
+        }
+      } catch (err) {
+        if (isMounted) {
+          setError(err.response?.data?.detail || "Failed to load your datasets.");
+        }
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    loadDatasets();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const activeDatasets = datasets.filter((d) => d.is_active !== false);
   const displayName =
     (user?.full_name ??
       [user?.first_name, user?.last_name].filter(Boolean).join(" ").trim()) ||
@@ -86,13 +85,13 @@ export default function DatasetListPage() {
 
             {error && (
               <p role="alert" className="text-red-700 mb-4">
-                Failed to load your datasets.
+                {error}
               </p>
             )}
 
             {loading && <p className="text-gray-500">Loading datasets…</p>}
 
-            {!loading && activeDatasets.length === 0 && (
+            {!loading && !error && activeDatasets.length === 0 && (
               <div className="bg-white rounded-xl p-10 text-center">
                 <p className="text-gray-500 mb-4">You haven't uploaded any datasets yet.</p>
                 <button
@@ -104,7 +103,7 @@ export default function DatasetListPage() {
               </div>
             )}
 
-            {!loading && activeDatasets.length > 0 && (
+            {!loading && !error && activeDatasets.length > 0 && (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {activeDatasets.map((dataset) => (
                   <div
@@ -150,7 +149,7 @@ export default function DatasetListPage() {
 
                     <div className="flex items-center justify-between mt-3 text-xs text-gray-500">
                       <span>⬇ {dataset.download_count ?? 0}</span>
-                      <span>🕒 {dataset.updated_at ? timeAgo(dataset.updated_at) : "—"}</span>
+                      <span>🕒 {timeAgo(dataset.updated_at)}</span>
                       <button
                         aria-label="Open dataset"
                         onClick={(e) => {

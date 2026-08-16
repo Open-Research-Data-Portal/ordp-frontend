@@ -1,8 +1,7 @@
-import "@testing-library/jest-dom";
-import { describe, it, expect } from "vitest";
+import "@testing-library/jest-dom/vitest";
+import { cleanup } from "@testing-library/react";
+import { afterEach } from "vitest";
 
-describe("sanity check", () => {
-  it("basic math works", () => {
-    expect(1 + 1).toBe(2);
-  });
+afterEach(() => {
+  cleanup();
 });

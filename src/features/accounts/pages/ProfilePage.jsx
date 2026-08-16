@@ -87,18 +87,20 @@ export default function ProfilePage() {
 
   useEffect(() => {
     const parts = getNameParts(user);
-    setFirstName(parts.firstName);
-    setFatherName(parts.fatherName);
-    setGrandFatherName(parts.grandFatherName);
+    queueMicrotask(() => {
+      setFirstName(parts.firstName);
+      setFatherName(parts.fatherName);
+      setGrandFatherName(parts.grandFatherName);
 
-    setEmail(user?.email ?? "");
-    setUsername(user?.username ?? "");
-    setAffiliation(user?.affiliation ?? DEFAULT_AFFILIATION);
-    setAcademicRole(user?.occupation ?? user?.academicRole ?? "Researcher");
-    setResearchInterests(user?.researchInterests ?? user?.research_interests ?? []);
-    setBio(user?.bio ?? "");
-    setOrcidId(user?.orcidId ?? user?.orcid_id ?? "");
-    setProfileVisibility(user?.profileVisibility ?? user?.profile_visibility ?? "");
+      setEmail(user?.email ?? "");
+      setUsername(user?.username ?? "");
+      setAffiliation(user?.affiliation ?? DEFAULT_AFFILIATION);
+      setAcademicRole(user?.occupation ?? user?.academicRole ?? "Researcher");
+      setResearchInterests(user?.researchInterests ?? user?.research_interests ?? []);
+      setBio(user?.bio ?? "");
+      setOrcidId(user?.orcidId ?? user?.orcid_id ?? "");
+      setProfileVisibility(user?.profileVisibility ?? user?.profile_visibility ?? "");
+    });
   }, [user]);
 
   useEffect(() => {

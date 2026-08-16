@@ -93,7 +93,7 @@ export default function DashboardPage() {
             <div className="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm">
               <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                 <div>
-                  <h2 className="text-xl font-serif font-bold text-[#0B1526] mb-2">
+                  <h2 className="text-xl font-serif font-bold text-navy mb-2">
                     Welcome to your research dashboard
                   </h2>
                   <p className="text-sm text-slate-500 leading-relaxed">

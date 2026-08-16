@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Database, RefreshCw, Save, Trash2 } from "lucide-react";
+import { AlertTriangle, Database, RefreshCw, Save, Trash2, X } from "lucide-react";
 import Sidebar from "../../../layouts/Sidebar";
 import TopBar from "../../../layouts/TopBar";
 import Button from "../../../components/ui/Button";
@@ -36,7 +36,7 @@ function getDisplayName(user) {
 }
 
 function formatStatus(dataset) {
-  return [dataset?.status, dataset?.visibility].filter(Boolean).join(" · ");
+  return [dataset?.status, dataset?.visibility].filter(Boolean).join(" - ");
 }
 
 export default function DatasetManagementPage() {
@@ -55,6 +55,7 @@ export default function DatasetManagementPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [busyDeleteId, setBusyDeleteId] = useState("");
+  const [pendingDelete, setPendingDelete] = useState(null);
   const [feedback, setFeedback] = useState({ type: "", message: "" });
 
   useEffect(() => {
@@ -177,9 +178,6 @@ export default function DatasetManagementPage() {
   }
 
   async function handleSoftDelete(dataset) {
-    const confirmed = window.confirm(`Move "${dataset.title}" to inactive?`);
-    if (!confirmed) return;
-
     setBusyDeleteId(dataset.id);
     setFeedback({ type: "", message: "" });
     try {
@@ -196,15 +194,11 @@ export default function DatasetManagementPage() {
       });
     } finally {
       setBusyDeleteId("");
+      setPendingDelete(null);
     }
   }
 
   async function handleHardDelete(dataset) {
-    const confirmed = window.confirm(
-      `Permanently delete "${dataset.title}"? This cannot be undone.`,
-    );
-    if (!confirmed) return;
-
     setBusyDeleteId(dataset.id);
     setFeedback({ type: "", message: "" });
     try {
@@ -221,7 +215,17 @@ export default function DatasetManagementPage() {
       });
     } finally {
       setBusyDeleteId("");
+      setPendingDelete(null);
     }
+  }
+
+  function confirmPendingDelete() {
+    if (!pendingDelete) return;
+    if (pendingDelete.mode === "hard") {
+      handleHardDelete(pendingDelete.dataset);
+      return;
+    }
+    handleSoftDelete(pendingDelete.dataset);
   }
 
   const displayName = getDisplayName(user);
@@ -265,28 +269,29 @@ export default function DatasetManagementPage() {
 
                 {datasets.map((dataset) => {
                   const active = dataset.id === selectedDatasetId;
-                  const adminVisible = admin;
                   return (
-                    <button
+                    <article
                       key={dataset.id}
-                      type="button"
-                      onClick={() => setSelectedDatasetId(dataset.id)}
                       className={[
-                        "w-full text-left rounded-xl border p-4 transition",
+                        "w-full rounded-xl border p-4 transition",
                         active
                           ? "border-[#8B6F1F] bg-amber-50/50"
                           : "border-slate-200 hover:bg-slate-50",
                       ].join(" ")}
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
+                      <div className="flex items-start justify-between gap-3 text-left">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedDatasetId(dataset.id)}
+                          className="min-w-0 flex-1 rounded-lg text-left focus:outline-none focus:ring-2 focus:ring-[#8B6F1F]/30"
+                        >
                           <h3 className="font-semibold text-[#0B1526]">
                             {dataset.title}
                           </h3>
                           <p className="mt-1 text-xs text-slate-500">
                             {formatStatus(dataset)}
                           </p>
-                        </div>
+                        </button>
                         <span
                           className={[
                             "text-[11px] font-semibold rounded-full px-2.5 py-1",
@@ -313,19 +318,35 @@ export default function DatasetManagementPage() {
                       </div>
 
                       <div className="mt-4 flex flex-wrap gap-2">
-                        <span className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-700">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedDatasetId(dataset.id)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-white"
+                        >
                           <Database className="w-3.5 h-3.5" /> Edit metadata
-                        </span>
-                        <span className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-700">
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setPendingDelete({ mode: "soft", dataset })
+                          }
+                          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-white"
+                        >
                           <Trash2 className="w-3.5 h-3.5" /> Delete
-                        </span>
-                        {adminVisible && (
-                          <span className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+                        </button>
+                        {admin && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPendingDelete({ mode: "hard", dataset })
+                            }
+                            className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-100"
+                          >
                             Hard delete
-                          </span>
+                          </button>
                         )}
                       </div>
-                    </button>
+                    </article>
                   );
                 })}
               </div>
@@ -453,7 +474,12 @@ export default function DatasetManagementPage() {
                       icon={Trash2}
                       loading={busyDeleteId === selectedDataset.id}
                       disabled={busyDeleteId === selectedDataset.id}
-                      onClick={() => handleSoftDelete(selectedDataset)}
+                      onClick={() =>
+                        setPendingDelete({
+                          mode: "soft",
+                          dataset: selectedDataset,
+                        })
+                      }
                     >
                       Delete (soft)
                     </Button>
@@ -465,7 +491,12 @@ export default function DatasetManagementPage() {
                         icon={AlertTriangle}
                         loading={busyDeleteId === selectedDataset.id}
                         disabled={busyDeleteId === selectedDataset.id}
-                        onClick={() => handleHardDelete(selectedDataset)}
+                        onClick={() =>
+                          setPendingDelete({
+                            mode: "hard",
+                            dataset: selectedDataset,
+                          })
+                        }
                       >
                         Hard delete
                       </Button>
@@ -477,6 +508,71 @@ export default function DatasetManagementPage() {
           </div>
         </main>
       </div>
+
+      {pendingDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-dialog-title"
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  {pendingDelete.mode === "hard"
+                    ? "Permanent delete"
+                    : "Soft delete"}
+                </p>
+                <h2
+                  id="delete-dialog-title"
+                  className="mt-1 text-lg font-serif font-bold text-[#0B1526]"
+                >
+                  {pendingDelete.mode === "hard"
+                    ? "Permanently delete dataset?"
+                    : "Mark dataset inactive?"}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPendingDelete(null)}
+                className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                aria-label="Close delete confirmation"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <p className="mt-4 text-sm text-slate-600">
+              {pendingDelete.mode === "hard"
+                ? `This will permanently remove "${pendingDelete.dataset.title}" and cannot be undone.`
+                : `This will move "${pendingDelete.dataset.title}" to inactive without permanently removing it.`}
+            </p>
+
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <Button
+                variant="secondary"
+                fullWidth={false}
+                disabled={busyDeleteId === pendingDelete.dataset.id}
+                onClick={() => setPendingDelete(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant={pendingDelete.mode === "hard" ? "danger" : "gold"}
+                fullWidth={false}
+                icon={pendingDelete.mode === "hard" ? AlertTriangle : Trash2}
+                loading={busyDeleteId === pendingDelete.dataset.id}
+                onClick={confirmPendingDelete}
+              >
+                {pendingDelete.mode === "hard"
+                  ? "Permanently delete"
+                  : "Mark inactive"}
+              </Button>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }

@@ -52,6 +52,7 @@ function renderPage() {
 
 describe("DatasetManagementPage", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     mockUser.role = "researcher";
     api.listMyDatasets.mockResolvedValue(datasetList);
     api.listCategories.mockResolvedValue(categories);
@@ -62,7 +63,7 @@ describe("DatasetManagementPage", () => {
     api.hardDeleteDataset.mockResolvedValue({});
   });
 
-  it("shows soft delete and saves category/tag metadata", async () => {
+  it("saves selected category and keyword tag metadata", async () => {
     const user = userEvent.setup();
     renderPage();
 
@@ -97,14 +98,39 @@ describe("DatasetManagementPage", () => {
       keywords: ["kw-1"],
     });
 
-    const deleteCard = screen.getByText("Delete dataset").closest("section");
-    expect(deleteCard).not.toBeNull();
-    expect(
-      within(deleteCard).getByRole("button", { name: /delete \(soft\)/i }),
-    ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /hard delete/i }),
     ).not.toBeInTheDocument();
+  });
+
+  it("confirms soft delete before marking a dataset inactive", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findByRole("button", { name: /climate study/i });
+    const deleteCard = screen.getByText("Delete dataset").closest("section");
+    expect(deleteCard).not.toBeNull();
+
+    await user.click(
+      within(deleteCard).getByRole("button", { name: /delete \(soft\)/i }),
+    );
+
+    const dialog = screen.getByRole("dialog", {
+      name: /mark dataset inactive/i,
+    });
+    expect(
+      within(dialog).getByText(/move "climate study" to inactive/i),
+    ).toBeInTheDocument();
+    expect(api.softDeleteDataset).not.toHaveBeenCalled();
+
+    await user.click(within(dialog).getByRole("button", { name: /mark inactive/i }));
+
+    await waitFor(() =>
+      expect(api.softDeleteDataset).toHaveBeenCalledWith("dataset-1"),
+    );
+    expect(
+      await screen.findByText(/was marked inactive/i),
+    ).toBeInTheDocument();
   });
 
   it("shows hard delete for admin users", async () => {
@@ -120,5 +146,33 @@ describe("DatasetManagementPage", () => {
     expect(
       within(deleteCard).getByRole("button", { name: /hard delete/i }),
     ).toBeInTheDocument();
+  });
+
+  it("confirms admin hard delete before permanently deleting", async () => {
+    const user = userEvent.setup();
+    mockUser.role = "admin";
+    renderPage();
+
+    await screen.findByRole("button", { name: /climate study/i });
+    const deleteButton = screen.getAllByRole("button", {
+      name: /hard delete/i,
+    })[0];
+    await user.click(deleteButton);
+
+    const dialog = screen.getByRole("dialog", {
+      name: /permanently delete dataset/i,
+    });
+    expect(
+      within(dialog).getByText(/cannot be undone/i),
+    ).toBeInTheDocument();
+    expect(api.hardDeleteDataset).not.toHaveBeenCalled();
+
+    await user.click(
+      within(dialog).getByRole("button", { name: /permanently delete/i }),
+    );
+
+    await waitFor(() =>
+      expect(api.hardDeleteDataset).toHaveBeenCalledWith("dataset-1", true),
+    );
   });
 });

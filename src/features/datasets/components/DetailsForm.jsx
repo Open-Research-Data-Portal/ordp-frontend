@@ -1,12 +1,10 @@
 import { useState } from "react";
 import FormField from "../../../components/FormField";
 import TagInput from "../../../components/TagInput";
-// TODO: import your actual auth hook/context here, e.g.:
-// import { useAuth } from "../../../hooks/useAuth";
+import { useAuth } from "../../../context/useAuth";
 
 export default function DetailsForm({ initialValues = {}, onNext, isSubmitting, submitError }) {
-  // TODO: replace with your real auth hook, e.g. const { user } = useAuth();
-  // const loggedInUser = user; // expects { id, name } or similar
+  const { user } = useAuth();
 
   const [title, setTitle] = useState(initialValues.title || "");
   const [description, setDescription] = useState(initialValues.description || "");
@@ -29,9 +27,7 @@ export default function DetailsForm({ initialValues = {}, onNext, isSubmitting, 
       title,
       description,
       language,
-      // TODO: replace with the real logged-in user id once the auth hook is wired in,
-      // e.g. authorId: loggedInUser.id
-      authorId: initialValues.authorId,
+      authorId: user?.id,
       coAuthors,
     });
   };

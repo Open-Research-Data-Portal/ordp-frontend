@@ -17,10 +17,11 @@ export default function TopBar() {
 
   return (
     <header className="sticky top-0 z-30 bg-white border-b border-gray-200">
-      <div className="max-w-7xl mx-auto px-6 h-16 flex items-center gap-8">
+      <div className="max-w-full px-6 h-16 flex items-center gap-8">
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2 shrink-0">
-          <span className="text-xl">🎓</span>
+          {/* Place the AASTU logo file at ordp-frontend/public/aastu-logo.png */}
+          <img src="/aastu-logo.png" alt="AASTU logo" className="h-9 w-9 object-contain" />
           <span className="font-bold text-[#0B1526] text-sm sm:text-base whitespace-nowrap">
             AASTU Research Portal
           </span>
@@ -88,6 +89,5 @@ export default function TopBar() {
         </div>
       </div>
     </header>
-
   );
 }

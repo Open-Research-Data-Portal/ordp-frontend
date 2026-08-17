@@ -14,6 +14,7 @@ import ResearchInterestsOnboardingPage from "../features/accounts/pages/Research
 import DataUploadPage from "../pages/DataUpload/DataUploadPage.jsx";
 
 import ContributeDatasetPage from "../features/datasets/pages/ContributeDatasetPage.jsx";
+import DatasetManagementPage from "../features/datasets/pages/DatasetManagementPage.jsx";
 import SubmissionSuccessPage from "../features/datasets/pages/SubmissionSuccessPage.jsx";
 import DatasetListPage from "../features/datasets/pages/DatasetListPage.jsx";
 import ResearcherDashboardPage from "../features/datasets/pages/ResearcherDashboardPage.jsx";
@@ -59,6 +60,10 @@ export default function AppRoutes() {
 
       {/* Datasets */}
       <Route path="/my-datasets" element={<DatasetListPage />} />
+      <Route path="/datasets" element={<DatasetListPage />} />
+      <Route path="/projects" element={<DatasetManagementPage />} />
+      <Route path="/submissions" element={<DatasetManagementPage />} />
+      <Route path="/submissions/new" element={<DatasetManagementPage />} />
       <Route path="/datasets/contribute" element={<ContributeDatasetPage />} />
       <Route path="/datasets/contribute/success" element={<SubmissionSuccessPage />} />
       <Route path="/datasets/:id" element={<DatasetDetailPage />} />

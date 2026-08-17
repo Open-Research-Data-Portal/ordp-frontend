@@ -70,54 +70,32 @@ export default function DataUploadPage() {
     if (!isAuthenticated) return;
 
     let cancelled = false;
-    authApi
-      .getProfile()
-      .then((profile) => {
-        if (cancelled) return;
-        const parts = getNameParts(profile);
-        setFirstName(parts.firstName);
-        setFatherName(parts.fatherName);
-        setGrandFatherName(parts.grandFatherName);
-        setEmail(profile?.email ?? "");
-        setUsername(profile?.username ?? "");
-      })
-      .catch(() => {});
 
+    async function loadProfile() {
+      let profile = null;
+      try {
+        profile = await authApi.getProfile();
+      } catch {
+        // Fall back to context user below.
+      }
+      if (cancelled) return;
+
+      const source = profile ?? user;
+      if (!source) return;
+
+      const parts = getNameParts(source);
+      setFirstName(parts.firstName);
+      setFatherName(parts.fatherName);
+      setGrandFatherName(parts.grandFatherName);
+      setEmail(source?.email ?? "");
+      setUsername(source?.username ?? "");
+    }
+
+    loadProfile();
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated]);
-
- useEffect(() => {
-  if (!isAuthenticated) return;
-
-  let cancelled = false;
-
-  async function loadProfile() {
-    let profile = null;
-    try {
-      profile = await authApi.getProfile();
-    } catch {
-      // fall back to context user below
-    }
-    if (cancelled) return;
-
-    const source = profile ?? user;
-    if (!source) return;
-
-    const parts = getNameParts(source);
-    setFirstName(parts.firstName);
-    setFatherName(parts.fatherName);
-    setGrandFatherName(parts.grandFatherName);
-    setEmail(source?.email ?? "");
-    setUsername(source?.username ?? "");
-  }
-
-  loadProfile();
-  return () => {
-    cancelled = true;
-  };
-}, [isAuthenticated, user]);
+  }, [isAuthenticated, user]);
 
   const displayName = useMemo(() => {
     const full = [firstName, fatherName, grandFatherName].filter(Boolean).join(" ").trim();

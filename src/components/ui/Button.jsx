@@ -11,10 +11,10 @@ export default function Button({
   const base =
     "flex items-center justify-center gap-2 rounded-xl font-semibold py-3 text-sm transition disabled:opacity-60 disabled:cursor-not-allowed";
   const variants = {
-    primary: "bg-[#0B1526] text-white hover:bg-[#16233a]",
+    primary: "bg-navy text-white hover:bg-navy-light",
     secondary:
       "bg-white text-slate-700 border border-slate-200 hover:bg-slate-50",
-    gold: "bg-[#8B6F1F] text-white hover:bg-[#7a611b]",
+    gold: "bg-gold text-white hover:bg-gold-dark",
     danger: "bg-red-600 text-white hover:bg-red-700",
   };
 

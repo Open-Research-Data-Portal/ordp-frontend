@@ -12,7 +12,13 @@ import {
   X,
   Plus,
   Trash2,
+  FileText,
+  HardDrive,
+  Calendar,
+  Copy,
+  Database,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import TopBar from "../../../layouts/TopBar";
 import { useAuth } from "../../../context/useAuth";
 import * as datasetsApi from "../hooks/datasetsApi";
@@ -61,7 +67,7 @@ function EditTrigger({ onClick, label }) {
       type="button"
       onClick={onClick}
       aria-label={label}
-      className="text-[#A67A0D] hover:text-[#8f690b] transition-colors"
+      className="text-gold hover:text-gold-dark transition-colors"
     >
       <Pencil className="w-3.5 h-3.5" />
     </button>
@@ -75,7 +81,7 @@ function EditActions({ onSave, onCancel, saving }) {
         type="button"
         onClick={onSave}
         disabled={saving}
-        className="flex items-center gap-1.5 bg-[#A67A0D] hover:bg-[#8f690b] text-white rounded-md px-4 py-2 text-xs font-semibold transition-colors disabled:opacity-60"
+        className="flex items-center gap-1.5 bg-gold hover:bg-gold-dark text-white rounded-md px-4 py-2 text-xs font-semibold transition-colors disabled:opacity-60"
       >
         <Check className="w-3.5 h-3.5" />
         {saving ? "Saving…" : "Save"}
@@ -192,8 +198,18 @@ export default function DatasetDetailPage() {
     }
   }
 
+  const files = dataset?.files || [];
+  const citationText = dataset
+    ? `${dataset.title}. ORDP / AASTU Research Portal. ${dataset.doi || "DOI pending"}.`
+    : "";
+
+  function copyCitation() {
+    if (!citationText) return;
+    navigator.clipboard?.writeText(citationText);
+  }
+
   return (
-    <>
+  <div className="min-h-screen bg-[#F5F5F3]">
       <style>{`
         @keyframes fadeInUp {
           from {
@@ -230,7 +246,15 @@ export default function DatasetDetailPage() {
 
       <TopBar />
 
-      <div className="w-full px-4 sm:px-6 lg:px-10 py-6">
+      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 py-6">
+        <nav className="flex items-center gap-2 text-xs text-gray-500 mb-4 animate-fade-in-up" aria-label="Breadcrumb">
+          <Link to="/datasets" className="hover:text-[#A67A0D] transition-colors">Datasets</Link>
+          <span>/</span>
+          <span className="text-navy font-medium truncate max-w-[200px] sm:max-w-md">
+            {dataset?.title || "Dataset"}
+          </span>
+        </nav>
+
         <button
           type="button"
           onClick={() => navigate(-1)}
@@ -258,18 +282,36 @@ export default function DatasetDetailPage() {
             {/* LEFT COLUMN */}
             <Card className="overflow-hidden">
               {/* HEADER */}
-              <div className="bg-navy px-8 py-6 flex items-center justify-between">
+              <div className="bg-navy px-8 py-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
-                  <div className="text-3xl text-gold">
-                    🗄
+                  <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center text-gold shrink-0">
+                    <Database className="w-6 h-6" />
                   </div>
 
                   <div>
+                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                      <span
+                        className={[
+                          "text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded",
+                          dataset.visibility === "public"
+                            ? "bg-emerald-500/20 text-emerald-200"
+                            : "bg-white/15 text-white",
+                        ].join(" ")}
+                      >
+                        {dataset.visibility || "private"}
+                      </span>
+                      {dataset.status && (
+                        <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded bg-white/15 text-white capitalize">
+                          {String(dataset.status).replace("_", " ")}
+                        </span>
+                      )}
+                    </div>
                     <h1 className="text-2xl font-serif font-bold text-white">
                       {dataset.title}
                     </h1>
 
-                    <p className="text-sm text-[#C7CEDB] mt-0.5">
+                    <p className="text-sm text-[#C7CEDB] mt-0.5 flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5" />
                       Donated on {formatDate(dataset.created_at)}
                     </p>
                   </div>
@@ -675,6 +717,49 @@ export default function DatasetDetailPage() {
                   </>
                 )}
 
+                {/* FILES */}
+                {files.length > 0 && (
+                  <div className="py-6 border-b border-[#E3E1DA]">
+                    <h2 className="text-xl font-serif font-bold text-navy mb-4 flex items-center gap-2">
+                      <FileText className="w-5 h-5 text-[#A67A0D]" />
+                      Files
+                    </h2>
+                    <ul className="space-y-3">
+                      {files.map((f, idx) => (
+                        <li
+                          key={f.id || idx}
+                          className="flex items-center justify-between gap-4 p-4 rounded-lg border border-[#E3E1DA] bg-[#FBFAF7] hover:border-[#EADFC0] transition-colors"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <span className="w-9 h-9 rounded-lg bg-white border border-[#E3E1DA] flex items-center justify-center shrink-0">
+                              <HardDrive className="w-4 h-4 text-[#A67A0D]" />
+                            </span>
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-navy truncate">
+                                {f.filename || f.name || `File ${idx + 1}`}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {f.file_type || "—"} · {formatBytes(f.file_size)}
+                                {f.item_count != null && ` · ${f.item_count} rows`}
+                                {f.column_count != null && ` · ${f.column_count} cols`}
+                              </p>
+                            </div>
+                          </div>
+                          {f.download_url && (
+                            <a
+                              href={f.download_url}
+                              className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold text-[#A67A0D] hover:underline"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              Download
+                            </a>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
                 {/* DATASET INFORMATION */}
                 <div className="py-6 border-b border-[#E3E1DA]">
                   <div className="flex items-center justify-between">
@@ -830,12 +915,23 @@ export default function DatasetDetailPage() {
               {/* CITE */}
               <button
                 type="button"
-                className="flex items-center justify-center gap-2 bg-[#A67A0D] hover:bg-[#8f690b] text-white rounded-md px-6 py-3.5 text-sm font-semibold transition-all hover:shadow-lg hover:-translate-y-0.5 animate-fade-in-up"
+                onClick={copyCitation}
+                className="flex items-center justify-center gap-2 bg-gold hover:bg-gold-dark text-white rounded-md px-6 py-3.5 text-sm font-semibold transition-all hover:shadow-lg hover:-translate-y-0.5 animate-fade-in-up"
                 style={{ animationDelay: "50ms" }}
               >
                 <Quote className="w-4 h-4" />
                 CITE
               </button>
+
+              {citationText && (
+                <div className="bg-white border border-[#E3E1DA] rounded-lg p-4 text-xs text-gray-600 leading-relaxed animate-fade-in-up" style={{ animationDelay: "75ms" }}>
+                  <p className="font-semibold text-navy mb-1 flex items-center gap-1">
+                    <Copy className="w-3.5 h-3.5" />
+                    Citation
+                  </p>
+                  {citationText}
+                </div>
+              )}
 
               {/* STATISTICS */}
               <Card className="p-6" delay={100}>
@@ -1245,7 +1341,7 @@ export default function DatasetDetailPage() {
           </div>
         )}
       </div>
-    </>
+    </div>
   );
 }
 

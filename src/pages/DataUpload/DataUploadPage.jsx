@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Database, Send } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import Sidebar from "../../layouts/Sidebar";
-import TopBar from "../../layouts/TopBar";
+import DashboardShell from "../../components/dashboard/DashboardShell";
 import TextInput from "../../components/ui/TextInput";
 import TextArea from "../../components/ui/TextArea";
 import Select from "../../components/ui/Select";
@@ -149,11 +148,7 @@ export default function DataUploadPage() {
   }
 
   return (
-    <div className="min-h-screen flex bg-[#F5F5F3]">
-      <Sidebar />
-      <div className="flex-1 flex flex-col min-w-0">
-        <TopBar title="Data Upload Request" user={{ name: displayName }} hideRight />
-        <main className="flex-1 px-8 py-8 overflow-y-auto">
+    <DashboardShell title="Data Upload" subtitle={`Request access — ${displayName || "Researcher"}`}>
           <div className="max-w-2xl mx-auto">
             {submitted && (
               <div role="status" className="mb-4 rounded-xl border border-green-200 bg-green-50 px-4 py-2.5 text-sm text-green-700">
@@ -327,8 +322,6 @@ export default function DataUploadPage() {
               </div>
             </div>
           </div>
-        </main>
-      </div>
-    </div>
+    </DashboardShell>
   );
 }

@@ -1,10 +1,15 @@
 @import "tailwindcss";
 
 @theme {
-  --color-navy: #16233F;
-  --color-gold: #7C6318;
-  --color-gold-dark: #665014;
-  --color-bg: #F7F6F2;
+  /* Exact palette from assets/aastulogo.png */
+  --color-navy: #0C1236;
+  --color-navy-light: #151B3D;
+  --color-navy-muted: #1A2248;
+  --color-gold: #A87E0E;
+  --color-gold-dark: #8B6914;
+  --color-gold-light: #F5EDD6;
+  --color-silver: #C0C0C0;
+  --color-bg: #F5F5F3;
   --color-border: #E3E1DA;
   --color-success: #4C7A3D;
   --color-danger: #B3392C;
@@ -39,7 +44,6 @@ body {
   50% { opacity: 0.55; }
 }
 
-
 @layer base {
   html,
   body,
@@ -51,7 +55,7 @@ body {
   body {
     font-family: var(--font-sans);
     color: #1f2937;
-    background: var(--color-cream);
+    background: var(--color-bg);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }

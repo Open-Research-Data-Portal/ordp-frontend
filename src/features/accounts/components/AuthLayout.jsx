@@ -13,7 +13,7 @@ export default function AuthLayout({
   const panels = (
     <div className="flex-1 flex flex-col md:flex-row min-h-0">
       <div
-        className={`relative ${leftWidth} bg-[#0B1526] text-white flex flex-col justify-center px-10 py-16 md:py-20 overflow-hidden min-h-[280px] md:min-h-0`}
+        className={`relative ${leftWidth} bg-navy text-white flex flex-col justify-center px-10 py-16 md:py-20 overflow-hidden min-h-[280px] md:min-h-0`}
       >
         <div className="absolute inset-0 opacity-[0.04] bg-[radial-gradient(circle,white_1px,transparent_1px)] [background-size:18px_18px]" />
         <div className="relative z-10 max-w-lg mx-auto md:mx-0 w-full">{left}</div>

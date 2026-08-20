@@ -67,7 +67,7 @@ export default function LoginPage() {
     // If redirected from reset password flow with a success message,
     // ensure the password field is empty.
     if (location.state?.message) {
-      setPassword("");
+      queueMicrotask(() => setPassword(""));
     }
   }, [location.state]);
 

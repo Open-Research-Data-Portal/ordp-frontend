@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Search, SlidersHorizontal, User } from "lucide-react";
 import { useAuth } from "../context/useAuth";
+import { getDashboardPath } from "../utils/userRoles";
+import logo from "../assets/aastulogo.png";
 
 export default function TopBar() {
   const [query, setQuery] = useState("");
@@ -16,70 +18,65 @@ export default function TopBar() {
   }
 
   return (
-    <header className="sticky top-0 z-30 bg-white border-b border-gray-200">
-      <div className="max-w-7xl mx-auto px-6 h-16 flex items-center gap-8">
-        {/* Logo */}
-        <Link to="/" className="flex items-center gap-2 shrink-0">
-          <span className="text-xl">🎓</span>
-          <span className="font-bold text-[#0B1526] text-sm sm:text-base whitespace-nowrap">
+    <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm border-b border-border shadow-sm">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 h-16 flex items-center gap-4 lg:gap-6">
+        <Link to="/" className="flex items-center gap-2.5 shrink-0">
+          <img src={logo} alt="AASTU" className="h-9 w-9 object-contain" />
+          <span className="font-bold text-navy text-sm sm:text-base whitespace-nowrap hidden sm:inline">
             AASTU Research Portal
           </span>
         </Link>
 
-        {/* Nav links */}
-        <nav className="hidden md:flex items-center gap-6 text-sm">
-          <Link
-            to="/datasets"
-            className="text-[#8B6F1F] font-semibold border-b-2 border-[#8B6F1F] pb-5 -mb-5"
-          >
-            Datasets
-          </Link>
-        </nav>
-
-        {/* Search */}
-        <form onSubmit={handleSearchSubmit} className="flex-1 max-w-xl mx-auto">
+        <form onSubmit={handleSearchSubmit} className="flex-1 min-w-0 max-w-4xl mx-auto">
           <div className="relative">
-            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-gray-400 absolute left-4 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search datasets..."
-              className="w-full bg-gray-50 border border-gray-200 rounded-lg pl-9 pr-9 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#8B6F1F]/30 focus:border-[#8B6F1F]"
+              placeholder="Search datasets by title, keyword, subject, or researcher…"
+              className="w-full bg-gray-50 border border-border rounded-xl pl-11 pr-24 py-2.5 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gold/30 focus:border-gold focus:bg-white transition-colors"
             />
-            <button
-              type="button"
-              aria-label="Filters"
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-            >
-              <SlidersHorizontal className="w-4 h-4" />
-            </button>
+            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+              <button
+                type="button"
+                aria-label="Filters"
+                className="p-1.5 rounded-lg text-gray-400 hover:text-navy hover:bg-white transition"
+              >
+                <SlidersHorizontal className="w-4 h-4" />
+              </button>
+              <button
+                type="submit"
+                className="hidden sm:inline-flex items-center gap-1.5 bg-gold hover:bg-gold-dark text-white text-xs font-semibold rounded-lg px-3.5 py-1.5 transition-colors"
+              >
+                Search
+              </button>
+            </div>
           </div>
         </form>
 
-        {/* Auth area */}
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
           {isAuthenticated ? (
             <Link
-              to="/dashboard"
-              className="flex items-center gap-2 text-sm font-medium text-[#0B1526] hover:bg-gray-50 rounded-lg px-3 py-2 transition"
+              to={getDashboardPath(user)}
+              className="flex items-center gap-2 text-sm font-medium text-navy hover:bg-gray-50 rounded-lg px-3 py-2 transition"
             >
-              <span className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center">
-                <User className="w-4 h-4 text-gray-500" />
+              <span className="w-8 h-8 rounded-full bg-gold-light flex items-center justify-center">
+                <User className="w-4 h-4 text-gold" />
               </span>
-              <span className="hidden sm:inline">{user?.name || "Dashboard"}</span>
+              <span className="hidden md:inline max-w-[140px] truncate">{user?.name || "Dashboard"}</span>
             </Link>
           ) : (
             <>
               <Link
                 to="/login"
-                className="text-sm font-medium text-[#0B1526] border border-gray-300 rounded-lg px-4 py-2 hover:bg-gray-50 transition"
+                className="text-sm font-medium text-navy border border-border rounded-lg px-4 py-2 hover:bg-gray-50 transition"
               >
                 Login
               </Link>
               <Link
                 to="/register"
-                className="text-sm font-medium text-white bg-[#8B6F1F] rounded-lg px-4 py-2 hover:bg-[#75601a] transition"
+                className="text-sm font-medium text-white bg-gold rounded-lg px-4 py-2 hover:bg-gold-dark transition"
               >
                 Register
               </Link>
@@ -88,6 +85,5 @@ export default function TopBar() {
         </div>
       </div>
     </header>
-
   );
 }

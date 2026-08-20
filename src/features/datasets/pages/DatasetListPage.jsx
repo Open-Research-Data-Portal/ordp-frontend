@@ -1,25 +1,32 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import Sidebar from "../../../layouts/Sidebar";
+import { ArrowLeft } from "lucide-react";
 import TopBar from "../../../layouts/TopBar";
 import { useAuth } from "../../../context/useAuth";
 import * as datasetsApi from "../hooks/datasetsApi";
 
-function timeAgo(dateString) {
+const STATUS_META = {
+  approved: { label: "APPROVED", dot: "bg-success", text: "text-success" },
+  pending: { label: "PENDING", dot: "bg-[#D98A0D]", text: "text-[#D98A0D]" },
+  rejected: { label: "REJECTED", dot: "bg-danger", text: "text-danger" },
+};
+
+const ROWS_PER_PAGE_OPTIONS = [5, 10, 25];
+
+function formatDate(dateString) {
   if (!dateString) return "—";
-  const diffMs = Date.now() - new Date(dateString).getTime();
-  const mins = Math.floor(diffMs / 60000);
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+  return new Date(dateString).toLocaleDateString("en-US", {
+    month: "numeric", day: "numeric", year: "numeric",
+  });
 }
 
 export default function DatasetListPage() {
   const [datasets, setDatasets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [sortDesc, setSortDesc] = useState(true);
+  const [rowsPerPage, setRowsPerPage] = useState(5);
+  const [page, setPage] = useState(0);
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -32,7 +39,6 @@ export default function DatasetListPage() {
       try {
         const data = await datasetsApi.getMyDatasets();
         if (isMounted) {
-          // Handle both array responses and { results: [...] } paginated responses
           const list = Array.isArray(data) ? data : data?.results || [];
           setDatasets(list);
         }
@@ -46,13 +52,9 @@ export default function DatasetListPage() {
     };
 
     loadDatasets();
-
-    return () => {
-      isMounted = false;
-    };
+    return () => { isMounted = false; };
   }, []);
 
-  const activeDatasets = datasets.filter((d) => d.is_active !== false);
   const displayName =
     (user?.full_name ??
       [user?.first_name, user?.last_name].filter(Boolean).join(" ").trim()) ||
@@ -60,110 +62,149 @@ export default function DatasetListPage() {
     user?.email ||
     "User";
 
+  const sortedActive = useMemo(() => {
+    const active = datasets.filter((d) => d.is_active !== false);
+    return [...active].sort((a, b) => {
+      const aTime = new Date(a.created_at).getTime();
+      const bTime = new Date(b.created_at).getTime();
+      return sortDesc ? bTime - aTime : aTime - bTime;
+    });
+  }, [datasets, sortDesc]);
+
+  const totalRows = sortedActive.length;
+  const pageStart = page * rowsPerPage;
+  const pageEnd = Math.min(pageStart + rowsPerPage, totalRows);
+  const pageRows = sortedActive.slice(pageStart, pageEnd);
+  const canGoPrev = page > 0;
+  const canGoNext = pageEnd < totalRows;
+
   return (
     <div className="min-h-screen flex bg-[#F5F5F3]">
-      <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
         <TopBar title="My Datasets" user={{ name: displayName }} />
         <main className="flex-1 px-8 py-8">
-          <div className="p-8 lg:p-10 bg-gray-50 min-h-screen rounded-2xl border border-slate-200">
+          <div className="p-8 lg:p-10 bg-white min-h-screen rounded-2xl border border-[#E3E1DA]">
+            {/* Back to dashboard */}
+            <button
+              type="button"
+              onClick={() => navigate("/dashboard")}
+              className="group flex items-center gap-2 text-sm font-medium text-navy hover:text-gold mb-6 transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" />
+              <span>Back to Dashboard</span>
+            </button>
+
             {/* Header */}
-            <div className="flex justify-between items-start mb-6">
-              <div>
-                <h1 className="text-2xl font-bold text-slate-900">My Datasets</h1>
-                <p className="text-gray-500 mt-1">
-                  {loading ? "Loading…" : `${activeDatasets.length} dataset${activeDatasets.length === 1 ? "" : "s"}`}
-                </p>
-              </div>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="text-3xl text-navy">🗄</div>
+              <h1 className="text-2xl font-serif font-bold text-navy">Your Donated Datasets</h1>
+            </div>
+
+            {/* Controls row: sort pill */}
+            <div className="flex flex-wrap items-center gap-6 mb-6">
               <button
-                onClick={() => navigate("/datasets/contribute")}
-                className="bg-slate-900 text-white rounded-lg px-4 py-2.5 font-medium hover:bg-slate-800 transition"
+                type="button"
+                onClick={() => setSortDesc((v) => !v)}
+                className="flex items-center gap-2 bg-navy text-gold rounded-full px-4 py-2 text-xs font-semibold tracking-wide"
               >
-                + New Dataset
+                <span>☰</span>
+                SORT BY&nbsp;&nbsp;DATE DONATED, {sortDesc ? "DESC" : "ASC"}
               </button>
             </div>
 
-            {error && (
-              <p role="alert" className="text-red-700 mb-4">
-                {error}
-              </p>
-            )}
-
+            {error && <p role="alert" className="text-danger mb-4">{error}</p>}
             {loading && <p className="text-gray-500">Loading datasets…</p>}
 
-            {!loading && !error && activeDatasets.length === 0 && (
-              <div className="bg-white rounded-xl p-10 text-center">
+            {!loading && !error && totalRows === 0 && (
+              <div className="bg-[#F7F6F2] rounded-xl p-10 text-center border border-[#E3E1DA]">
                 <p className="text-gray-500 mb-4">You haven't uploaded any datasets yet.</p>
                 <button
                   onClick={() => navigate("/datasets/contribute")}
-                  className="bg-slate-900 text-white rounded-lg px-4 py-2 font-medium hover:bg-slate-800 transition"
+                  className="bg-[#A67A0D] hover:bg-[#8f690b] text-white rounded-md px-4 py-2 text-sm font-semibold transition"
                 >
                   Upload your first dataset
                 </button>
               </div>
             )}
 
-            {!loading && !error && activeDatasets.length > 0 && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {activeDatasets.map((dataset) => (
-                  <div
-                    key={dataset.id}
-                    onClick={() => navigate(`/datasets/${dataset.id}`)}
-                    role="button"
-                    tabIndex={0}
-                    className="bg-white border border-gray-200 rounded-lg p-4 cursor-pointer hover:shadow-md transition"
+            {!loading && !error && totalRows > 0 && (
+              <>
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="border-b border-[#E3E1DA]">
+                      <th className="text-left text-xs font-semibold text-gray-500 tracking-wide uppercase py-3">
+                        Dataset Name
+                      </th>
+                      <th className="text-left text-xs font-semibold text-gray-500 tracking-wide uppercase py-3">
+                        Date Donated
+                      </th>
+                      <th className="text-left text-xs font-semibold text-gray-500 tracking-wide uppercase py-3">
+                        Status
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pageRows.map((dataset) => {
+                      const meta = STATUS_META[dataset.status] || {
+                        label: (dataset.status || "—").toUpperCase(),
+                        dot: "bg-gray-400",
+                        text: "text-gray-500",
+                      };
+                      return (
+                        <tr key={dataset.id} className="border-b border-[#E3E1DA]">
+                          <td className="py-4">
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/datasets/${dataset.id}`)}
+                              className="text-[#2C5AAE] hover:underline font-medium text-base"
+                            >
+                              {dataset.title}
+                            </button>
+                          </td>
+                          <td className="py-4 text-sm text-navy">{formatDate(dataset.created_at)}</td>
+                          <td className="py-4">
+                            <span className={`inline-flex items-center gap-2 text-sm font-semibold ${meta.text}`}>
+                              <span className={`w-2.5 h-2.5 rounded-full ${meta.dot}`} />
+                              {meta.label}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+
+                {/* Pagination */}
+                <div className="flex items-center justify-end gap-4 mt-6 text-sm text-gray-500">
+                  <span>Rows per page</span>
+                  <select
+                    value={rowsPerPage}
+                    onChange={(e) => { setRowsPerPage(Number(e.target.value)); setPage(0); }}
+                    className="border border-[#E3E1DA] rounded-full px-3 py-1.5 text-sm bg-white focus:outline-none focus:border-navy"
                   >
-                    <div className="flex justify-between items-center">
-                      <span
-                        className={`text-[11px] font-semibold px-2 py-0.5 rounded ${
-                          dataset.visibility === "public"
-                            ? "bg-slate-900 text-white"
-                            : "bg-gray-200 text-gray-700"
-                        }`}
-                      >
-                        {dataset.visibility === "public" ? "PUBLIC" : "PRIVATE"}
-                      </span>
-                      <div className="flex gap-1.5">
-                        <button
-                          aria-label="Edit dataset"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate(`/datasets/${dataset.id}/edit`);
-                          }}
-                          className="text-gray-500 hover:text-slate-900"
-                        >
-                          ✎
-                        </button>
-                        <button
-                          aria-label={dataset.visibility === "public" ? "Share dataset" : "Restricted"}
-                          onClick={(e) => e.stopPropagation()}
-                          className="text-gray-500 hover:text-slate-900"
-                        >
-                          {dataset.visibility === "public" ? "⤴" : "🔒"}
-                        </button>
-                      </div>
-                    </div>
-
-                    <h3 className="text-sm font-semibold text-slate-900 mt-3">{dataset.title}</h3>
-                    <p className="text-xs text-gray-500 mt-1 line-clamp-2">{dataset.description}</p>
-
-                    <div className="flex items-center justify-between mt-3 text-xs text-gray-500">
-                      <span>⬇ {dataset.download_count ?? 0}</span>
-                      <span>🕒 {timeAgo(dataset.updated_at)}</span>
-                      <button
-                        aria-label="Open dataset"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/datasets/${dataset.id}`);
-                        }}
-                        className="bg-gray-100 rounded-md w-7 h-7 flex items-center justify-center hover:bg-gray-200"
-                      >
-                        →
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                    {ROWS_PER_PAGE_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                  <span>{totalRows === 0 ? "0" : pageStart + 1} to {pageEnd} of {totalRows}</span>
+                  <button
+                    type="button"
+                    disabled={!canGoPrev}
+                    onClick={() => setPage((p) => Math.max(p - 1, 0))}
+                    className="text-lg disabled:opacity-30 disabled:cursor-not-allowed hover:text-navy"
+                    aria-label="Previous page"
+                  >
+                    ‹
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!canGoNext}
+                    onClick={() => setPage((p) => p + 1)}
+                    className="text-lg disabled:opacity-30 disabled:cursor-not-allowed hover:text-navy"
+                    aria-label="Next page"
+                  >
+                    ›
+                  </button>
+                </div>
+              </>
             )}
           </div>
         </main>

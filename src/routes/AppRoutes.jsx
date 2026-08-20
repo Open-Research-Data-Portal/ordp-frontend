@@ -12,11 +12,18 @@ import ProfilePage from "../features/accounts/pages/ProfilePage.jsx";
 import ResearchInterestsOnboardingPage from "../features/accounts/pages/ResearchInterestsOnboardingPage.jsx";
 
 import DataUploadPage from "../pages/DataUpload/DataUploadPage.jsx";
+import DashboardRouter from "../pages/Dashboard/DashboardRouter.jsx";
 
 import ContributeDatasetPage from "../features/datasets/pages/ContributeDatasetPage.jsx";
+import DatasetManagementPage from "../features/datasets/pages/DatasetManagementPage.jsx";
 import SubmissionSuccessPage from "../features/datasets/pages/SubmissionSuccessPage.jsx";
 import DatasetListPage from "../features/datasets/pages/DatasetListPage.jsx";
 import ResearcherDashboardPage from "../features/datasets/pages/ResearcherDashboardPage.jsx";
+import AdminDashboardPage from "../features/datasets/pages/AdminDashboardPage.jsx";
+import ReviewerDashboardPage from "../features/datasets/pages/ReviewerDashboardPage.jsx";
+import UserDashboardPage from "../features/datasets/pages/UserDashboardPage.jsx";
+import DatasetDetailPage from "../features/datasets/pages/Datasetdetailpage.jsx";
+import BrowseDatasetsPage from "../pages/BrowseDatasetsPage.jsx";
 
 function VerifyEmailRoute() {
   const [searchParams] = useSearchParams();
@@ -45,8 +52,12 @@ export default function AppRoutes() {
       {/* Onboarding */}
       <Route path="/research-interests-onboarding" element={<ResearchInterestsOnboardingPage />} />
 
-      {/* Dashboard */}
-      <Route path="/dashboard" element={<ResearcherDashboardPage />} />
+      {/* Dashboards — role-specific */}
+      <Route path="/dashboard" element={<DashboardRouter />} />
+      <Route path="/user-dashboard" element={<UserDashboardPage />} />
+      <Route path="/researcher-dashboard" element={<ResearcherDashboardPage />} />
+      <Route path="/reviewer-dashboard" element={<ReviewerDashboardPage />} />
+      <Route path="/admin-dashboard" element={<AdminDashboardPage />} />
 
       {/* Profile */}
       <Route path="/profile" element={<ProfilePage />} />
@@ -55,9 +66,14 @@ export default function AppRoutes() {
       <Route path="/data-upload" element={<DataUploadPage />} />
 
       {/* Datasets */}
-      <Route path="/datasets" element={<DatasetListPage />} />
+      <Route path="/datasets" element={<BrowseDatasetsPage />} />
+      <Route path="/my-datasets" element={<DatasetListPage />} />
+      <Route path="/projects" element={<DatasetManagementPage />} />
+      <Route path="/submissions" element={<DatasetManagementPage />} />
+      <Route path="/submissions/new" element={<DatasetManagementPage />} />
       <Route path="/datasets/contribute" element={<ContributeDatasetPage />} />
       <Route path="/datasets/contribute/success" element={<SubmissionSuccessPage />} />
+      <Route path="/datasets/:id" element={<DatasetDetailPage />} />
 
       {/* Catch-all — kept last on purpose */}
       <Route path="*" element={<Navigate to="/login" replace />} />

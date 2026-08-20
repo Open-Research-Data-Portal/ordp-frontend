@@ -14,7 +14,7 @@ export default function AuthSplitCard({
   return (
     <div className="min-h-screen w-full flex items-center justify-center bg-[#F0F0EE] px-4 py-8">
       <div className="w-full max-w-4xl bg-white rounded-2xl shadow-[0_8px_40px_rgba(11,21,38,0.1)] overflow-hidden flex flex-col md:flex-row">
-        <div className="md:w-[38%] bg-[#0B1526] text-white p-8 md:p-10 flex flex-col items-center justify-center text-center relative overflow-hidden min-h-[300px]">
+        <div className="md:w-[38%] bg-navy text-white p-8 md:p-10 flex flex-col items-center justify-center text-center relative overflow-hidden min-h-[300px]">
           <div className="absolute inset-0 opacity-[0.04] bg-[linear-gradient(white_1px,transparent_1px),linear-gradient(90deg,white_1px,transparent_1px)] [background-size:20px_20px]" />
           <div className="relative z-10">
             <div

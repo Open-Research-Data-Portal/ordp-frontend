@@ -69,7 +69,12 @@ export default function ResearchInterests({
         {value.map((tag) => (
           <span key={tag} className="inline-flex items-center gap-1 bg-[#6B5B1A] text-white text-xs font-medium rounded-full px-3 py-1">
             {tag}
-            <button type="button" onClick={() => removeInterest(tag)} className="hover:text-red-200">
+            <button
+              type="button"
+              onClick={() => removeInterest(tag)}
+              aria-label={`Remove ${tag}`}
+              className="hover:text-red-200"
+            >
               <X className="w-3 h-3" />
             </button>
           </span>

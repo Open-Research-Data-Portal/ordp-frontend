@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Camera, User as UserIcon, GraduationCap, Database, Save, RotateCcw } from "lucide-react";
-import Sidebar from "../../../layouts/Sidebar";
-import TopBar from "../../../layouts/TopBar";
+import DashboardShell from "../../../components/dashboard/DashboardShell";
 import TextInput from "../../../components/ui/TextInput";
 import TextArea from "../../../components/ui/TextArea";
 import Select from "../../../components/ui/Select";
@@ -87,18 +86,20 @@ export default function ProfilePage() {
 
   useEffect(() => {
     const parts = getNameParts(user);
-    setFirstName(parts.firstName);
-    setFatherName(parts.fatherName);
-    setGrandFatherName(parts.grandFatherName);
+    queueMicrotask(() => {
+      setFirstName(parts.firstName);
+      setFatherName(parts.fatherName);
+      setGrandFatherName(parts.grandFatherName);
 
-    setEmail(user?.email ?? "");
-    setUsername(user?.username ?? "");
-    setAffiliation(user?.affiliation ?? DEFAULT_AFFILIATION);
-    setAcademicRole(user?.occupation ?? user?.academicRole ?? "Researcher");
-    setResearchInterests(user?.researchInterests ?? user?.research_interests ?? []);
-    setBio(user?.bio ?? "");
-    setOrcidId(user?.orcidId ?? user?.orcid_id ?? "");
-    setProfileVisibility(user?.profileVisibility ?? user?.profile_visibility ?? "");
+      setEmail(user?.email ?? "");
+      setUsername(user?.username ?? "");
+      setAffiliation(user?.affiliation ?? DEFAULT_AFFILIATION);
+      setAcademicRole(user?.occupation ?? user?.academicRole ?? "Researcher");
+      setResearchInterests(user?.researchInterests ?? user?.research_interests ?? []);
+      setBio(user?.bio ?? "");
+      setOrcidId(user?.orcidId ?? user?.orcid_id ?? "");
+      setProfileVisibility(user?.profileVisibility ?? user?.profile_visibility ?? "");
+    });
   }, [user]);
 
   useEffect(() => {
@@ -176,13 +177,8 @@ export default function ProfilePage() {
   const displayName = [firstName, fatherName, grandFatherName].filter(Boolean).join(" ").trim() || username || email;
 
   return (
-    <div className="min-h-screen flex bg-[#F5F5F3]">
-      <Sidebar />
-      <div className="flex-1 flex flex-col min-w-0">
-        <TopBar title="User Profile" user={{ name: displayName }} />
-
-        <main className="flex-1 px-8 py-6 overflow-y-auto">
-          <div className="max-w-4xl">
+    <DashboardShell title="Settings" subtitle={displayName ? `Profile — ${displayName}` : "Manage your profile and research identity"}>
+        <div className="max-w-4xl">
             {saved && (
               <div role="status" className="mb-4 rounded-xl border border-green-200 bg-green-50 px-4 py-2.5 text-sm text-green-700">
                 Profile changes saved.
@@ -201,7 +197,7 @@ export default function ProfilePage() {
                   </div>
                   <label
                     htmlFor="avatar-upload"
-                    className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-[#8B6F1F] text-white
+                    className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-gold text-white
                                flex items-center justify-center cursor-pointer shadow-sm"
                     aria-label="Upload profile picture"
                   >
@@ -440,21 +436,7 @@ export default function ProfilePage() {
                 Save Changes
               </Button>
             </div>
-          </div>
-        </main>
-
-        <footer className="px-8 py-5 border-t border-slate-200 bg-[#F7F7F5] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-xs text-slate-400">
-          <div>
-            <p className="font-semibold text-slate-600">AASTU Research Portal</p>
-            <p className="mt-0.5">© 2024 Addis Ababa Science and Technology University. All Rights Reserved.</p>
-          </div>
-          <div className="flex items-center gap-6">
-            <a href="/privacy" className="hover:text-[#0B1526]">Privacy Policy</a>
-            <a href="/terms" className="hover:text-[#0B1526]">Terms of Service</a>
-            <a href="/contact" className="hover:text-[#0B1526]">Contact Us</a>
-          </div>
-        </footer>
-      </div>
-    </div>
+        </div>
+    </DashboardShell>
   );
 }

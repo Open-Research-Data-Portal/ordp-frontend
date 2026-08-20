@@ -1,24 +1,44 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { beforeEach, describe, it, expect, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import ProfilePage from "./ProfilePage";
-import { AuthProvider } from "../../../context/AuthContext";
 
+const authApi = vi.hoisted(() => ({
+  getProfile: vi.fn(),
+  updateProfile: vi.fn(),
+}));
 
-vi.mock("../../api/authApi");
+const mockAuthUser = vi.hoisted(() => ({
+  email: "researcher@aastu.edu.et",
+  username: "researcher",
+  full_name: "Researcher User",
+}));
+
+vi.mock("../../../layouts/Sidebar", () => ({ default: () => <aside /> }));
+vi.mock("../../../layouts/TopBar", () => ({ default: ({ title }) => <header>{title}</header> }));
+vi.mock("../../../context/useAuth", () => ({
+  useAuth: () => ({
+    isAuthenticated: false,
+    user: mockAuthUser,
+  }),
+}));
+vi.mock("../api/authApi", () => authApi);
 
 function renderProfilePage() {
   return render(
     <MemoryRouter>
-      <AuthProvider>
-        <ProfilePage />
-      </AuthProvider>
+      <ProfilePage />
     </MemoryRouter>
   );
 }
 
 describe("ProfilePage", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    authApi.updateProfile.mockResolvedValue({});
+  });
+
   it("renders Email Address and Username as read-only and does not allow editing", async () => {
     renderProfilePage();
     const email = screen.getByLabelText(/email address/i);
@@ -26,6 +46,7 @@ describe("ProfilePage", () => {
 
     expect(email).toHaveAttribute("readonly");
     expect(username).toHaveAttribute("readonly");
+    await waitFor(() => expect(email).toHaveValue("researcher@aastu.edu.et"));
 
     const originalEmail = email.value;
     await userEvent.type(email, "changed@example.com");
@@ -35,9 +56,9 @@ describe("ProfilePage", () => {
   it("shows the password field masked and read-only, with a Change Password action", () => {
     renderProfilePage();
     expect(screen.getByText(/change password/i)).toBeInTheDocument();
-    const password = screen.getByLabelText(/^password$/i);
+    const password = screen.getByLabelText(/password/i);
     expect(password).toHaveAttribute("readonly");
-    expect(password.value).toBe("••••••••");
+    expect(password).toHaveAttribute("type", "password");
   });
 
   it("marks Academic Role and Research Interests as required", () => {
@@ -51,22 +72,26 @@ describe("ProfilePage", () => {
 
   it("lets the user add and remove a research interest tag", async () => {
     renderProfilePage();
-    expect(screen.getByText("Artificial Intelligence")).toBeInTheDocument();
+    await screen.findByDisplayValue("researcher@aastu.edu.et");
+    expect(screen.getAllByText("Artificial Intelligence").length).toBeGreaterThan(0);
 
-    await userEvent.click(screen.getByRole("button", { name: /add interest/i }));
     await userEvent.click(screen.getByRole("button", { name: "Machine Learning" }));
     expect(screen.getByText("Machine Learning")).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: /remove machine learning/i }));
-    expect(screen.queryByText("Machine Learning")).not.toBeInTheDocument();
+    const removeButton = await screen.findByRole("button", {
+      name: /remove .*machine learning/i,
+    });
+    await userEvent.click(removeButton);
+    expect(
+      screen.queryByRole("button", { name: /remove .*machine learning/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("enforces the 300-character limit on the Bio field and shows a live counter", async () => {
     renderProfilePage();
     const bio = screen.getByLabelText(/^bio/i);
-    await userEvent.clear(bio);
     const longText = "x".repeat(310);
-    await userEvent.type(bio, longText);
+    fireEvent.change(bio, { target: { value: longText } });
 
     expect(bio.value.length).toBeLessThanOrEqual(300);
     expect(screen.getByText(/300 \/ 300|^\d+ \/ 300$/)).toBeInTheDocument();
@@ -81,6 +106,9 @@ describe("ProfilePage", () => {
 
   it("shows a saved confirmation after clicking Save Changes", async () => {
     renderProfilePage();
+    await screen.findByDisplayValue("researcher@aastu.edu.et");
+    await userEvent.selectOptions(screen.getByLabelText(/profile visibility/i), "public");
+    await userEvent.click(screen.getByLabelText(/ordp terms/i));
     await userEvent.click(screen.getByRole("button", { name: /save changes/i }));
     expect(await screen.findByRole("status")).toHaveTextContent(/saved/i);
   });

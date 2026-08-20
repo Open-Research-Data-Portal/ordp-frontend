@@ -126,3 +126,63 @@ export async function getDashboardMyContributions() {
   const { data } = await client.get(`${DATASETS_BASE}/dashboard/my-contributions/`);
   return data;
 }
+
+export async function getAdminPendingReviews() {
+  const { data } = await client.get(`${DATASETS_BASE}/admin/pending-reviews/`);
+  return data;
+}
+
+export async function getAdminUploadRequests() {
+  const { data } = await client.get(`${DATASETS_BASE}/admin/upload-requests/`);
+  return data;
+}
+
+export async function getReviewerQueue() {
+  const { data } = await client.get(`${DATASETS_BASE}/reviewer/queue/`);
+  return data;
+}
+
+export async function getReviewerOverview() {
+  const { data } = await client.get("/admin-panel/dashboard/reviewer/overview/");
+  return data;
+}
+
+export async function getReviewerMetrics() {
+  const { data } = await client.get("/admin-panel/dashboard/reviewer/metrics/");
+  return data;
+}
+
+export async function getAdminCards() {
+  const { data } = await client.get("/admin-panel/dashboard/admin/cards/");
+  return data;
+}
+
+export async function getAdminAuditLog() {
+  const { data } = await client.get("/admin-panel/dashboard/admin/audit-log/");
+  return data;
+}
+
+export async function getAdminDeletionQueue() {
+  const { data } = await client.get("/admin-panel/deletion-requests/queue/");
+  return data;
+}
+
+export async function getDiscoverFeed() {
+  const { data } = await client.get("/search/discover/");
+  return data;
+}
+
+export async function getBookmarks() {
+  const { data } = await client.get(`${DATASETS_BASE}/bookmarks/`);
+  return data;
+}
+
+export async function getMySuggestions() {
+  const { data } = await client.get("/accounts/my-suggestions/");
+  return data;
+}
+
+export async function getMyDownloads() {
+  const { data } = await client.get(`${DATASETS_BASE}/dashboard/my-downloads/`);
+  return data;
+}

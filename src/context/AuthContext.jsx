@@ -1,38 +1,26 @@
-/**
- * AuthContext — Context API auth state, per the storage decision already
- * made in PR #36 (Context API, not Redux, not localStorage).
- *
- * IMPORTANT — check `src/context/` before adding this file: if PR #36
- * already created an AuthContext, use that one instead of this one, and
- * just make sure it exposes the same shape (`login`, `logout`, `user`,
- * `accessToken`, `isAuthenticated`, `loading`) so LoginPage.jsx below
- * doesn't need changes either way.
- *
- * One open question for the team (flagged, not silently decided): the
- * Figma login screen has a "Stay logged in for 30 days" checkbox, but
- * the refresh token itself is only valid 7 days server-side, and pure
- * in-memory Context state won't survive a page refresh at all. Until
- * that's resolved with Rebika/the team, this file persists the refresh
- * token to `sessionStorage` (survives a refresh, clears when the tab
- * closes) ONLY when "stay logged in" is checked — not localStorage, and
- * not indefinite. Swap the two `sessionStorage` calls below for
- * whatever the team decides instead.
- */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import * as authApi from "../features/accounts/api/authApi";
 import client from "../api/client";
 import AuthContext from "./AuthContextInstance";
-
-const REFRESH_STORAGE_KEY = "ordp_refresh_token";
+import {
+  setTokens,
+  clearTokens,
+  getRefreshToken,
+  REFRESH_KEY,
+} from "../api/tokenStore";
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [accessToken, setAccessToken] = useState(null);
-  const [refreshToken, setRefreshToken] = useState(null);
   const [loading, setLoading] = useState(() =>
-    Boolean(sessionStorage.getItem(REFRESH_STORAGE_KEY))
+    // Start in loading state only when we have a stored refresh token that
+    // we'll try to silently exchange on mount.
+    Boolean(
+      sessionStorage.getItem(REFRESH_KEY) || localStorage.getItem(REFRESH_KEY)
+    )
   );
 
+  // Keep axios default header in sync whenever the in-memory access token changes.
   useEffect(() => {
     if (accessToken) {
       client.defaults.headers.common.Authorization = `Bearer ${accessToken}`;
@@ -41,35 +29,47 @@ export function AuthProvider({ children }) {
     }
   }, [accessToken]);
 
-  // On mount: if a refresh token survived (sessionStorage, "stay logged
-  // in" case), silently exchange it for a fresh access token instead of
-  // forcing a re-login.
+  // On mount: silently exchange any stored refresh token for a fresh access
+  // token so the user doesn't have to log in again after a page refresh.
   useEffect(() => {
-    const stored = sessionStorage.getItem(REFRESH_STORAGE_KEY);
-    if (!stored) {
-      return;
-    }
+    // loading was initialized to false when there is no stored token, so
+    // returning early here is safe — no state update needed.
+    const stored = getRefreshToken(); // reads sessionStorage or localStorage
+    if (!stored) return;
+
     authApi
       .refresh(stored)
       .then(({ access, refresh: newRefresh }) => {
+        setTokens(access, newRefresh);
         client.defaults.headers.common.Authorization = `Bearer ${access}`;
         setAccessToken(access);
-        setRefreshToken(newRefresh);
-        sessionStorage.setItem(REFRESH_STORAGE_KEY, newRefresh);
         return authApi.getProfile();
       })
       .then(setUser)
       .catch(() => {
-        sessionStorage.removeItem(REFRESH_STORAGE_KEY);
+        // Stored refresh token is invalid or revoked — wipe everything.
+        clearTokens();
+        delete client.defaults.headers.common.Authorization;
       })
       .finally(() => setLoading(false));
   }, []);
 
   const login = useCallback(async (identifier, password, stayLoggedIn) => {
     const data = await authApi.login(identifier, password); // throws AuthApiError on failure
+
+    // Write tokens to the in-memory store and sessionStorage so the axios
+    // interceptor can use them immediately for any subsequent request.
+    setTokens(data.access, data.refresh);
+
+    // "Stay logged in" — also persist to localStorage so the session survives
+    // the tab being closed and re-opened.
+    if (stayLoggedIn) {
+      localStorage.setItem(REFRESH_KEY, data.refresh);
+    }
+
     client.defaults.headers.common.Authorization = `Bearer ${data.access}`;
     setAccessToken(data.access);
-    setRefreshToken(data.refresh);
+
     let profile;
     try {
       profile = await authApi.getProfile();
@@ -78,9 +78,7 @@ export function AuthProvider({ children }) {
       profile = data.user;
       setUser(profile);
     }
-    if (stayLoggedIn) {
-      sessionStorage.setItem(REFRESH_STORAGE_KEY, data.refresh);
-    }
+
     return { ...data, profile };
   }, []);
 
@@ -91,19 +89,16 @@ export function AuthProvider({ children }) {
   }, []);
 
   const logout = useCallback(async () => {
+    const currentRefresh = getRefreshToken();
     try {
-      if (refreshToken) await authApi.logout(refreshToken);
+      if (currentRefresh) await authApi.logout(currentRefresh);
     } finally {
-      // Clear client-side state regardless of whether the API call
-      // succeeded — per the API reference, the backend can't reach into
-      // the browser to do this for us.
+      clearTokens();
       delete client.defaults.headers.common.Authorization;
       setAccessToken(null);
-      setRefreshToken(null);
       setUser(null);
-      sessionStorage.removeItem(REFRESH_STORAGE_KEY);
     }
-  }, [refreshToken]);
+  }, []);
 
   const value = useMemo(
     () => ({

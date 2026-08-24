@@ -24,6 +24,8 @@ import ReviewerDashboardPage from "../features/datasets/pages/ReviewerDashboardP
 import UserDashboardPage from "../features/datasets/pages/UserDashboardPage.jsx";
 import DatasetDetailPage from "../features/datasets/pages/Datasetdetailpage.jsx";
 import BrowseDatasetsPage from "../pages/BrowseDatasetsPage.jsx";
+import DatasetViewPage from "../pages/DatasetViewPage";
+import BookmarksPage from "../features/datasets/pages/BookmarksPage";
 
 function VerifyEmailRoute() {
   const [searchParams] = useSearchParams();
@@ -65,15 +67,19 @@ export default function AppRoutes() {
       {/* Data upload request (researcher/uploader access) */}
       <Route path="/data-upload" element={<DataUploadPage />} />
 
-      {/* Datasets */}
+      {/* Datasets — public browsing */}
       <Route path="/datasets" element={<BrowseDatasetsPage />} />
+      <Route path="/datasets/:id" element={<DatasetViewPage />} />
+
+      {/* Datasets — the researcher's own (upload/draft/manage) */}
       <Route path="/my-datasets" element={<DatasetListPage />} />
+      <Route path="/my-datasets/:id" element={<DatasetDetailPage />} />
       <Route path="/projects" element={<DatasetManagementPage />} />
       <Route path="/submissions" element={<DatasetManagementPage />} />
       <Route path="/submissions/new" element={<DatasetManagementPage />} />
       <Route path="/datasets/contribute" element={<ContributeDatasetPage />} />
       <Route path="/datasets/contribute/success" element={<SubmissionSuccessPage />} />
-      <Route path="/datasets/:id" element={<DatasetDetailPage />} />
+      <Route path="/bookmarks" element={<BookmarksPage />} />
 
       {/* Catch-all — kept last on purpose */}
       <Route path="*" element={<Navigate to="/login" replace />} />

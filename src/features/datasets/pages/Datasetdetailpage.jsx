@@ -1,65 +1,180 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import {
-  ArrowLeft,
   Download,
-  Quote,
-  Eye,
-  User,
+  Share2,
   ChevronDown,
   Pencil,
   Check,
   X,
   Plus,
   Trash2,
-  FileText,
+  User,
   HardDrive,
-  Calendar,
-  Copy,
-  Database,
 } from "lucide-react";
-import { Link } from "react-router-dom";
 import TopBar from "../../../layouts/TopBar";
 import { useAuth } from "../../../context/useAuth";
 import * as datasetsApi from "../hooks/datasetsApi";
+import { getDownloadUrl } from "../../../api/sharing";
 
-function formatDate(dateString) {
-  if (!dateString) return "—";
+// ---------------------------------------------------------------------
+// DatasetDetailPage — the OWNER'S view of their own dataset.
+//
+// Layout mirrors the public DatasetViewPage (header with title/tags/
+// download/share, file + details panel, Metadata accordion). Editing is
+// layered on top via pencil triggers + an edit-mode toggle.
+//
+// API integration follows the same pattern as DatasetViewPage's
+// normalizeDataset(): the raw DatasetSerializer response nests most
+// descriptive fields under `.metadata` (MetadataSerializer), so reads
+// and writes both go through that shape. Fields marked FIXME below are
+// guesses at field names — confirm against the real serializer and
+// adjust normalizeDataset/buildPatch together if they differ.
+// ---------------------------------------------------------------------
 
-  return new Date(dateString).toLocaleDateString("en-US", {
-    month: "numeric",
-    day: "numeric",
-    year: "numeric",
-  });
+function formatRelativeDate(dateStr) {
+  if (!dateStr) return "—";
+  const diffMs = Date.now() - new Date(dateStr).getTime();
+  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  if (days < 1) return "Updated today";
+  if (days === 1) return "Updated 1 day ago";
+  if (days < 30) return `Updated ${days} days ago`;
+  const months = Math.floor(days / 30);
+  return months < 12 ? `Updated ${months} mo ago` : `Updated ${Math.floor(months / 12)}y ago`;
 }
 
 function formatBytes(bytes) {
   if (!bytes) return "0 B";
-
   if (bytes < 1024) return `${bytes} B`;
-
   const units = ["KB", "MB", "GB"];
   let value = bytes / 1024;
   let unitIndex = 0;
-
   while (value >= 1024 && unitIndex < units.length - 1) {
     value /= 1024;
     unitIndex++;
   }
-
   return `${value.toFixed(1)} ${units[unitIndex]}`;
 }
 
-function Card({ children, className = "", delay = 0 }) {
-  return (
-    <div
-      className={`bg-white border border-[#E3E1DA] rounded-lg transition-all duration-300 hover:shadow-md hover:border-[#D8D3C4] animate-fade-in-up ${className}`}
-      style={{ animationDelay: `${delay}ms` }}
-    >
-      {children}
-    </div>
-  );
+// ---------------------------------------------------------------------
+// Raw API -> UI shape. Keep this the single place that knows how the
+// backend nests fields, same role as DatasetViewPage's normalizeDataset.
+// ---------------------------------------------------------------------
+function normalizeFile(f) {
+  return {
+    id: f.id,
+    filename: f.original_filename || f.file_key || f.filename || "data file",
+    file_type:
+      f.file_type ||
+      (f.original_filename ? f.original_filename.split(".").pop()?.toUpperCase() : null),
+    file_size: f.file_size,
+    download_url: f.download_url || f.file_key || null,
+    // FIXME: confirm real field names for per-file instance/column counts —
+    // backend may return these under a different key or not at all yet.
+    item_count: f.item_count ?? f.row_count ?? null,
+    column_count: f.column_count ?? (Array.isArray(f.columns) ? f.columns.length : null),
+    has_missing_values: f.has_missing_values ?? null,
+  };
 }
+
+function normalizeDataset(raw) {
+  if (!raw) return null;
+  const meta = raw.metadata || {};
+  const files = (raw.files || []).map(normalizeFile);
+
+  return {
+    id: raw.id,
+    title: raw.title,
+    visibility: raw.visibility,
+    status: raw.status,
+    owner: raw.owner,
+    is_owner: raw.is_owner,
+    owner_name: raw.author || raw.owner_name || null,
+    updated_at: raw.updated_at,
+    thumbnail_url: raw.thumbnail_key || raw.thumbnail_url || null,
+
+    description: meta.description ?? raw.description ?? "",
+    keywords: meta.keywords ?? raw.keywords ?? [],
+
+    subject_name: meta.subject_name ?? raw.subject_name ?? "",
+    associated_tasks: meta.associated_tasks ?? raw.associated_tasks ?? "",
+    feature_type: meta.feature_type ?? raw.feature_type ?? "",
+    characteristics: meta.characteristics ?? raw.characteristics ?? [],
+    // FIXME: dataset-level has_missing_values vs. per-file — backend may only
+    // expose this on the file record. Falls back to the first file's value
+    // in the render below if this is null.
+    has_missing_values: meta.has_missing_values ?? raw.has_missing_values ?? null,
+
+    creators: meta.creators ?? raw.creators ?? [],
+
+    // FIXME: no confirmed backend field for these three yet — confirm with
+    // backend and adjust the metadata key names here + in buildPatch.
+    collaborators_note: meta.collaborators_note ?? raw.collaborators_note ?? "",
+    coverage: meta.coverage ?? raw.coverage ?? "",
+    doi: meta.doi ?? raw.doi ?? null,
+    related_publication: meta.related_publication ?? raw.related_publication ?? "",
+    citation_notes: meta.citation_notes ?? raw.citation_notes ?? "",
+
+    files,
+  };
+}
+
+// ---------------------------------------------------------------------
+// UI draft -> API patch. `title` lives top-level on the dataset record;
+// everything else editable here is read from `.metadata` in
+// normalizeDataset above, so it's written back the same way. If your
+// backend actually flattens these onto the dataset record instead of
+// nesting under metadata, drop the `metadata: {...}` wrapper below.
+// ---------------------------------------------------------------------
+function buildPatch(section, draft) {
+  switch (section) {
+    case "header":
+      return {
+        title: draft.title,
+        metadata: { description: draft.description },
+      };
+    case "keywords":
+      return { metadata: { keywords: draft.keywords } };
+    case "core":
+      return {
+        metadata: {
+          subject_name: draft.subject_name,
+          associated_tasks: draft.associated_tasks,
+          feature_type: draft.feature_type,
+          characteristics: draft.characteristics
+            ? draft.characteristics
+                .split(",")
+                .map((s) => s.trim())
+                .filter(Boolean)
+            : [],
+          has_missing_values: !!draft.has_missing_values,
+        },
+        // item_count / column_count live on the file record, not metadata —
+        // FIXME: confirm the right endpoint for editing per-file stats;
+        // sending them here as a best-effort top-level patch for now.
+        item_count: draft.item_count === "" ? null : Number(draft.item_count),
+        column_count: draft.column_count === "" ? null : Number(draft.column_count),
+      };
+    case "creators":
+      return { metadata: { creators: draft.creators } };
+    case "collaborators":
+      return { metadata: { collaborators_note: draft.collaborators_note } };
+    case "coverage":
+      return { metadata: { coverage: draft.coverage } };
+    case "doi":
+      return {
+        metadata: {
+          related_publication: draft.related_publication,
+          citation_notes: draft.citation_notes,
+        },
+      };
+    default:
+      return draft;
+  }
+}
+
+const inputClass =
+  "w-full px-3 py-2 border border-gray-200 rounded-md text-sm bg-white focus:outline-none focus:border-slate-900";
 
 function EditTrigger({ onClick, label }) {
   return (
@@ -67,7 +182,7 @@ function EditTrigger({ onClick, label }) {
       type="button"
       onClick={onClick}
       aria-label={label}
-      className="text-gold hover:text-gold-dark transition-colors"
+      className="text-amber-700 hover:text-amber-900 transition-colors"
     >
       <Pencil className="w-3.5 h-3.5" />
     </button>
@@ -76,22 +191,21 @@ function EditTrigger({ onClick, label }) {
 
 function EditActions({ onSave, onCancel, saving }) {
   return (
-    <div className="flex items-center gap-2 mt-4">
+    <div className="flex items-center gap-2 mt-3">
       <button
         type="button"
         onClick={onSave}
         disabled={saving}
-        className="flex items-center gap-1.5 bg-gold hover:bg-gold-dark text-white rounded-md px-4 py-2 text-xs font-semibold transition-colors disabled:opacity-60"
+        className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-md px-4 py-2 text-xs font-semibold transition-colors disabled:opacity-60"
       >
         <Check className="w-3.5 h-3.5" />
         {saving ? "Saving…" : "Save"}
       </button>
-
       <button
         type="button"
         onClick={onCancel}
         disabled={saving}
-        className="flex items-center gap-1.5 text-gray-500 hover:text-navy rounded-md px-3 py-2 text-xs font-semibold transition-colors"
+        className="flex items-center gap-1.5 text-gray-500 hover:text-slate-900 rounded-md px-3 py-2 text-xs font-semibold transition-colors"
       >
         <X className="w-3.5 h-3.5" />
         Cancel
@@ -100,8 +214,39 @@ function EditActions({ onSave, onCancel, saving }) {
   );
 }
 
-const inputClass =
-  "w-full px-3 py-2 border border-[#E3E1DA] rounded-md text-sm bg-[#FBFAF7] focus:outline-none focus:border-navy";
+function TagChip({ children }) {
+  return (
+    <span className="inline-block rounded-full bg-rose-50 px-3 py-1 text-xs font-medium text-rose-500">
+      {children}
+    </span>
+  );
+}
+
+function VisibilityBadge({ visibility }) {
+  const styles = {
+    public: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    institutional: "bg-blue-50 text-blue-700 border-blue-200",
+    restricted: "bg-amber-50 text-amber-700 border-amber-200",
+  };
+  const labels = { public: "Public", institutional: "Institutional", restricted: "Restricted" };
+  const style = styles[visibility] || "bg-gray-50 text-gray-600 border-gray-200";
+  const label = labels[visibility] || "Unknown";
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${style}`}>
+      <span className="h-1.5 w-1.5 rounded-full bg-current" />
+      {label}
+    </span>
+  );
+}
+
+function StatusBadge({ status }) {
+  if (!status) return null;
+  return (
+    <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-semibold capitalize text-gray-600">
+      {String(status).replace("_", " ")}
+    </span>
+  );
+}
 
 export default function DatasetDetailPage() {
   const { id } = useParams();
@@ -112,55 +257,41 @@ export default function DatasetDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const [infoOpen, setInfoOpen] = useState(true);
-  const [paperOpen, setPaperOpen] = useState(true);
-
   const [editMode, setEditMode] = useState(false);
   const [editingSection, setEditingSection] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
-
   const [draft, setDraft] = useState({});
+
+  const [expandedSections, setExpandedSections] = useState(() => new Set());
+
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState(null);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
-
     const load = async () => {
       setLoading(true);
       setError(null);
-
       try {
-        const data = await datasetsApi.getDatasetDetail(id);
-
-        if (isMounted) {
-          setDataset(data);
-        }
+        const raw = await datasetsApi.getDatasetDetail(id);
+        if (isMounted) setDataset(normalizeDataset(raw));
       } catch (err) {
-        if (isMounted) {
-          setError(
-            err.response?.data?.detail ||
-              "Failed to load this dataset."
-          );
-        }
+        if (isMounted) setError(err.response?.data?.detail || "Failed to load this dataset.");
       } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
+        if (isMounted) setLoading(false);
       }
     };
-
     load();
-
     return () => {
       isMounted = false;
     };
   }, [id]);
 
-  const isOwner =
-    dataset?.is_owner ||
-    String(dataset?.owner) === String(user?.id);
-
-  const file = dataset?.files?.[0];
+  const isOwner = dataset?.is_owner || String(dataset?.owner) === String(user?.id);
+  const isApproved = dataset?.status === "approved";
+  const files = dataset?.files || [];
 
   function startEditing(section, initialDraft) {
     setSaveError(null);
@@ -174,828 +305,214 @@ export default function DatasetDetailPage() {
     setSaveError(null);
   }
 
-  async function saveSection(section, patch) {
+  async function saveSection(section, sectionDraft) {
     setSaving(true);
     setSaveError(null);
-
     try {
+      const patch = buildPatch(section, sectionDraft);
       const updated = await datasetsApi.updateDataset(id, patch);
 
-      setDataset((prev) => ({
-        ...prev,
-        ...(updated || patch),
-      }));
-
+      setDataset((prev) => {
+        // If the API returns the full raw record (has its own `.metadata`),
+        // re-normalize it so we stay in sync with whatever the backend
+        // actually persisted, rather than trusting our optimistic patch.
+        if (updated && (updated.metadata || updated.title)) {
+          return normalizeDataset(updated);
+        }
+        // Otherwise fall back to an optimistic merge of the normalized
+        // draft values the user just edited.
+        return { ...prev, ...sectionDraft };
+      });
       setEditingSection(null);
       setDraft({});
     } catch (err) {
-      setSaveError(
-        err.response?.data?.detail ||
-          "Failed to save changes."
-      );
+      setSaveError(err.response?.data?.detail || "Failed to save changes.");
     } finally {
       setSaving(false);
     }
   }
 
-  const files = dataset?.files || [];
-  const citationText = dataset
-    ? `${dataset.title}. ORDP / AASTU Research Portal. ${dataset.doi || "DOI pending"}.`
-    : "";
+  const toggleSection = (key) => {
+    setExpandedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
 
-  function copyCitation() {
-    if (!citationText) return;
-    navigator.clipboard?.writeText(citationText);
+  const expandAll = () => {
+    setExpandedSections(new Set(["authors", "collaborators", "coverage", "doi"]));
+  };
+
+  async function handleDownload() {
+    setDownloading(true);
+    setDownloadError(null);
+    try {
+      const url = await getDownloadUrl(id);
+      window.location.assign(url);
+    } catch (err) {
+      console.error("Failed to get download URL:", err);
+      setDownloadError(err.response?.data?.detail || "Couldn't start the download. Please try again.");
+    } finally {
+      setDownloading(false);
+    }
+  }
+
+  async function handleShare() {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy link:", err);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#F5F5F3] flex flex-col">
+        <TopBar />
+        <div className="w-full px-6 lg:px-10 py-8 flex-1">
+          <div className="h-40 animate-pulse rounded-2xl border border-gray-200 bg-white" />
+          <div className="mt-6 h-32 animate-pulse rounded-2xl border border-gray-200 bg-white" />
+          <div className="mt-6 h-64 animate-pulse rounded-2xl border border-gray-200 bg-white" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !dataset) {
+    return (
+      <div className="min-h-screen bg-[#F5F5F3] flex flex-col">
+        <TopBar />
+        <div className="w-full px-6 lg:px-10 py-16 text-center flex-1">
+          <p className="text-sm text-gray-500">{error || "This dataset couldn't be found."}</p>
+          <button
+            type="button"
+            onClick={() => navigate("/my-datasets")}
+            className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+          >
+            Back to My Datasets
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
-  <div className="min-h-screen bg-[#F5F5F3]">
-      <style>{`
-        @keyframes fadeInUp {
-          from {
-            opacity: 0;
-            transform: translateY(8px);
-          }
-
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        .animate-fade-in-up {
-          animation: fadeInUp 0.45s ease-out both;
-        }
-
-        @keyframes collapseIn {
-          from {
-            opacity: 0;
-            transform: translateY(-4px);
-          }
-
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        .animate-collapse-in {
-          animation: collapseIn 0.25s ease-out both;
-        }
-      `}</style>
-
+    <div className="min-h-screen bg-[#F5F5F3] flex flex-col">
       <TopBar />
-
-      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 py-6">
-        <nav className="flex items-center gap-2 text-xs text-gray-500 mb-4 animate-fade-in-up" aria-label="Breadcrumb">
-          <Link to="/datasets" className="hover:text-[#A67A0D] transition-colors">Datasets</Link>
+      <div className="w-full px-6 lg:px-10 py-8 flex-1">
+        <nav className="flex items-center gap-2 text-xs text-gray-500 mb-2" aria-label="Breadcrumb">
+          <Link to="/my-datasets" className="hover:text-slate-900 transition-colors">
+            My Datasets
+          </Link>
           <span>/</span>
-          <span className="text-navy font-medium truncate max-w-[200px] sm:max-w-md">
-            {dataset?.title || "Dataset"}
+          <span className="text-slate-900 font-medium truncate max-w-[200px] sm:max-w-md">
+            {dataset.title}
           </span>
         </nav>
+        <div className="mb-4">
+          <button
+            type="button"
+            onClick={() => navigate("/my-datasets")}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-slate-900 transition-colors"
+          >
+            ← Back to My Datasets
+          </button>
+        </div>
 
-        <button
-          type="button"
-          onClick={() => navigate(-1)}
-          className="group flex items-center gap-2 text-sm font-medium text-navy hover:text-gold mb-5 transition-colors"
-          aria-label="Go back"
-        >
-          <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" />
-          <span>Back</span>
-        </button>
-
-        {loading && (
-          <p className="text-gray-500">
-            Loading dataset…
-          </p>
-        )}
-
-        {error && (
-          <p role="alert" className="text-danger">
-            {error}
-          </p>
-        )}
-
-        {!loading && !error && dataset && (
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6">
-            {/* LEFT COLUMN */}
-            <Card className="overflow-hidden">
-              {/* HEADER */}
-              <div className="bg-navy px-8 py-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center text-gold shrink-0">
-                    <Database className="w-6 h-6" />
-                  </div>
-
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2 mb-1">
-                      <span
-                        className={[
-                          "text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded",
-                          dataset.visibility === "public"
-                            ? "bg-emerald-500/20 text-emerald-200"
-                            : "bg-white/15 text-white",
-                        ].join(" ")}
-                      >
-                        {dataset.visibility || "private"}
-                      </span>
-                      {dataset.status && (
-                        <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded bg-white/15 text-white capitalize">
-                          {String(dataset.status).replace("_", " ")}
-                        </span>
-                      )}
-                    </div>
-                    <h1 className="text-2xl font-serif font-bold text-white">
-                      {dataset.title}
-                    </h1>
-
-                    <p className="text-sm text-[#C7CEDB] mt-0.5 flex items-center gap-1.5">
-                      <Calendar className="w-3.5 h-3.5" />
-                      Donated on {formatDate(dataset.created_at)}
-                    </p>
-                  </div>
-                </div>
-
-                {isOwner && (
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        startEditing("header", {
-                          title: dataset.title,
-                          description: dataset.description,
-                        })
-                      }
-                      className="text-white hover:text-gold transition-colors"
-                      aria-label="Edit dataset"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={editMode}
-                      aria-label="Toggle edit mode"
-                      onClick={() => {
-                        if (editMode) {
-                          cancelEditing();
-                        }
-
-                        setEditMode((value) => !value);
-                      }}
-                      className={[
-                        "relative w-11 h-6 rounded-full transition-colors duration-200 shrink-0",
-                        editMode
-                          ? "bg-white/90"
-                          : "bg-white/25",
-                      ].join(" ")}
-                    >
-                      <span
-                        className={[
-                          "absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-navy transition-transform duration-200",
-                          editMode
-                            ? "translate-x-5 bg-[#A67A0D]"
-                            : "translate-x-0",
-                        ].join(" ")}
+        {/* Header */}
+        <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+            <div className="flex flex-col justify-between h-full">
+              <div>
+                <div className="flex items-start justify-between gap-3">
+                  {editingSection === "header" ? (
+                    <div className="w-full">
+                      <label className="block text-xs font-semibold text-gray-500 mb-1">Title</label>
+                      <input
+                        type="text"
+                        value={draft.title ?? ""}
+                        onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
+                        className={`${inputClass} mb-3 text-lg font-serif font-bold`}
                       />
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              <div className="p-8">
-                {/* HEADER EDIT */}
-                {editingSection === "header" ? (
-                  <div className="mb-8 animate-collapse-in">
-                    <label className="block text-xs font-semibold text-gray-500 mb-1">
-                      Title
-                    </label>
-
-                    <input
-                      type="text"
-                      value={draft.title ?? ""}
-                      onChange={(e) =>
-                        setDraft((d) => ({
-                          ...d,
-                          title: e.target.value,
-                        }))
-                      }
-                      className={`${inputClass} mb-4`}
-                    />
-
-                    <label className="block text-xs font-semibold text-gray-500 mb-1">
-                      Description
-                    </label>
-
-                    <textarea
-                      value={draft.description ?? ""}
-                      onChange={(e) =>
-                        setDraft((d) => ({
-                          ...d,
-                          description: e.target.value,
-                        }))
-                      }
-                      rows={4}
-                      className={`${inputClass} resize-y`}
-                    />
-
-                    {saveError && (
-                      <p className="text-danger text-xs mt-2">
-                        {saveError}
-                      </p>
-                    )}
-
-                    <EditActions
-                      saving={saving}
-                      onCancel={cancelEditing}
-                      onSave={() =>
-                        saveSection("header", {
-                          title: draft.title,
-                          description: draft.description,
-                        })
-                      }
-                    />
-                  </div>
-                ) : (
-                  <div className="flex items-start justify-between gap-3 mb-8">
-                    <p className="text-navy">
-                      {dataset.description}
-                    </p>
-
-                    {editMode && (
-                      <EditTrigger
-                        label="Edit description"
-                        onClick={() =>
-                          startEditing("header", {
-                            title: dataset.title,
-                            description:
-                              dataset.description,
-                          })
+                      <label className="block text-xs font-semibold text-gray-500 mb-1">Description</label>
+                      <textarea
+                        value={draft.description ?? ""}
+                        onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
+                        rows={4}
+                        className={`${inputClass} resize-y`}
+                      />
+                      {saveError && <p className="text-red-500 text-xs mt-2">{saveError}</p>}
+                      <EditActions
+                        saving={saving}
+                        onCancel={cancelEditing}
+                        onSave={() =>
+                          saveSection("header", { title: draft.title, description: draft.description })
                         }
                       />
-                    )}
-                  </div>
-                )}
-
-                {/* CORE METADATA */}
-                {editingSection === "core" ? (
-                  <div className="pb-8 border-b border-[#E3E1DA] animate-collapse-in">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                      <div>
-                        <label className="block text-xs font-semibold text-gray-500 mb-1">
-                          Dataset Characteristics
-                        </label>
-
-                        <input
-                          type="text"
-                          value={
-                            draft.characteristics ?? ""
-                          }
-                          onChange={(e) =>
-                            setDraft((d) => ({
-                              ...d,
-                              characteristics:
-                                e.target.value,
-                            }))
-                          }
-                          placeholder="Comma-separated, e.g. Tabular, Multivariate"
-                          className={inputClass}
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-semibold text-gray-500 mb-1">
-                          Subject Area
-                        </label>
-
-                        <input
-                          type="text"
-                          value={draft.subject_name ?? ""}
-                          onChange={(e) =>
-                            setDraft((d) => ({
-                              ...d,
-                              subject_name:
-                                e.target.value,
-                            }))
-                          }
-                          className={inputClass}
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-semibold text-gray-500 mb-1">
-                          Associated Tasks
-                        </label>
-
-                        <input
-                          type="text"
-                          value={
-                            draft.associated_tasks ?? ""
-                          }
-                          onChange={(e) =>
-                            setDraft((d) => ({
-                              ...d,
-                              associated_tasks:
-                                e.target.value,
-                            }))
-                          }
-                          className={inputClass}
-                        />
-                      </div>
                     </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      <div>
-                        <label className="block text-xs font-semibold text-gray-500 mb-1">
-                          Feature Type
-                        </label>
-
-                        <input
-                          type="text"
-                          value={draft.feature_type ?? ""}
-                          onChange={(e) =>
-                            setDraft((d) => ({
-                              ...d,
-                              feature_type:
-                                e.target.value,
-                            }))
-                          }
-                          className={inputClass}
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-semibold text-gray-500 mb-1">
-                          # Instances
-                        </label>
-
-                        <input
-                          type="number"
-                          value={draft.item_count ?? ""}
-                          onChange={(e) =>
-                            setDraft((d) => ({
-                              ...d,
-                              item_count:
-                                e.target.value,
-                            }))
-                          }
-                          className={inputClass}
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-semibold text-gray-500 mb-1">
-                          # Features
-                        </label>
-
-                        <input
-                          type="number"
-                          value={draft.column_count ?? ""}
-                          onChange={(e) =>
-                            setDraft((d) => ({
-                              ...d,
-                              column_count:
-                                e.target.value,
-                            }))
-                          }
-                          className={inputClass}
-                        />
-                      </div>
-                    </div>
-
-                    {saveError && (
-                      <p className="text-danger text-xs mt-2">
-                        {saveError}
-                      </p>
-                    )}
-
-                    <EditActions
-                      saving={saving}
-                      onCancel={cancelEditing}
-                      onSave={() => {
-                        const patch = {
-                          subject_name:
-                            draft.subject_name,
-                          associated_tasks:
-                            draft.associated_tasks,
-                          feature_type:
-                            draft.feature_type,
-
-                          characteristics:
-                            draft.characteristics
-                              ? draft.characteristics
-                                  .split(",")
-                                  .map((item) =>
-                                    item.trim()
-                                  )
-                                  .filter(Boolean)
-                              : [],
-
-                          item_count:
-                            draft.item_count === ""
-                              ? null
-                              : Number(
-                                  draft.item_count
-                                ),
-
-                          column_count:
-                            draft.column_count === ""
-                              ? null
-                              : Number(
-                                  draft.column_count
-                                ),
-                        };
-
-                        saveSection("core", patch);
-                      }}
-                    />
-                  </div>
-                ) : (
-                  <>
-                    <div className="relative grid grid-cols-1 md:grid-cols-3 gap-6 pb-8 border-b border-[#E3E1DA]">
-                      {editMode && (
-                        <span className="absolute -top-1 right-0">
-                          <EditTrigger
-                            label="Edit core metadata"
-                            onClick={() =>
-                              startEditing("core", {
-                                characteristics:
-                                  (
-                                    dataset.characteristics ||
-                                    []
-                                  ).join(", "),
-
-                                subject_name:
-                                  dataset.subject_name ||
-                                  "",
-
-                                associated_tasks:
-                                  dataset.associated_tasks ||
-                                  "",
-
-                                feature_type:
-                                  dataset.feature_type ||
-                                  "",
-
-                                item_count:
-                                  file?.item_count ?? "",
-
-                                column_count:
-                                  file?.column_count ?? "",
-                              })
-                            }
-                          />
-                        </span>
-                      )}
-
-                      <div>
-                        <p className="text-base font-serif font-bold text-navy mb-1">
-                          Dataset Characteristics
-                        </p>
-
-                        <p className="text-sm text-gray-600">
-                          {dataset.characteristics?.join(
-                            ", "
-                          ) || "—"}
-                        </p>
-                      </div>
-
-                      <div>
-                        <p className="text-base font-serif font-bold text-navy mb-1">
-                          Subject Area
-                        </p>
-
-                        <p className="text-sm text-gray-600">
-                          {dataset.subject_name || "—"}
-                        </p>
-                      </div>
-
-                      <div>
-                        <p className="text-base font-serif font-bold text-navy mb-1">
-                          Associated Tasks
-                        </p>
-
-                        <p className="text-sm text-gray-600">
-                          {dataset.associated_tasks || "—"}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 py-8 border-b border-[#E3E1DA]">
-                      <div>
-                        <p className="text-base font-serif font-bold text-navy mb-1">
-                          Feature Type
-                        </p>
-
-                        <p className="text-sm text-gray-600">
-                          {dataset.feature_type || "—"}
-                        </p>
-                      </div>
-
-                      <div>
-                        <p className="text-base font-serif font-bold text-navy mb-1">
-                          # Instances
-                        </p>
-
-                        <p className="text-sm text-gray-600">
-                          {file?.item_count ?? "—"}
-                        </p>
-                      </div>
-
-                      <div>
-                        <p className="text-base font-serif font-bold text-navy mb-1">
-                          # Features
-                        </p>
-
-                        <p className="text-sm text-gray-600">
-                          {file?.column_count ?? "—"}
-                        </p>
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                {/* FILES */}
-                {files.length > 0 && (
-                  <div className="py-6 border-b border-[#E3E1DA]">
-                    <h2 className="text-xl font-serif font-bold text-navy mb-4 flex items-center gap-2">
-                      <FileText className="w-5 h-5 text-[#A67A0D]" />
-                      Files
-                    </h2>
-                    <ul className="space-y-3">
-                      {files.map((f, idx) => (
-                        <li
-                          key={f.id || idx}
-                          className="flex items-center justify-between gap-4 p-4 rounded-lg border border-[#E3E1DA] bg-[#FBFAF7] hover:border-[#EADFC0] transition-colors"
-                        >
-                          <div className="flex items-center gap-3 min-w-0">
-                            <span className="w-9 h-9 rounded-lg bg-white border border-[#E3E1DA] flex items-center justify-center shrink-0">
-                              <HardDrive className="w-4 h-4 text-[#A67A0D]" />
-                            </span>
-                            <div className="min-w-0">
-                              <p className="text-sm font-semibold text-navy truncate">
-                                {f.filename || f.name || `File ${idx + 1}`}
-                              </p>
-                              <p className="text-xs text-gray-500">
-                                {f.file_type || "—"} · {formatBytes(f.file_size)}
-                                {f.item_count != null && ` · ${f.item_count} rows`}
-                                {f.column_count != null && ` · ${f.column_count} cols`}
-                              </p>
-                            </div>
+                  ) : (
+                    <>
+                      <div className="flex-1">
+                        <div className="flex flex-wrap items-center gap-3 mb-3">
+                          <h1 className="text-3xl sm:text-4xl font-serif font-bold text-slate-900 leading-tight">
+                            {dataset.title}
+                          </h1>
+                          <VisibilityBadge visibility={dataset.visibility} />
+                          <StatusBadge status={dataset.status} />
+                        </div>
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="h-7 w-7 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-700">
+                            {(dataset.owner_name || user?.username || "U").slice(0, 2).toUpperCase()}
                           </div>
-                          {f.download_url && (
-                            <a
-                              href={f.download_url}
-                              className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold text-[#A67A0D] hover:underline"
-                            >
-                              <Download className="w-3.5 h-3.5" />
-                              Download
-                            </a>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {/* DATASET INFORMATION */}
-                <div className="py-6 border-b border-[#E3E1DA]">
-                  <div className="flex items-center justify-between">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setInfoOpen((value) => !value)
-                      }
-                      className="flex items-center gap-2 text-left"
-                    >
-                      <span className="text-xl font-serif font-bold text-navy">
-                        Dataset Information
-                      </span>
-
-                      <ChevronDown
-                        className={`w-5 h-5 text-navy transition-transform duration-300 ${
-                          infoOpen ? "rotate-180" : ""
-                        }`}
-                      />
-                    </button>
-
-                    {editMode &&
-                      infoOpen &&
-                      editingSection !== "info" && (
+                          <span className="text-sm font-medium text-gray-700">
+                            {dataset.owner_name || "You"}
+                          </span>
+                          <span className="text-xs text-gray-400">
+                            · {formatRelativeDate(dataset.updated_at)}
+                          </span>
+                        </div>
+                        <p className="whitespace-pre-line text-sm leading-relaxed text-gray-600">
+                          {dataset.description || "No description provided."}
+                        </p>
+                      </div>
+                      {isOwner && editMode && (
                         <EditTrigger
-                          label="Edit dataset information"
+                          label="Edit title and description"
                           onClick={() =>
-                            startEditing("info", {
-                              has_missing_values: !!(
-                                dataset.has_missing_values ??
-                                file?.has_missing_values
-                              ),
+                            startEditing("header", {
+                              title: dataset.title,
+                              description: dataset.description,
                             })
                           }
                         />
                       )}
-                  </div>
-
-                  {infoOpen &&
-                    (editingSection === "info" ? (
-                      <div className="mt-4 animate-collapse-in">
-                        <label className="flex items-center gap-2 text-sm text-navy">
-                          <input
-                            type="checkbox"
-                            className="w-4 h-4"
-                            checked={
-                              !!draft.has_missing_values
-                            }
-                            onChange={(e) =>
-                              setDraft((d) => ({
-                                ...d,
-                                has_missing_values:
-                                  e.target.checked,
-                              }))
-                            }
-                          />
-
-                          Has Missing Values
-                        </label>
-
-                        {saveError && (
-                          <p className="text-danger text-xs mt-2">
-                            {saveError}
-                          </p>
-                        )}
-
-                        <EditActions
-                          saving={saving}
-                          onCancel={cancelEditing}
-                          onSave={() =>
-                            saveSection("info", {
-                              has_missing_values:
-                                !!draft.has_missing_values,
-                            })
-                          }
-                        />
-                      </div>
-                    ) : (
-                      <div className="mt-4">
-                        <p className="text-base font-semibold text-navy mb-1">
-                          Has Missing Values?
-                        </p>
-
-                        <p className="text-sm text-gray-600">
-                          {(
-                            dataset.has_missing_values ??
-                            file?.has_missing_values
-                          )
-                            ? "Yes"
-                            : "No"}
-                        </p>
-                      </div>
-                    ))}
+                    </>
+                  )}
                 </div>
 
-                {/* INTRODUCTORY PAPER */}
-                {dataset.related_publication && (
-                  <div className="py-6">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setPaperOpen((value) => !value)
-                      }
-                      className="flex items-center justify-between w-full text-left"
-                    >
-                      <span className="text-xl font-serif font-bold text-navy">
-                        Introductory Paper
-                      </span>
-
-                      <ChevronDown
-                        className={`w-5 h-5 text-navy transition-transform duration-300 ${
-                          paperOpen ? "rotate-180" : ""
-                        }`}
-                      />
-                    </button>
-
-                    {paperOpen && (
-                      <div className="mt-4 animate-collapse-in">
-                        <a
-                          href={dataset.related_publication}
-                          className="text-[#2C5AAE] hover:underline text-sm"
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          Follow
-                        </a>
-
-                        <p className="text-sm text-gray-600 mt-2">
-                          {dataset.citation_notes}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </Card>
-
-            {/* RIGHT COLUMN */}
-            <div className="flex flex-col gap-4">
-              {/* DOWNLOAD */}
-              <a
-                href={file?.download_url || "#"}
-                className="flex items-center justify-center gap-2 bg-navy hover:bg-[#132038] text-white rounded-md px-6 py-3.5 text-sm font-semibold transition-all hover:shadow-lg hover:-translate-y-0.5 animate-fade-in-up"
-              >
-                <Download className="w-4 h-4" />
-
-                DOWNLOAD{" "}
-                {file?.file_size
-                  ? `(${formatBytes(file.file_size)})`
-                  : ""}
-              </a>
-
-              {/* CITE */}
-              <button
-                type="button"
-                onClick={copyCitation}
-                className="flex items-center justify-center gap-2 bg-gold hover:bg-gold-dark text-white rounded-md px-6 py-3.5 text-sm font-semibold transition-all hover:shadow-lg hover:-translate-y-0.5 animate-fade-in-up"
-                style={{ animationDelay: "50ms" }}
-              >
-                <Quote className="w-4 h-4" />
-                CITE
-              </button>
-
-              {citationText && (
-                <div className="bg-white border border-[#E3E1DA] rounded-lg p-4 text-xs text-gray-600 leading-relaxed animate-fade-in-up" style={{ animationDelay: "75ms" }}>
-                  <p className="font-semibold text-navy mb-1 flex items-center gap-1">
-                    <Copy className="w-3.5 h-3.5" />
-                    Citation
-                  </p>
-                  {citationText}
-                </div>
-              )}
-
-              {/* STATISTICS */}
-              <Card className="p-6" delay={100}>
-                <div className="flex items-center gap-2 text-sm text-navy mb-2">
-                  <Quote className="w-4 h-4 text-gray-400" />
-
-                  <span>
-                    {dataset.citation_count ?? 0} citations
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-2 text-sm text-navy">
-                  <Eye className="w-4 h-4 text-gray-400" />
-
-                  <span>
-                    {dataset.view_count ?? 0} views
-                  </span>
-                </div>
-              </Card>
-
-              {/* KEYWORDS */}
-              <Card className="p-6" delay={150}>
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-lg font-serif font-bold text-navy">
-                    Keywords
-                  </p>
-
-                  {editMode &&
-                    editingSection !== "keywords" && (
-                      <EditTrigger
-                        label="Edit keywords"
-                        onClick={() =>
-                          startEditing("keywords", {
-                            keywords: dataset.keywords
-                              ? [...dataset.keywords]
-                              : [],
-                            newKeyword: "",
-                          })
-                        }
-                      />
-                    )}
-                </div>
-
-                {editingSection === "keywords" ? (
-                  <div className="animate-collapse-in">
-                    <div className="flex flex-wrap gap-2 mb-3">
-                      {(draft.keywords || []).map(
-                        (keyword, index) => (
+                <div className="mt-4">
+                  {editingSection === "keywords" ? (
+                    <div>
+                      <div className="flex flex-wrap gap-2 mb-3">
+                        {(draft.keywords || []).map((keyword, index) => (
                           <span
                             key={`${keyword}-${index}`}
-                            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border border-[#2C5AAE] text-[#2C5AAE]"
+                            className="flex items-center gap-1.5 rounded-full bg-rose-50 px-3 py-1 text-xs font-medium text-rose-500"
                           >
                             {keyword}
-
                             <button
                               type="button"
                               onClick={() =>
                                 setDraft((d) => ({
                                   ...d,
-                                  keywords:
-                                    d.keywords.filter(
-                                      (_, idx) =>
-                                        idx !== index
-                                    ),
+                                  keywords: d.keywords.filter((_, idx) => idx !== index),
                                 }))
                               }
                               aria-label={`Remove ${keyword}`}
@@ -1003,345 +520,637 @@ export default function DatasetDetailPage() {
                               <X className="w-3 h-3" />
                             </button>
                           </span>
-                        )
-                      )}
-                    </div>
-
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={draft.newKeyword || ""}
-                        onChange={(e) =>
-                          setDraft((d) => ({
-                            ...d,
-                            newKeyword: e.target.value,
-                          }))
-                        }
-                        onKeyDown={(e) => {
-                          if (
-                            e.key === "Enter" &&
-                            draft.newKeyword?.trim()
-                          ) {
-                            e.preventDefault();
-
+                        ))}
+                      </div>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={draft.newKeyword || ""}
+                          onChange={(e) => setDraft((d) => ({ ...d, newKeyword: e.target.value }))}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && draft.newKeyword?.trim()) {
+                              e.preventDefault();
+                              setDraft((d) => ({
+                                ...d,
+                                keywords: [...(d.keywords || []), d.newKeyword.trim()],
+                                newKeyword: "",
+                              }));
+                            }
+                          }}
+                          placeholder="Add keyword"
+                          className={inputClass}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!draft.newKeyword?.trim()) return;
                             setDraft((d) => ({
                               ...d,
-                              keywords: [
-                                ...(d.keywords || []),
-                                d.newKeyword.trim(),
-                              ],
+                              keywords: [...(d.keywords || []), d.newKeyword.trim()],
                               newKeyword: "",
                             }));
-                          }
-                        }}
-                        placeholder="Add keyword"
-                        className={inputClass}
+                          }}
+                          className="shrink-0 bg-rose-50 text-rose-500 rounded-md px-3 hover:bg-rose-100 transition-colors"
+                          aria-label="Add keyword"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </div>
+                      {saveError && <p className="text-red-500 text-xs mt-2">{saveError}</p>}
+                      <EditActions
+                        saving={saving}
+                        onCancel={cancelEditing}
+                        onSave={() => saveSection("keywords", { keywords: draft.keywords })}
                       />
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (!draft.newKeyword?.trim()) {
-                            return;
-                          }
-
-                          setDraft((d) => ({
-                            ...d,
-                            keywords: [
-                              ...(d.keywords || []),
-                              d.newKeyword.trim(),
-                            ],
-                            newKeyword: "",
-                          }));
-                        }}
-                        className="shrink-0 bg-[#F2E7C4] text-[#A67A0D] rounded-md px-3 hover:bg-[#EADFC0] transition-colors"
-                        aria-label="Add keyword"
-                      >
-                        <Plus className="w-4 h-4" />
-                      </button>
                     </div>
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {(dataset.keywords || []).map((tag) => (
+                        <TagChip key={tag}>{tag}</TagChip>
+                      ))}
+                      {(!dataset.keywords || dataset.keywords.length === 0) && (
+                        <span className="text-xs text-gray-400">No keywords listed</span>
+                      )}
+                      {isOwner && editMode && (
+                        <EditTrigger
+                          label="Edit keywords"
+                          onClick={() =>
+                            startEditing("keywords", {
+                              keywords: dataset.keywords ? [...dataset.keywords] : [],
+                              newKeyword: "",
+                            })
+                          }
+                        />
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
 
-                    {saveError && (
-                      <p className="text-danger text-xs mt-2">
-                        {saveError}
-                      </p>
-                    )}
-
-                    <EditActions
-                      saving={saving}
-                      onCancel={cancelEditing}
-                      onSave={() =>
-                        saveSection("keywords", {
-                          keywords: draft.keywords,
-                        })
-                      }
-                    />
+              <div className="mt-8">
+                {isApproved ? (
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={handleDownload}
+                      disabled={downloading}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 transition disabled:opacity-50"
+                    >
+                      <Download size={16} />
+                      {downloading ? "Preparing…" : "Download Dataset"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleShare}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 px-5 py-2.5 text-sm font-semibold text-slate-900 hover:border-gray-300 transition"
+                    >
+                      <Share2 size={16} />
+                      {linkCopied ? "Link Copied!" : "Share"}
+                    </button>
                   </div>
                 ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {(dataset.keywords || []).map(
-                      (keyword) => (
-                        <span
-                          key={keyword}
-                          className="text-xs px-3 py-1.5 rounded-full border border-[#2C5AAE] text-[#2C5AAE] transition-colors hover:bg-[#2C5AAE] hover:text-white cursor-default"
-                        >
-                          {keyword}
-                        </span>
-                      )
-                    )}
+                  <p className="text-xs text-gray-500">
+                    Download and sharing will be available once this dataset is approved.
+                  </p>
+                )}
+                {downloadError && <p className="mt-2 text-xs text-red-500">{downloadError}</p>}
 
-                    {(!dataset.keywords ||
-                      dataset.keywords.length === 0) && (
-                      <span className="text-sm text-gray-400">
-                        No keywords listed
-                      </span>
-                    )}
+                {isOwner && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (editMode) cancelEditing();
+                      setEditMode((v) => !v);
+                    }}
+                    className="mt-3 text-xs font-semibold text-amber-700 hover:text-amber-900 transition-colors"
+                  >
+                    {editMode ? "Done editing" : "Edit dataset"}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-col">
+              <div className="h-64 w-full overflow-hidden rounded-xl bg-gray-100 shadow-md border border-gray-200">
+                {dataset.thumbnail_url ? (
+                  <img
+                    src={dataset.thumbnail_url}
+                    alt={dataset.title}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-slate-800 to-slate-950 text-white text-xs font-mono">
+                    No Preview
                   </div>
                 )}
-              </Card>
+              </div>
+            </div>
+          </div>
+        </div>
 
-              {/* CREATORS */}
-              <Card className="p-6" delay={200}>
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-lg font-serif font-bold text-navy">
-                    Creators
-                  </p>
+        {/* Files + Dataset Details */}
+        <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_300px]">
+          <div className="rounded-2xl border border-gray-200 bg-white p-5">
+            <p className="text-sm font-bold text-slate-900 mb-3">Files</p>
+            {files.length === 0 ? (
+              <p className="text-sm text-gray-400">No files uploaded yet.</p>
+            ) : (
+              <ul className="space-y-3">
+                {files.map((f, idx) => (
+                  <li
+                    key={f.id || idx}
+                    className="flex items-center justify-between gap-4 rounded-lg border border-gray-100 bg-gray-50 p-3"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="w-9 h-9 rounded-lg bg-white border border-gray-200 flex items-center justify-center shrink-0">
+                        <HardDrive className="w-4 h-4 text-amber-700" />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-900 truncate">
+                          {f.filename || `File ${idx + 1}`}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {f.file_type || "—"} · {formatBytes(f.file_size)}
+                        </p>
+                      </div>
+                    </div>
+                    {f.download_url && isApproved ? (
+                      <a
+                        href={f.download_url}
+                        className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 hover:underline"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        Download
+                      </a>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
 
-                  {editMode &&
-                    editingSection !== "creators" && (
-                      <EditTrigger
-                        label="Edit creators"
-                        onClick={() =>
-                          startEditing("creators", {
-                            creators: dataset.creators
-                              ? dataset.creators.map(
-                                  (creator) => ({
-                                    ...creator,
-                                  })
-                                )
-                              : [],
-                          })
-                        }
-                      />
-                    )}
+          {/* Dataset Details (editable core metadata) */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-5">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-bold text-slate-900">Dataset Details</p>
+              {isOwner && editMode && editingSection !== "core" && (
+                <EditTrigger
+                  label="Edit dataset details"
+                  onClick={() =>
+                    startEditing("core", {
+                      characteristics: (dataset.characteristics || []).join(", "),
+                      subject_name: dataset.subject_name || "",
+                      associated_tasks: dataset.associated_tasks || "",
+                      feature_type: dataset.feature_type || "",
+                      item_count: files[0]?.item_count ?? "",
+                      column_count: files[0]?.column_count ?? "",
+                      has_missing_values: !!(dataset.has_missing_values ?? files[0]?.has_missing_values),
+                    })
+                  }
+                />
+              )}
+            </div>
+
+            {editingSection === "core" ? (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">Subject Area</label>
+                  <input
+                    type="text"
+                    value={draft.subject_name ?? ""}
+                    onChange={(e) => setDraft((d) => ({ ...d, subject_name: e.target.value }))}
+                    className={inputClass}
+                  />
                 </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">Associated Tasks</label>
+                  <input
+                    type="text"
+                    value={draft.associated_tasks ?? ""}
+                    onChange={(e) => setDraft((d) => ({ ...d, associated_tasks: e.target.value }))}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">Feature Type</label>
+                  <input
+                    type="text"
+                    value={draft.feature_type ?? ""}
+                    onChange={(e) => setDraft((d) => ({ ...d, feature_type: e.target.value }))}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">
+                    Dataset Characteristics
+                  </label>
+                  <input
+                    type="text"
+                    value={draft.characteristics ?? ""}
+                    onChange={(e) => setDraft((d) => ({ ...d, characteristics: e.target.value }))}
+                    placeholder="Comma-separated, e.g. Tabular, Multivariate"
+                    className={inputClass}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 mb-1"># Instances</label>
+                    <input
+                      type="number"
+                      value={draft.item_count ?? ""}
+                      onChange={(e) => setDraft((d) => ({ ...d, item_count: e.target.value }))}
+                      className={inputClass}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 mb-1"># Features</label>
+                    <input
+                      type="number"
+                      value={draft.column_count ?? ""}
+                      onChange={(e) => setDraft((d) => ({ ...d, column_count: e.target.value }))}
+                      className={inputClass}
+                    />
+                  </div>
+                </div>
+                <label className="flex items-center gap-2 text-sm text-slate-900">
+                  <input
+                    type="checkbox"
+                    checked={!!draft.has_missing_values}
+                    onChange={(e) => setDraft((d) => ({ ...d, has_missing_values: e.target.checked }))}
+                  />
+                  Has Missing Values
+                </label>
+                {saveError && <p className="text-red-500 text-xs">{saveError}</p>}
+                <EditActions saving={saving} onCancel={cancelEditing} onSave={() => saveSection("core", draft)} />
+              </div>
+            ) : (
+              <div className="space-y-2.5 text-xs text-gray-600">
+                <p>
+                  <span className="font-semibold text-slate-800">Subject Area:</span> {dataset.subject_name || "—"}
+                </p>
+                <p>
+                  <span className="font-semibold text-slate-800">Associated Tasks:</span>{" "}
+                  {dataset.associated_tasks || "—"}
+                </p>
+                <p>
+                  <span className="font-semibold text-slate-800">Feature Type:</span> {dataset.feature_type || "—"}
+                </p>
+                <p>
+                  <span className="font-semibold text-slate-800">Characteristics:</span>{" "}
+                  {(dataset.characteristics || []).join(", ") || "—"}
+                </p>
+                <p>
+                  <span className="font-semibold text-slate-800"># Instances:</span> {files[0]?.item_count ?? "—"}
+                </p>
+                <p>
+                  <span className="font-semibold text-slate-800"># Features:</span> {files[0]?.column_count ?? "—"}
+                </p>
+                <p>
+                  <span className="font-semibold text-slate-800">Missing Values:</span>{" "}
+                  {(dataset.has_missing_values ?? files[0]?.has_missing_values) ? "Yes" : "No"}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
 
-                {editingSection === "creators" ? (
-                  <div className="animate-collapse-in flex flex-col gap-3">
-                    {(draft.creators || []).map(
-                      (creator, index) => (
-                        <div
-                          key={index}
-                          className="border border-[#E3E1DA] rounded-md p-3 flex flex-col gap-2"
-                        >
+        {/* Metadata accordion */}
+        <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold text-slate-900">Metadata</h2>
+            <button
+              type="button"
+              onClick={expandAll}
+              className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:border-gray-300"
+            >
+              Expand All
+            </button>
+          </div>
+
+          <div className="mt-3 divide-y divide-gray-100">
+            {/* Authors (Creators) */}
+            <div>
+              <button
+                type="button"
+                onClick={() => toggleSection("authors")}
+                className="flex w-full items-center justify-between py-3 text-left"
+              >
+                <span className="text-sm font-medium text-amber-700">Authors</span>
+                <ChevronDown
+                  size={16}
+                  className={`text-gray-400 transition-transform ${
+                    expandedSections.has("authors") ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+              {expandedSections.has("authors") && (
+                <div className="pb-4">
+                  {editingSection === "authors" ? (
+                    <div className="flex flex-col gap-3">
+                      {(draft.creators || []).map((creator, index) => (
+                        <div key={index} className="border border-gray-200 rounded-md p-3 flex flex-col gap-2">
                           <div className="flex items-center justify-between">
-                            <span className="text-xs font-semibold text-gray-500">
-                              Creator {index + 1}
-                            </span>
-
+                            <span className="text-xs font-semibold text-gray-500">Author {index + 1}</span>
                             <button
                               type="button"
                               onClick={() =>
                                 setDraft((d) => ({
                                   ...d,
-                                  creators:
-                                    d.creators.filter(
-                                      (_, idx) =>
-                                        idx !== index
-                                    ),
+                                  creators: d.creators.filter((_, idx) => idx !== index),
                                 }))
                               }
-                              aria-label="Remove creator"
-                              className="text-danger hover:opacity-70"
+                              aria-label="Remove author"
+                              className="text-red-500 hover:opacity-70"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
-
                           <input
                             type="text"
                             value={creator.name || ""}
                             onChange={(e) =>
                               setDraft((d) => ({
                                 ...d,
-                                creators:
-                                  d.creators.map(
-                                    (item, idx) =>
-                                      idx === index
-                                        ? {
-                                            ...item,
-                                            name: e.target
-                                              .value,
-                                          }
-                                        : item
-                                  ),
+                                creators: d.creators.map((item, idx) =>
+                                  idx === index ? { ...item, name: e.target.value } : item
+                                ),
                               }))
                             }
                             placeholder="Name"
                             className={inputClass}
                           />
-
                           <input
                             type="email"
                             value={creator.email || ""}
                             onChange={(e) =>
                               setDraft((d) => ({
                                 ...d,
-                                creators:
-                                  d.creators.map(
-                                    (item, idx) =>
-                                      idx === index
-                                        ? {
-                                            ...item,
-                                            email:
-                                              e.target
-                                                .value,
-                                          }
-                                        : item
-                                  ),
+                                creators: d.creators.map((item, idx) =>
+                                  idx === index ? { ...item, email: e.target.value } : item
+                                ),
                               }))
                             }
                             placeholder="Email"
                             className={inputClass}
                           />
-
                           <input
                             type="text"
-                            value={
-                              creator.affiliation || ""
-                            }
+                            value={creator.affiliation || ""}
                             onChange={(e) =>
                               setDraft((d) => ({
                                 ...d,
-                                creators:
-                                  d.creators.map(
-                                    (item, idx) =>
-                                      idx === index
-                                        ? {
-                                            ...item,
-                                            affiliation:
-                                              e.target
-                                                .value,
-                                          }
-                                        : item
-                                  ),
+                                creators: d.creators.map((item, idx) =>
+                                  idx === index ? { ...item, affiliation: e.target.value } : item
+                                ),
                               }))
                             }
                             placeholder="Affiliation (optional)"
                             className={inputClass}
                           />
                         </div>
-                      )
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setDraft((d) => ({
-                          ...d,
-                          creators: [
-                            ...(d.creators || []),
-                            {
-                              name: "",
-                              email: "",
-                              affiliation: "",
-                            },
-                          ],
-                        }))
-                      }
-                      className="flex items-center justify-center gap-1.5 text-xs font-semibold text-[#A67A0D] border border-dashed border-[#EADFC0] rounded-md py-2 hover:bg-[#FBF6E9] transition-colors"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      Add creator
-                    </button>
-
-                    {saveError && (
-                      <p className="text-danger text-xs">
-                        {saveError}
-                      </p>
-                    )}
-
-                    <EditActions
-                      saving={saving}
-                      onCancel={cancelEditing}
-                      onSave={() =>
-                        saveSection("creators", {
-                          creators: draft.creators,
-                        })
-                      }
-                    />
-                  </div>
-                ) : (
-                  <>
-                    {(dataset.creators || []).map(
-                      (creator, index) => (
-                        <div
-                          key={index}
-                          className="mb-2 last:mb-0"
-                        >
-                          <p className="text-sm font-semibold text-navy">
-                            {creator.name}
-                          </p>
-
-                          <p className="text-xs text-gray-500 flex items-center gap-1.5">
-                            <User className="w-3 h-3" />
-                            {creator.email}
-                          </p>
-
-                          {creator.affiliation && (
-                            <p className="text-xs text-gray-500 ml-5">
-                              {creator.affiliation}
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDraft((d) => ({
+                            ...d,
+                            creators: [...(d.creators || []), { name: "", email: "", affiliation: "" }],
+                          }))
+                        }
+                        className="flex items-center justify-center gap-1.5 text-xs font-semibold text-amber-700 border border-dashed border-amber-200 rounded-md py-2 hover:bg-amber-50 transition-colors"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Add author
+                      </button>
+                      {saveError && <p className="text-red-500 text-xs">{saveError}</p>}
+                      <EditActions
+                        saving={saving}
+                        onCancel={cancelEditing}
+                        onSave={() => saveSection("creators", { creators: draft.creators })}
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1">
+                        {(dataset.creators || []).map((creator, index) => (
+                          <div key={index} className="mb-2 last:mb-0">
+                            <p className="text-sm font-semibold text-slate-900">{creator.name}</p>
+                            <p className="text-xs text-gray-500 flex items-center gap-1.5">
+                              <User className="w-3 h-3" />
+                              {creator.email}
                             </p>
-                          )}
-                        </div>
-                      )
-                    )}
+                            {creator.affiliation && (
+                              <p className="text-xs text-gray-500 ml-5">{creator.affiliation}</p>
+                            )}
+                          </div>
+                        ))}
+                        {(!dataset.creators || dataset.creators.length === 0) && (
+                          <p className="text-sm text-gray-400">No authors listed</p>
+                        )}
+                      </div>
+                      {isOwner && editMode && (
+                        <EditTrigger
+                          label="Edit authors"
+                          onClick={() =>
+                            startEditing("authors", {
+                              creators: dataset.creators ? dataset.creators.map((c) => ({ ...c })) : [],
+                            })
+                          }
+                        />
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
-                    {(!dataset.creators ||
-                      dataset.creators.length === 0) && (
-                      <p className="text-sm text-gray-400">
-                        No creators listed
+            {/* Collaborators */}
+            <div>
+              <button
+                type="button"
+                onClick={() => toggleSection("collaborators")}
+                className="flex w-full items-center justify-between py-3 text-left"
+              >
+                <span className="text-sm font-medium text-amber-700">Collaborators</span>
+                <ChevronDown
+                  size={16}
+                  className={`text-gray-400 transition-transform ${
+                    expandedSections.has("collaborators") ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+              {expandedSections.has("collaborators") && (
+                <div className="pb-4">
+                  {editingSection === "collaborators" ? (
+                    <div>
+                      <textarea
+                        value={draft.collaborators_note ?? ""}
+                        onChange={(e) => setDraft((d) => ({ ...d, collaborators_note: e.target.value }))}
+                        rows={2}
+                        placeholder="List any external collaborators"
+                        className={`${inputClass} resize-y`}
+                      />
+                      {saveError && <p className="text-red-500 text-xs mt-2">{saveError}</p>}
+                      <EditActions
+                        saving={saving}
+                        onCancel={cancelEditing}
+                        onSave={() => saveSection("collaborators", { collaborators_note: draft.collaborators_note })}
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="text-sm text-gray-500 flex-1">
+                        {dataset.collaborators_note || "No external collaborators listed for this dataset yet."}
                       </p>
-                    )}
-                  </>
-                )}
-              </Card>
+                      {isOwner && editMode && (
+                        <EditTrigger
+                          label="Edit collaborators"
+                          onClick={() =>
+                            startEditing("collaborators", {
+                              collaborators_note: dataset.collaborators_note || "",
+                            })
+                          }
+                        />
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
-              {/* DOI */}
-              <Card className="p-6" delay={250}>
-                <p className="text-lg font-serif font-bold text-navy mb-2">
-                  DOI
-                </p>
+            {/* Coverage */}
+            <div>
+              <button
+                type="button"
+                onClick={() => toggleSection("coverage")}
+                className="flex w-full items-center justify-between py-3 text-left"
+              >
+                <span className="text-sm font-medium text-amber-700">Coverage</span>
+                <ChevronDown
+                  size={16}
+                  className={`text-gray-400 transition-transform ${
+                    expandedSections.has("coverage") ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+              {expandedSections.has("coverage") && (
+                <div className="pb-4">
+                  {editingSection === "coverage" ? (
+                    <div>
+                      <textarea
+                        value={draft.coverage ?? ""}
+                        onChange={(e) => setDraft((d) => ({ ...d, coverage: e.target.value }))}
+                        rows={2}
+                        placeholder="e.g. Addis Ababa metropolitan area, Jan–Dec 2024"
+                        className={`${inputClass} resize-y`}
+                      />
+                      {saveError && <p className="text-red-500 text-xs mt-2">{saveError}</p>}
+                      <EditActions
+                        saving={saving}
+                        onCancel={cancelEditing}
+                        onSave={() => saveSection("coverage", { coverage: draft.coverage })}
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="text-sm text-gray-500 flex-1">{dataset.coverage || "Not specified."}</p>
+                      {isOwner && editMode && (
+                        <EditTrigger
+                          label="Edit coverage"
+                          onClick={() => startEditing("coverage", { coverage: dataset.coverage || "" })}
+                        />
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
-                <p className="text-sm text-gray-600">
-                  {dataset.doi || "Pending"}
-                </p>
-              </Card>
-
-              {/* LICENSE */}
-              <Card className="p-6" delay={300}>
-                <p className="text-lg font-serif font-bold text-navy mb-2">
-                  License
-                </p>
-
-                <p className="text-sm text-gray-600">
-                  This dataset is licensed under a{" "}
-                  <a
-                    href={dataset.license_url || "#"}
-                    className="text-[#2C5AAE] hover:underline font-medium"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Creative Commons license
-                  </a>
-                  .
-                </p>
-              </Card>
+            {/* DOI Citation */}
+            <div>
+              <button
+                type="button"
+                onClick={() => toggleSection("doi")}
+                className="flex w-full items-center justify-between py-3 text-left"
+              >
+                <span className="text-sm font-medium text-amber-700">DOI Citation</span>
+                <ChevronDown
+                  size={16}
+                  className={`text-gray-400 transition-transform ${
+                    expandedSections.has("doi") ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+              {expandedSections.has("doi") && (
+                <div className="pb-4">
+                  {editingSection === "doi" ? (
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 mb-1">
+                        Related Publication (URL)
+                      </label>
+                      <input
+                        type="text"
+                        value={draft.related_publication ?? ""}
+                        onChange={(e) => setDraft((d) => ({ ...d, related_publication: e.target.value }))}
+                        className={`${inputClass} mb-3`}
+                      />
+                      <label className="block text-xs font-semibold text-gray-500 mb-1">Citation Notes</label>
+                      <textarea
+                        value={draft.citation_notes ?? ""}
+                        onChange={(e) => setDraft((d) => ({ ...d, citation_notes: e.target.value }))}
+                        rows={2}
+                        className={`${inputClass} resize-y`}
+                      />
+                      {saveError && <p className="text-red-500 text-xs mt-2">{saveError}</p>}
+                      <EditActions
+                        saving={saving}
+                        onCancel={cancelEditing}
+                        onSave={() =>
+                          saveSection("doi", {
+                            related_publication: draft.related_publication,
+                            citation_notes: draft.citation_notes,
+                          })
+                        }
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 text-sm text-gray-500">
+                        <p>DOI: {dataset.doi || "Pending — assigned upon publication approval."}</p>
+                        {dataset.related_publication && (
+                          <p className="mt-1">
+                            Related publication:{" "}
+                            <a
+                              href={dataset.related_publication}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-[#2C5AAE] hover:underline"
+                            >
+                              {dataset.related_publication}
+                            </a>
+                          </p>
+                        )}
+                        {dataset.citation_notes && <p className="mt-1">{dataset.citation_notes}</p>}
+                      </div>
+                      {isOwner && editMode && (
+                        <EditTrigger
+                          label="Edit citation details"
+                          onClick={() =>
+                            startEditing("doi", {
+                              related_publication: dataset.related_publication || "",
+                              citation_notes: dataset.citation_notes || "",
+                            })
+                          }
+                        />
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
 }
-

@@ -3,19 +3,24 @@ import { useState } from "react";
 export default function PolicyForm({ initialValues = {}, onSubmit, onBack, isSubmitting, submitError }) {
   const [ownership, setOwnership] = useState(initialValues.ownership || false);
   const [piiRemoval, setPiiRemoval] = useState(initialValues.piiRemoval || false);
-  const [licenseConsent, setLicenseConsent] = useState(initialValues.licenseConsent || false);
   const [error, setError] = useState("");
+  // Track which action is in-flight so each button shows its own loading label.
+  const [activeAction, setActiveAction] = useState(null); // 'submit' | 'draft'
 
-  const allChecked = ownership && piiRemoval && licenseConsent;
+  const allChecked = ownership && piiRemoval;
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!allChecked) { setError("All three confirmations are required before submitting."); return; }
+    if (!allChecked) { setError("Both confirmations are required before submitting."); return; }
     setError("");
-    onSubmit({ ownership, piiRemoval, licenseConsent });
+    setActiveAction("submit");
+    onSubmit({ ownership, piiRemoval });
   };
 
-  const handleSaveDraft = () => onSubmit({ ownership, piiRemoval, licenseConsent, isDraft: true });
+  const handleSaveDraft = () => {
+    setActiveAction("draft");
+    onSubmit({ ownership, piiRemoval, isDraft: true });
+  };
 
   const checkRow = "flex gap-4 items-start p-5 border border-[#E3E1DA] rounded-lg mb-4 cursor-pointer";
 
@@ -35,8 +40,7 @@ export default function PolicyForm({ initialValues = {}, onSubmit, onBack, isSub
         </p>
         <ul className="list-disc pl-6">
           <li>The repository serves as a permanent, immutable record for academic validation.</li>
-          <li>Data will be indexed by global research crawlers and made discoverable via DOI.</li>
-          <li>Contributors retain authorship credit while granting AASTU a non-exclusive, perpetual license to host and distribute the content.</li>
+          <li>Contributors retain authorship credit while granting AASTU a non-exclusive, perpetual right to host and distribute the content.</li>
         </ul>
       </div>
 
@@ -56,33 +60,34 @@ export default function PolicyForm({ initialValues = {}, onSubmit, onBack, isSub
         </span>
       </label>
 
-      <label className={checkRow}>
-        <input type="checkbox" className="mt-1 w-5 h-5" checked={licenseConsent} onChange={(e) => setLicenseConsent(e.target.checked)} />
-        <span>
-          <strong className="block text-base mb-1.5">License & DOI Consent</strong>
-          <p className="m-0 text-sm text-gray-500">I agree to release this data under the selected license and understand that a permanent Digital Object Identifier (DOI) will be minted upon approval.</p>
-        </span>
-      </label>
-
       <div className="bg-[#EAF0FB] rounded-lg px-5 py-4 text-sm text-[#2C5AAE] my-5">
-        ⓘ Static Review Notice: Your submission will enter a 48-hour administrative review queue.
-        AASTU Review Commite will verify metadata accuracy and file integrity before the dataset becomes
+        ⓘ AASTU Review Committee will verify metadata accuracy and file integrity before the dataset becomes
         public. You will be notified via email once the review is complete.
       </div>
 
-      {error && <p className="text-danger text-sm mt-2">{error}</p>}
-      {submitError && <p className="text-danger text-sm mt-2">{submitError}</p>}
+      {error && (
+        <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3.5 text-sm text-amber-700 mt-4">
+          <span className="shrink-0 text-base">⚠</span>
+          <span>{error}</span>
+        </div>
+      )}
+      {submitError && (
+        <div className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3.5 text-sm text-red-700 mt-4">
+          <span className="shrink-0 text-base">⚠️</span>
+          <span>{submitError}</span>
+        </div>
+      )}
 
       <div className="flex justify-between items-center mt-10 pt-6 border-t border-[#E3E1DA]">
         <button type="button" className="text-gray-500 text-base font-semibold" onClick={onBack}>← Back</button>
         <div className="flex gap-4">
           <button type="button" className="bg-[#A67A0D] hover:bg-[#8f690b] text-white rounded-md px-6 py-3.5 text-base font-semibold disabled:opacity-60"
             onClick={handleSaveDraft} disabled={isSubmitting}>
-            Save as Draft
+            {isSubmitting && activeAction === "draft" ? "Saving…" : "Save as Draft"}
           </button>
           <button type="submit" className="bg-[#A67A0D] hover:bg-[#8f690b] text-white rounded-md px-7 py-3.5 text-base font-semibold disabled:opacity-60"
             disabled={isSubmitting}>
-            {isSubmitting ? "Submitting…" : "Submit for Review"}
+            {isSubmitting && activeAction === "submit" ? "Submitting…" : "Submit for Review"}
           </button>
         </div>
       </div>

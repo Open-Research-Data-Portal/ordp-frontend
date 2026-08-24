@@ -1,11 +1,28 @@
 import { useRef, useState } from "react";
 import FileUploadItem from "./FileUploadItem";
 
-export default function UploadForm({ initialValues = {}, onNext, onBack }) {
+export default function UploadForm({ initialValues = {}, onNext, onBack, isSubmitting = false, submitError = null }) {
   const [files, setFiles] = useState(initialValues.files || []);
   const [access, setAccess] = useState(initialValues.access || "public");
   const [isDragging, setIsDragging] = useState(false);
+  const [thumbnail, setThumbnail] = useState(initialValues.thumbnail || null);
+  const [thumbnailPreview, setThumbnailPreview] = useState(
+    initialValues.thumbnail ? URL.createObjectURL(initialValues.thumbnail) : null
+  );
   const fileInputRef = useRef(null);
+  const thumbnailInputRef = useRef(null);
+
+  const handleThumbnailChange = (file) => {
+    if (!file) return;
+    setThumbnail(file);
+    setThumbnailPreview(URL.createObjectURL(file));
+  };
+
+  const clearThumbnail = () => {
+    setThumbnail(null);
+    setThumbnailPreview(null);
+    if (thumbnailInputRef.current) thumbnailInputRef.current.value = "";
+  };
 
   const addFiles = (fileList) => {
     const newEntries = Array.from(fileList).map((file) => ({
@@ -21,7 +38,7 @@ export default function UploadForm({ initialValues = {}, onNext, onBack }) {
 
   const handleContinue = (e) => {
     e.preventDefault();
-    onNext({ files, access });
+    onNext({ files, access, thumbnail });
   };
 
   return (
@@ -39,7 +56,9 @@ export default function UploadForm({ initialValues = {}, onNext, onBack }) {
       >
         <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-[#F2E7C4] flex items-center justify-center text-gold-dark text-xl">⬆</div>
         <p className="text-lg font-semibold m-0 mb-1.5">Drag and drop files here</p>
-        <p className="text-sm text-gray-500 m-0 mb-5">Supported formats: CSV, JSON/JSONL, Excel, Images, Parquet (Max 2GB per file)</p>
+        <p className="text-sm text-gray-500 m-0 mb-5">
+          Supported formats: CSV, TSV, JSON, JSONL, Excel, Parquet, HDF5, NetCDF, XML, SQLite, MATLAB, RData, GeoJSON, Images, Audio, Video, PDF, plain text, ZIP, and more. Max 2 GB per file.
+        </p>
         <button type="button" className="bg-[#A67A0D] hover:bg-[#8f690b] text-white rounded-md px-6 py-3 text-base font-semibold">Browse Files</button>
         <input ref={fileInputRef} type="file" multiple hidden onChange={(e) => addFiles(e.target.files)} />
       </div>
@@ -53,10 +72,87 @@ export default function UploadForm({ initialValues = {}, onNext, onBack }) {
         </div>
       )}
 
+      {/* ── Thumbnail ── */}
+      <div className="mb-8 pt-6 border-t border-[#E3E1DA]">
+        <label className="block text-base font-semibold mb-1">Dataset Thumbnail <span className="text-gray-400 font-normal text-sm">(Optional)</span></label>
+        <p className="text-sm text-gray-500 mb-4">A cover image that helps users identify your dataset. Recommended: 16:9, at least 800×450 px. JPEG or PNG.</p>
+
+        {thumbnailPreview ? (
+          <div className="flex items-start gap-5">
+            <img
+              src={thumbnailPreview}
+              alt="Thumbnail preview"
+              className="w-48 h-28 object-cover rounded-lg border border-[#E3E1DA] shrink-0"
+            />
+            <div className="flex flex-col gap-2 justify-center">
+              <p className="text-sm text-gray-700 font-medium">{thumbnail?.name}</p>
+              <p className="text-sm text-gray-500">{thumbnail ? formatBytes(thumbnail.size) : ""}</p>
+              <div className="flex gap-3 mt-1">
+                <button
+                  type="button"
+                  onClick={() => thumbnailInputRef.current?.click()}
+                  className="text-sm text-[#A67A0D] font-semibold hover:underline"
+                >
+                  Change
+                </button>
+                <button
+                  type="button"
+                  onClick={clearThumbnail}
+                  className="text-sm text-danger font-semibold hover:underline"
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => thumbnailInputRef.current?.click()}
+            className="flex items-center gap-3 px-5 py-3 border border-dashed border-[#E3E1DA] rounded-lg text-sm text-gray-500 hover:border-gold hover:text-[#A67A0D] transition-colors bg-[#FBFAF7]"
+          >
+            <span className="text-xl">🖼️</span>
+            Click to upload a thumbnail image
+          </button>
+        )}
+        <input
+          ref={thumbnailInputRef}
+          type="file"
+          accept="image/*"
+          hidden
+          onChange={(e) => handleThumbnailChange(e.target.files?.[0])}
+        />
+      </div>
+
+      {/* ── Dataset Access ── */}
       <div className="mb-6">
-        <label className="block text-base font-semibold mb-2">Access</label>
-        <p className="text-sm text-gray-500 mb-3">Every dataset is visible to all users. Access controls whether the file itself can be downloaded directly.</p>
-        <div className="grid grid-cols-2 gap-5">
+        <label className="block text-base font-semibold mb-2">
+          Dataset Access <span className="text-danger">*</span>
+        </label>
+        <p className="text-sm text-gray-500 mb-3">
+          Controls who can view and interact with this dataset. This can be modified after publication.
+        </p>
+        <div className="grid grid-cols-3 gap-4">
+          <button
+            type="button"
+            onClick={() => setAccess("institution")}
+            className={`text-left p-5 border rounded-lg bg-white flex flex-col gap-1.5
+              ${access === "institution" ? "border-gold bg-[#FBF6E9]" : "border-[#E3E1DA]"}`}
+          >
+            <span className="text-2xl">🏛️</span>
+            <span className="font-semibold text-base">Institution</span>
+            <span className="text-sm text-gray-500">Limited to verified members of Addis Ababa Science and Technology University.</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setAccess("restricted")}
+            className={`text-left p-5 border rounded-lg bg-white flex flex-col gap-1.5
+              ${access === "restricted" ? "border-gold bg-[#FBF6E9]" : "border-[#E3E1DA]"}`}
+          >
+            <span className="text-2xl">🔒</span>
+            <span className="font-semibold text-base">Restricted</span>
+            <span className="text-sm text-gray-500">Only approved users. Requires access request or manual validation.</span>
+          </button>
           <button
             type="button"
             onClick={() => setAccess("public")}
@@ -64,25 +160,22 @@ export default function UploadForm({ initialValues = {}, onNext, onBack }) {
               ${access === "public" ? "border-gold bg-[#FBF6E9]" : "border-[#E3E1DA]"}`}
           >
             <span className="text-2xl">🌐</span>
-            <span className="font-semibold text-base">Public</span>
-            <span className="text-sm text-gray-500">Anyone can view and download the dataset directly.</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setAccess("private")}
-            className={`text-left p-5 border rounded-lg bg-white flex flex-col gap-1.5
-              ${access === "private" ? "border-gold bg-[#FBF6E9]" : "border-[#E3E1DA]"}`}
-          >
-            <span className="text-2xl">🔒</span>
-            <span className="font-semibold text-base">Private</span>
-            <span className="text-sm text-gray-500">Visible to everyone, but downloading requires the author's consent.</span>
+            <span className="font-semibold text-base">Public / Open</span>
+            <span className="text-sm text-gray-500">Anyone can view and download (subject to the chosen license).</span>
           </button>
         </div>
       </div>
 
+      {submitError && (
+        <div className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3.5 text-sm text-red-700 mt-4">
+          <span className="shrink-0 text-base">⚠️</span>
+          <span>{submitError}</span>
+        </div>
+      )}
+
       <div className="flex justify-between items-center mt-10 pt-6 border-t border-[#E3E1DA]">
         <button type="button" className="text-gray-500 text-base font-semibold" onClick={onBack}>← Back</button>
-        <button type="submit" className="bg-[#A67A0D] hover:bg-[#8f690b] text-white rounded-md px-7 py-3.5 text-base font-semibold">Continue →</button>
+        <button type="submit" disabled={isSubmitting} className="bg-[#A67A0D] hover:bg-[#8f690b] text-white rounded-md px-7 py-3.5 text-base font-semibold disabled:opacity-60">{isSubmitting ? "Uploading…" : "Continue →"}</button>
       </div>
     </form>
   );

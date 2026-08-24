@@ -36,12 +36,11 @@ const ROLE_CONFIG = {
   researcher: {
     title: "AASTU ORDP",
     subtitle: "Open Research Data",
-    cta: { label: "Submit Manuscript", to: "/datasets/contribute", icon: Plus },
     nav: [
       { label: "Dashboard", icon: LayoutGrid, to: "/researcher-dashboard" },
-      { label: "My Projects", icon: FolderKanban, to: "/my-datasets" },
-      { label: "Datasets", icon: Database, to: "/datasets" },
-      { label: "Bookmarks", icon: Bookmark, to: "/datasets?tab=bookmarks" },
+      { label: "My Datasets", icon: FolderKanban, to: "/my-datasets" },
+      { label: "Other Datasets", icon: Database, to: "/datasets" },
+      { label: "Bookmarks", icon: Bookmark, to: "/bookmarks" },
       { label: "Settings", icon: Settings, to: "/profile" },
     ],
   },
@@ -106,15 +105,7 @@ export default function DashboardSidebar() {
       </div>
 
       {/* Primary CTA */}
-      <div className="px-4 py-4">
-        <Link
-          to={config.cta.to}
-          className="flex items-center justify-center gap-2 w-full bg-gold hover:bg-gold-dark text-white rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors"
-        >
-          <config.cta.icon className="w-4 h-4" />
-          {config.cta.label}
-        </Link>
-      </div>
+      
 
       {/* Navigation */}
       <nav className="flex-1 px-3 space-y-0.5">

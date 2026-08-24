@@ -55,7 +55,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   const login = useCallback(async (identifier, password, stayLoggedIn) => {
-    const data = await authApi.login(identifier, password); // throws AuthApiError on failure
+    const data = await authApi.login(identifier, password, stayLoggedIn); // throws AuthApiError on failure
 
     // Write tokens to the in-memory store and sessionStorage so the axios
     // interceptor can use them immediately for any subsequent request.

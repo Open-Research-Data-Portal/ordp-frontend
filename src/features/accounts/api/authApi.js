@@ -11,12 +11,17 @@ const BASE = 'http://localhost:8000/api/accounts'
 /**
  * @param {string} identifier
  * @param {string} password
+ * @param {boolean} [stayLoggedIn=false] – when true, backend issues a 30-day refresh token; otherwise 7 days.
  * @returns {Promise<{access: string, refresh: string, user: {id: number, email: string}}>}
  * @throws {AuthApiError}
  */
-export async function login(identifier, password) {
+export async function login(identifier, password, stayLoggedIn = false) {
   try {
-    const { data } = await client.post(`${BASE}/login/`, { identifier, password });
+    const { data } = await client.post(`${BASE}/login/`, {
+      identifier,
+      password,
+      stay_logged_in: stayLoggedIn,
+    });
     return data;
   } catch (err) {
     throw normalizeError(err);

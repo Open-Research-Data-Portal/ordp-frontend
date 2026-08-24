@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Bot,
@@ -16,10 +16,12 @@ import {
   Users,
   Shield,
   Quote,
+  Image as ImageIcon,
 } from "lucide-react";
 import TopBar from "../layouts/TopBar";
 import logo from "../assets/aastulogo.png";
 import campusImg from "../assets/1.jfif";
+import { searchDatasets } from "../api/search";
 
 const CATEGORIES = [
   { label: "Machine Learning", icon: Bot, slug: "machine-learning" },
@@ -45,20 +47,6 @@ const HOW_IT_WORKS = [
   { step: "04", title: "Collaborate", description: "Share datasets with co-authors, invite contributors, and track engagement.", icon: Users },
 ];
 
-const POPULAR_DATASETS = [
-  { id: "p1", accession: "ORDP · CV · 014", category: "COMPUTER VISION", title: "Ethiopian Coffee Leaf Disease Detection", description: "High-resolution images detailing various coffee leaf diseases across growing regions.", views: "12.4K", size: "2.4 GB", files: 18 },
-  { id: "p2", accession: "ORDP · NLP · 007", category: "NLP", title: "Amharic News Text Corpus for NLP", description: "Over 100,000 annotated news articles in Amharic from major Ethiopian outlets.", views: "8.2K", size: "450 MB", files: 3 },
-  { id: "p3", accession: "ORDP · HLT · 022", category: "HEALTHCARE", title: "Addis Ababa Urban Health Indicators", description: "Time-series respiratory health data correlated with urban traffic patterns.", views: "5.1K", size: "1.2 GB", files: 12 },
-  { id: "p4", accession: "ORDP · GEO · 031", category: "GEOGRAPHY", title: "GERD Water Level Satellite Imagery", description: "Multi-spectral satellite imagery tracking reservoir filling phases.", views: "15.3K", size: "8.5 GB", files: 24 },
-];
-
-const NEWLY_ADDED_DATASETS = [
-  { id: "n1", accession: "ORDP · AGR · 058", category: "AGRICULTURE", title: "Teff Yield Prediction Variables", description: "Soil composition, rainfall, and temperature mapped to Teff crop yields.", views: "142", size: "120 MB", files: 2 },
-  { id: "n2", accession: "ORDP · FIN · 059", category: "FINANCE", title: "Mobile Money Transaction Patterns", description: "Anonymized digital financial transactions for economic research.", views: "89", size: "3.1 GB", files: 5 },
-  { id: "n3", accession: "ORDP · ENG · 060", category: "ENGINEERING", title: "Addis Ababa Light Rail Transit Usage", description: "Daily passenger volume, peak hours, and route efficiency metrics.", views: "312", size: "56 MB", files: 1 },
-  { id: "n4", accession: "ORDP · CLM · 061", category: "CLIMATE", title: "Historical Drought Indices - Horn of Africa", description: "SPEI drought index data spanning three decades across the region.", views: "45", size: "210 MB", files: 4 },
-];
-
 function SectionEyebrow({ children }) {
   return (
     <div className="flex items-center gap-3 mb-2">
@@ -69,18 +57,45 @@ function SectionEyebrow({ children }) {
 }
 
 function DatasetCard({ dataset, onClick }) {
+  const categoryName = dataset.metadata?.category_name || dataset.category || "UNKNOWN";
+  const desc = dataset.metadata?.description || dataset.description || "";
+  const fileCount = dataset.files ? dataset.files.length : (dataset.fileCount || 0);
+  const sizeBytes = dataset.files ? dataset.files.reduce((acc, f) => acc + f.file_size, 0) : 0;
+  const sizeStr = dataset.size || (sizeBytes > 0 ? (sizeBytes / 1024 / 1024).toFixed(1) + " MB" : "0 MB");
+  const views = dataset.view_count ?? dataset.views ?? 0;
+  // FIX: the backend field is `thumbnail_key` (see Dataset model /
+  // DatasetSerializer), not `thumbnail_url` or `thumbnailUrl` — neither
+  // of which exist on the API response. This was why images rendered
+  // fine on the /datasets page (whose DatasetCard already read
+  // thumbnail_key correctly) but never showed up here.
+  const thumbnailUrl = dataset.thumbnail_key || dataset.thumbnail_url || dataset.thumbnailUrl;
+
   return (
-    <div onClick={onClick} role="button" tabIndex={0} className="group bg-white rounded-lg overflow-hidden border border-border hover:border-gold hover:shadow-md cursor-pointer transition">
-      <div className="px-4 pt-4 flex items-center justify-between">
-        <span className="text-[10px] font-mono tracking-wide text-gray-400">{dataset.accession}</span>
-        <span className="text-[10px] font-semibold tracking-wide text-navy bg-gold-light px-2 py-1 rounded">{dataset.category}</span>
+    <div onClick={onClick} role="button" tabIndex={0} className="group flex flex-col bg-white rounded-lg overflow-hidden border border-border hover:border-gold hover:shadow-md cursor-pointer transition">
+      <div className="h-40 w-full bg-gray-100 overflow-hidden">
+        {thumbnailUrl ? (
+          <img
+            src={thumbnailUrl}
+            alt={dataset.title}
+            loading="lazy"
+            className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-300"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-navy/10 to-gold/10">
+            <ImageIcon className="w-7 h-7 text-navy/30" />
+          </div>
+        )}
       </div>
-      <div className="p-4 pt-3">
+      <div className="px-4 pt-4 flex items-center justify-between">
+        <span className="text-[10px] font-mono tracking-wide text-gray-400">{dataset.accession || dataset.id?.slice(0,8)}</span>
+        <span className="text-[10px] font-semibold tracking-wide text-navy bg-gold-light px-2 py-1 rounded">{categoryName.toUpperCase()}</span>
+      </div>
+      <div className="p-4 pt-3 flex-1 flex flex-col">
         <h3 className="text-sm font-serif font-bold text-navy leading-snug">{dataset.title}</h3>
-        <p className="text-xs text-gray-500 mt-1.5 line-clamp-2">{dataset.description}</p>
+        <p className="text-xs text-gray-500 mt-1.5 line-clamp-2 flex-1">{desc}</p>
         <div className="flex items-center justify-between mt-4 pt-3 border-t border-border">
           <div className="flex items-center gap-2 text-[11px] text-gray-400">
-            <span>{dataset.views} views</span><span>·</span><span>{dataset.size}</span><span>·</span><span>{dataset.files} file{dataset.files === 1 ? "" : "s"}</span>
+            <span>{views} views</span><span>·</span><span>{sizeStr}</span><span>·</span><span>{fileCount} file{fileCount === 1 ? "" : "s"}</span>
           </div>
           <ArrowRight className="w-3.5 h-3.5 text-gray-300 group-hover:text-gold group-hover:translate-x-0.5 transition" />
         </div>
@@ -91,12 +106,32 @@ function DatasetCard({ dataset, onClick }) {
 
 export default function LandingPage() {
   const navigate = useNavigate();
-  const [heroQuery, setHeroQuery] = useState("");
+  const [popularDatasets, setPopularDatasets] = useState([]);
+  const [newestDatasets, setNewestDatasets] = useState([]);
+  const [datasetsLoading, setDatasetsLoading] = useState(true);
+  const [datasetsError, setDatasetsError] = useState(false);
 
-  const handleHeroSearch = (e) => {
-    e.preventDefault();
-    if (heroQuery.trim()) navigate(`/datasets?q=${encodeURIComponent(heroQuery.trim())}`);
-  };
+  useEffect(() => {
+    async function fetchDatasets() {
+      setDatasetsLoading(true);
+      setDatasetsError(false);
+      try {
+        const [pop, newests] = await Promise.all([
+          searchDatasets({ order_by: "popular" }),
+          searchDatasets({ order_by: "newest" }),
+        ]);
+        setPopularDatasets(pop.slice(0, 3));
+        setNewestDatasets(newests.slice(0, 3));
+      } catch (err) {
+        console.error("Failed to load landing page datasets:", err);
+        setDatasetsError(true);
+      } finally {
+        setDatasetsLoading(false);
+      }
+    }
+
+    fetchDatasets();
+  }, []);
 
   return (
     <div className="min-h-screen bg-bg">
@@ -128,31 +163,9 @@ export default function LandingPage() {
             Every dataset here was accessioned by the researcher who created it — searchable, citable, and open to the next person who needs it.
           </p>
 
-          <form onSubmit={handleHeroSearch} className="mt-10 max-w-3xl mx-auto">
-            <div className="relative flex items-center bg-white rounded-2xl shadow-xl shadow-black/20 p-1.5 pl-4">
-              <Search className="w-5 h-5 text-gray-400 shrink-0" />
-              <input
-                type="text"
-                value={heroQuery}
-                onChange={(e) => setHeroQuery(e.target.value)}
-                placeholder="Search datasets by title, keyword, subject, or researcher…"
-                className="flex-1 min-w-0 bg-transparent border-0 px-3 py-3.5 text-sm text-navy placeholder:text-gray-400 focus:outline-none focus:ring-0"
-              />
-              <button
-                type="submit"
-                className="shrink-0 bg-gold hover:bg-gold-dark text-white font-semibold rounded-xl px-6 py-3 text-sm transition-colors"
-              >
-                Search
-              </button>
-            </div>
-            <p className="text-xs text-slate-400 mt-3">
-              Try: <button type="button" onClick={() => navigate("/datasets?q=climate")} className="text-gold/90 hover:text-gold underline-offset-2 hover:underline">climate</button>
-              {" · "}
-              <button type="button" onClick={() => navigate("/datasets?q=machine+learning")} className="text-gold/90 hover:text-gold underline-offset-2 hover:underline">machine learning</button>
-              {" · "}
-              <button type="button" onClick={() => navigate("/datasets?q=health")} className="text-gold/90 hover:text-gold underline-offset-2 hover:underline">public health</button>
-            </p>
-          </form>
+          <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
+
+          </div>
         </div>
 
         <div className="relative max-w-3xl mx-auto mt-14 grid grid-cols-3 gap-6 border-t border-white/10 pt-8">
@@ -175,6 +188,7 @@ export default function LandingPage() {
             </div>
             <button onClick={() => navigate("/datasets")} className="text-sm font-semibold text-gold hover:underline shrink-0">View All Categories →</button>
           </div>
+
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {CATEGORIES.map(({ label, icon: Icon, slug }) => (
               <button key={slug} onClick={() => navigate(`/datasets?category=${slug}`)} className="flex flex-col items-center justify-center gap-2.5 bg-white rounded-xl py-7 border border-border hover:border-gold hover:shadow-sm transition">
@@ -191,9 +205,25 @@ export default function LandingPage() {
             <div><SectionEyebrow>Most consulted</SectionEyebrow><h2 className="text-xl font-serif font-bold text-navy">Popular Datasets</h2></div>
             <button onClick={() => navigate("/datasets?sort=popular")} className="text-sm font-semibold text-gold hover:underline shrink-0">Explore More →</button>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {POPULAR_DATASETS.map((d) => <DatasetCard key={d.id} dataset={d} onClick={() => navigate(`/datasets/${d.id}`)} />)}
-          </div>
+          {datasetsLoading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="h-40 rounded-lg bg-white border border-border animate-pulse" />
+              ))}
+            </div>
+          ) : popularDatasets.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-border bg-white py-12 text-center">
+              <p className="text-sm text-gray-400">
+                {datasetsError
+                  ? "Couldn't load datasets right now. Please try again shortly."
+                  : "No datasets available yet."}
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {popularDatasets.map((d) => <DatasetCard key={d.id} dataset={d} onClick={() => navigate(`/datasets/${d.id}`)} />)}
+            </div>
+          )}
         </section>
 
         {/* Newly Added */}
@@ -202,9 +232,25 @@ export default function LandingPage() {
             <div><SectionEyebrow>Latest accessions</SectionEyebrow><h2 className="text-xl font-serif font-bold text-navy">Newly Added</h2></div>
             <button onClick={() => navigate("/datasets?sort=newest")} className="text-sm font-semibold text-gold hover:underline shrink-0">View All →</button>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {NEWLY_ADDED_DATASETS.map((d) => <DatasetCard key={d.id} dataset={d} onClick={() => navigate(`/datasets/${d.id}`)} />)}
-          </div>
+          {datasetsLoading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="h-40 rounded-lg bg-white border border-border animate-pulse" />
+              ))}
+            </div>
+          ) : newestDatasets.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-border bg-white py-12 text-center">
+              <p className="text-sm text-gray-400">
+                {datasetsError
+                  ? "Couldn't load datasets right now. Please try again shortly."
+                  : "No datasets available yet."}
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {newestDatasets.map((d) => <DatasetCard key={d.id} dataset={d} onClick={() => navigate(`/datasets/${d.id}`)} />)}
+            </div>
+          )}
         </section>
 
         {/* Research at AASTU — campus image (NOT hero, NOT feeds) */}

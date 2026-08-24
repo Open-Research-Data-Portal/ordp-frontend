@@ -25,6 +25,19 @@ export async function attachMetadata(datasetId, metadataPayload) {
   return data;
 }
 
+export async function setDatasetLanguages(datasetId, payload) {
+  const { data } = await client.post(`${METADATA_BASE}/${datasetId}/languages/`, payload);
+  return data;
+}
+
+// Step 2b: optional thumbnail upload (after dataset is created).
+export async function uploadThumbnail(datasetId, file) {
+  const formData = new FormData();
+  formData.append("thumbnail", file);
+  const { data } = await client.post(`${DATASETS_BASE}/${datasetId}/thumbnail/`, formData);
+  return data;
+}
+
 // Step 3: chunked upload.
 // Backend contract (apps/datasets/views.py -> upload_chunk):
 //   request.FILES["chunk"] and request.data["chunk_index"] are required.
@@ -173,6 +186,11 @@ export async function getDiscoverFeed() {
 }
 
 export async function getBookmarks() {
+  const { data } = await client.get(`${DATASETS_BASE}/bookmarks/`);
+  return data;
+}
+
+export async function getMyBookmarks() {
   const { data } = await client.get(`${DATASETS_BASE}/bookmarks/`);
   return data;
 }

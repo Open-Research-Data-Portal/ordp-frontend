@@ -17,7 +17,7 @@ export default function SubmissionSuccessPage() {
     <ContributeLayout currentStep={4} steps={STEPS} allComplete>
       <div className="bg-white border border-border rounded-lg p-12 px-8 text-center">
         <div className="w-14 h-14 rounded-full bg-gold text-white flex items-center justify-center text-2xl mx-auto mb-5">✓</div>
-        <h1 className="text-navy m-0 mb-1.5">Dataset Submitted Successfully</h1>
+        <h1 className="text-navy m-0 mb-1.5">{submission.isDraft ? "Dataset Saved as Draft" : "Dataset Submitted Successfully"}</h1>
         <p className="text-gray-500 m-0 mb-4">'{submission.title}'</p>
         {submission.isDraft ? (
           <span className="text-[11px] px-2 py-0.5 rounded-full font-semibold bg-[#E3E1DA] text-gray-600">◷ Draft Saved</span>
@@ -41,12 +41,15 @@ export default function SubmissionSuccessPage() {
               <p className="text-sm font-semibold m-0 mt-0.5">{submission.category}</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500 m-0">Visibility</p>
-              <p className="text-sm font-semibold m-0 mt-0.5">🌐 {submission.visibility}</p>
+              <p className="text-xs text-gray-500 m-0">Access</p>
+              <p className="text-sm font-semibold m-0 mt-0.5">
+                {submission.access === "institution"
+                  ? "🏛️ Institution"
+                  : submission.access === "restricted"
+                  ? "🔒 Restricted"
+                  : "🌐 Public / Open"}
+              </p>
             </div>
-          </div>
-          <div className="mt-4 text-xs text-gray-500 border-t border-border pt-3">
-            DOI: {submission.doi}<br />License: {submission.license}
           </div>
         </div>
 

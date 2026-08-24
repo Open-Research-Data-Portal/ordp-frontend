@@ -3,7 +3,7 @@ import * as datasetsApi from "./datasetsApi";
 
 const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB per chunk
 
-// Backend only records the file_type values it can validate
+// File types the backend can validate
 // (see apps/datasets/services/file_validation.py).
 const KNOWN_FILE_TYPES = new Set([
   "csv", "tsv",
@@ -11,16 +11,53 @@ const KNOWN_FILE_TYPES = new Set([
   "xlsx", "xls",
   "parquet",
   "jpg", "jpeg", "png", "gif", "bmp", "webp", "tiff", "tif",
+  "heic", "heif", "avif",  // modern image formats
 ]);
+
+// Browser MIME type -> backend file_type string.
+// Used as the primary signal when the extension alone is ambiguous.
+const MIME_TO_FILE_TYPE = {
+  "image/jpeg": "jpg",
+  "image/jpg":  "jpg",
+  "image/png":  "png",
+  "image/gif":  "gif",
+  "image/bmp":  "bmp",
+  "image/webp": "webp",
+  "image/tiff": "tiff",
+  "image/heic": "heic",
+  "image/heif": "heic",
+  "image/avif": "avif",
+  "text/csv":   "csv",
+  "text/tab-separated-values": "tsv",
+  "application/json": "json",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+  "application/vnd.ms-excel": "xls",
+  "application/x-parquet": "parquet",
+};
 
 // File types that represent tabular/structured data, where column_count,
 // feature_names, and item_count are meaningful. For everything else
 // (images, etc.) these fields should not be sent.
 const STRUCTURED_FILE_TYPES = new Set(["csv", "tsv", "json", "jsonl", "xlsx", "xls", "parquet"]);
 
-function deriveFileType(fileName) {
-  const ext = (fileName.split(".").pop() || "").toLowerCase();
-  return KNOWN_FILE_TYPES.has(ext) ? ext : "csv";
+/**
+ * Derives the backend file_type string from a File object.
+ * Priority: MIME type > file extension > raw extension as-is.
+ * Never falls back to "csv" -- that caused binary files to be
+ * validated as UTF-8 text and produced a confusing error.
+ */
+function deriveFileType(file) {
+  // 1. MIME type is the most reliable signal (set by the browser/OS).
+  const mimeType = file.type || "";
+  if (mimeType && MIME_TO_FILE_TYPE[mimeType]) {
+    return MIME_TO_FILE_TYPE[mimeType];
+  }
+  // 2. Fall back to the file extension.
+  const ext = (file.name.split(".").pop() || "").toLowerCase();
+  if (KNOWN_FILE_TYPES.has(ext)) return ext;
+  // 3. Return the raw extension so the backend gives a clear
+  //    "unsupported type" error instead of a misleading CSV error.
+  return ext || "unknown";
 }
 
 // Parses a form field into a non-negative integer, or undefined if it's
@@ -33,99 +70,136 @@ function parseNonNegativeInt(value) {
   return Math.trunc(n);
 }
 
+function extractError(err) {
+  const status = err.response?.status;
+  const detail = err.response?.data?.detail;
+  if (status === 401) return detail || "Your session has expired. Please sign in again.";
+  if (status === 403) return detail || "You do not have permission to perform this action.";
+  if (detail) return detail;
+  if (err.message) return err.message;
+  return "Something went wrong. Please try again.";
+}
+
+async function uploadFileInChunks(file, sessionId) {
+  const totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
+  for (let i = 0; i < totalChunks; i++) {
+    const blob = file.slice(i * CHUNK_SIZE, Math.min((i + 1) * CHUNK_SIZE, file.size));
+    await datasetsApi.uploadChunk(sessionId, i, blob);
+  }
+}
+
 export default function useDatasetSubmission() {
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({ details: {}, metadata: {}, upload: {}, policy: {} });
+  const [datasetId, setDatasetId] = useState(null);
+  const [uploadSessionId, setUploadSessionId] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
 
-  const goToPreviousStep = () => setStep((s) => Math.max(s - 1, 1));
-
-  const goToNextStep = (stepKey, data) => {
-    setFormData((prev) => ({ ...prev, [stepKey]: data }));
-    setStep((s) => Math.min(s + 1, 4));
-  };
-
-  // Step 1 only stores the details locally.
-  // The backend dataset shell is deliberately NOT created here — it is created
-  // by upload/init/ inside submitDataset() when the user actually submits.
-  const submitDetails = async (detailsData) => {
+  const goToPreviousStep = () => {
     setSubmitError(null);
-    setFormData((prev) => ({ ...prev, details: detailsData }));
-    setStep(2);
+    setStep((s) => Math.max(s - 1, 1));
   };
 
-  const uploadFileInChunks = async (file, sessionId) => {
-    const totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
-    for (let i = 0; i < totalChunks; i++) {
-      const blob = file.slice(i * CHUNK_SIZE, Math.min((i + 1) * CHUNK_SIZE, file.size));
-      await datasetsApi.uploadChunk(sessionId, i, blob);
-    }
-  };
-
-  const submitDataset = async (policyData) => {
+  // Step 1: create dataset shell (or update title if revisiting).
+  const submitDetails = async (detailsData) => {
     setIsSubmitting(true);
     setSubmitError(null);
     try {
-      // Store policy data
-      setFormData((prev) => ({ ...prev, policy: policyData }));
-
-      const details = formData.details || {};
-      const metadata = formData.metadata || {};
-      const files = (formData.upload?.files || []).filter((entry) => entry.file);
-      // Every dataset is visible to all users. "access" controls whether the
-      // file itself can be downloaded directly (public) or requires the
-      // author's consent (private). Defaults to public.
-      const access = formData.upload?.access || "public";
-      if (!details.title?.trim()) {
-        throw new Error("Dataset title is required before submitting.");
+      let did = datasetId;
+      let sid = uploadSessionId;
+      if (!did) {
+        const r = await datasetsApi.initUpload({ title: detailsData.title, visibility: "restricted" });
+        did = r.dataset_id;
+        sid = r.upload_session_id;
+        setDatasetId(did);
+        setUploadSessionId(sid);
+      } else {
+        await datasetsApi.updateDataset(did, { title: detailsData.title });
       }
+      setFormData((prev) => ({ ...prev, details: detailsData }));
+      setStep(2);
+    } catch (err) {
+      setSubmitError(extractError(err));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
-      // Backend architecture is one upload session per file (finalize_upload
-      // consumes the whole session dir), so enforce a single file per submission.
-      if (files.length > 1) {
-        throw new Error("Only a single file can be uploaded per submission. Please remove extra files and try again.");
-      }
-
-      // 1. Create the draft Dataset shell + open the upload session NOW (not at step 1).
-      const initResult = await datasetsApi.initUpload({
-        title: details.title,
-        access,
-      });
-      const datasetId = initResult.dataset_id;
-      const uploadSessionId = initResult.upload_session_id;
-
-      // 2. Attach metadata (backend contract needs category_id/other_category,
-      // description, subject, keywords, sponsor_or_grant, language, author_id,
-      // co_authors).
+  // Step 2: attach metadata + set languages.
+  const submitMetadata = async (metadataData) => {
+    setIsSubmitting(true);
+    setSubmitError(null);
+    try {
+      const details = formData.details;
       const metadataPayload = {
-        category_id: metadata.category_id || undefined,
-        other_category: metadata.other_category || undefined,
-        description: details.description || metadata.description || "",
-        subject: metadata.subject_id || undefined,
-        keywords: Array.isArray(metadata.keywords) ? metadata.keywords : [],
-        sponsor_or_grant: metadata.sponsorOrGrant || "",
-        language: details.language || "",
-        author_id: details.authorId || undefined,
-        co_authors: Array.isArray(details.coAuthors) ? details.coAuthors : [],
+        category_id: metadataData.category_id || undefined,
+        other_category: metadataData.other_category || undefined,
+        description: details.description || "",
+        subject: metadataData.subject_id || undefined,
+        keywords: Array.isArray(metadataData.keywords) ? metadataData.keywords : [],
+        related_resources: Array.isArray(details.relatedResources) ? details.relatedResources : [],
+        geographic_coverage: details.geographicCoverage || "",
+        temporal_coverage: details.temporalCoverage || "",
+        instances_represent: metadataData.instancesRepresent || "",
+        collection_method: metadataData.collectionMethod || "",
+        recommended_splits: metadataData.recommendedSplits || "",
       };
       await datasetsApi.attachMetadata(datasetId, metadataPayload);
+      await datasetsApi.setDatasetLanguages(datasetId, {
+        other_languages: [details.language || "English"],
+      });
+      setFormData((prev) => ({ ...prev, metadata: metadataData }));
+      setStep(3);
+    } catch (err) {
+      setSubmitError(extractError(err));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
-      // 3. Upload file chunks + assemble them.
-      const entry = files[0];
-      if (entry) {
-        const fileType = entry.fileType || deriveFileType(entry.file.name);
+  // Step 3: set visibility, upload thumbnail + file.
+  const submitUpload = async (uploadData) => {
+    setIsSubmitting(true);
+    setSubmitError(null);
+    try {
+      await datasetsApi.updateDataset(datasetId, { visibility: uploadData.access || "restricted" });
+
+      if (uploadData.thumbnail) {
+        try {
+          await datasetsApi.uploadThumbnail(datasetId, uploadData.thumbnail);
+        } catch (e) {
+          console.warn("Thumbnail upload failed (non-fatal):", e);
+        }
+      }
+
+      const files = (uploadData.files || []).filter((e) => e.file);
+      if (files.length > 1) {
+        throw new Error("Only a single file can be uploaded per submission. Please remove extra files.");
+      }
+
+      if (files.length === 1) {
+        const entry = files[0];
+        const fileType = entry.fileType || deriveFileType(entry.file);
         const isStructuredFileType = STRUCTURED_FILE_TYPES.has(fileType);
-
-        // Only send column/feature/item metadata for structured (tabular) file
-        // types. Sending these for images, etc. either has no meaning or, if the
-        // form still has stale/leftover values, can violate backend constraints
-        // (e.g. a negative column_count).
-        const featureNames = isStructuredFileType && Array.isArray(metadata.variables)
-          ? metadata.variables.map((v) => (typeof v === "string" ? v : v?.name)).filter(Boolean)
-          : undefined;
-        const columnCount = isStructuredFileType ? parseNonNegativeInt(metadata.numFeatures) : undefined;
-        const itemCount = isStructuredFileType ? parseNonNegativeInt(metadata.numInstances) : undefined;
+        const metadata = formData.metadata || {};
+        const isTabular =
+          Array.isArray(metadata.characteristics) &&
+          metadata.characteristics.includes("Tabular");
+        const featureNames =
+          isStructuredFileType && isTabular && Array.isArray(metadata.variables)
+            ? metadata.variables
+                .map((v) => (typeof v === "string" ? v : v?.name))
+                .filter(Boolean)
+            : undefined;
+        const columnCount =
+          isStructuredFileType && isTabular
+            ? parseNonNegativeInt(metadata.numFeatures)
+            : undefined;
+        const itemCount =
+          isStructuredFileType && isTabular
+            ? parseNonNegativeInt(metadata.numInstances)
+            : undefined;
 
         await uploadFileInChunks(entry.file, uploadSessionId);
         await datasetsApi.completeUpload(uploadSessionId, {
@@ -139,46 +213,44 @@ export default function useDatasetSubmission() {
         });
       }
 
-      // 4. Submit for review — unless this is a "Save as Draft" action.
-      let result = null;
+      setFormData((prev) => ({ ...prev, upload: uploadData }));
+      setStep(4);
+    } catch (err) {
+      setSubmitError(extractError(err));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Step 4: submit for review (or save as draft).
+  const submitFinal = async (policyData) => {
+    setIsSubmitting(true);
+    setSubmitError(null);
+    try {
+      const details = formData.details || {};
+      const metadata = formData.metadata || {};
+      const upload = formData.upload || {};
+      const files = (upload.files || []).filter((e) => e.file);
+      const totalSize = files.reduce((sum, f) => sum + (f.file?.size || 0), 0);
+
       let status = "draft";
       if (!policyData.isDraft) {
-        const termsAccepted =
-          Boolean(policyData.ownership) &&
-          Boolean(policyData.piiRemoval) &&
-          Boolean(policyData.licenseConsent);
-        result = await datasetsApi.submitDataset(datasetId, termsAccepted);
+        await datasetsApi.submitDataset(datasetId, true);
         status = "pending";
       }
 
-      // Build a friendly summary for the success page
-      const totalSize = files.reduce((sum, f) => sum + (f.file.size || 0), 0);
       return {
         id: datasetId,
         title: details.title,
         fileCount: files.length,
         totalSize: formatBytes(totalSize),
         category: metadata.categoryName || "—",
-        access,
-        doi: result?.doi || "Pending",
+        access: upload.access || "restricted",
         status,
         isDraft: status === "draft",
       };
     } catch (err) {
-      const status = err.response?.status;
-      const detail = err.response?.data?.detail;
-
-      if (status === 401) {
-        setSubmitError(detail || "Your session has expired. Please sign in again.");
-      } else if (status === 403) {
-        setSubmitError(detail || "You do not have permission to submit this dataset.");
-      } else if (detail) {
-        setSubmitError(detail);
-      } else if (err.message) {
-        setSubmitError(err.message);
-      } else {
-        setSubmitError("Couldn't submit the dataset. Please try again.");
-      }
+      setSubmitError(extractError(err));
       return null;
     } finally {
       setIsSubmitting(false);
@@ -186,8 +258,12 @@ export default function useDatasetSubmission() {
   };
 
   return {
-    step, formData,
-    goToNextStep, goToPreviousStep, submitDetails, submitDataset,
+    step, formData, datasetId,
+    goToPreviousStep,
+    submitDetails,
+    submitMetadata,
+    submitUpload,
+    submitFinal,
     isSubmitting, submitError,
   };
 }
@@ -198,6 +274,9 @@ function formatBytes(bytes) {
   const units = ["KB", "MB", "GB"];
   let value = bytes / 1024;
   let unitIndex = 0;
-  while (value >= 1024 && unitIndex < units.length - 1) { value /= 1024; unitIndex++; }
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex++;
+  }
   return `${value.toFixed(1)} ${units[unitIndex]}`;
 }

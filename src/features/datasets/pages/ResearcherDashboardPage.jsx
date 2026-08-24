@@ -5,14 +5,15 @@ import {
   Download,
   FolderOpen,
   Plus,
-  Pencil,
   MoreVertical,
   Bookmark,
-  FileText,
+  User,
+  X,
+  ArrowRight,
 } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import StatCard from "../../../components/dashboard/StatCard";
-import { SectionHeader, StatusBadge, EmptyState } from "../../../components/dashboard/dashboardUi";
+import { StatusBadge, EmptyState } from "../../../components/dashboard/dashboardUi";
 import { useAuth } from "../../../context/useAuth";
 import { getDisplayName } from "../../../utils/userRoles";
 import * as datasetsApi from "../hooks/datasetsApi";
@@ -22,26 +23,65 @@ function normalizeList(data) {
   return data?.results || [];
 }
 
-function timeAgo(dateString) {
+function formatDate(dateString) {
   if (!dateString) return "—";
-  const diffMs = Date.now() - new Date(dateString).getTime();
-  const mins = Math.floor(diffMs / 60000);
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
+  return new Date(dateString).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
+
+// Placeholder recommendations shown until the backend feed endpoint
+// returns real personalized results.
+const MOCK_RECOMMENDATIONS = [
+  {
+    id: "mock-1",
+    title: "Structural Integrity Analysis of High-Rise Concrete Frames",
+    description: "Comprehensive dataset detailing stress test results over a 10-year simulation period.",
+    category: "Civil Engineering",
+    views: 2400,
+    downloads: 450,
+    thumbnail_url: null,
+  },
+  {
+    id: "mock-2",
+    title: "Ethiopian Language Processing Model Corpus",
+    description: "A curated collection of text data aimed at training LLMs for Amharic, Oromo, and Tigrinya.",
+    category: "Machine Learning",
+    views: 5100,
+    downloads: 1200,
+    thumbnail_url: null,
+  },
+  {
+    id: "mock-3",
+    title: "Genomic Sequencing Variations in Indigenous Flora",
+    description: "Raw sequencing data mapped against climate change indicators over the last decade.",
+    category: "Bio-Informatics",
+    views: 890,
+    downloads: 120,
+    thumbnail_url: null,
+  },
+];
 
 export default function ResearcherDashboardPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
+
   const [datasets, setDatasets] = useState([]);
-  const [downloads, setDownloads] = useState([]);
-  const [activity, setActivity] = useState([]);
   const [feed, setFeed] = useState([]);
+  const [bookmarks, setBookmarks] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("bookmarks");
+
+  // Profile completion banner: reappears every time the dashboard loads
+  // until the user's profile is actually marked complete.
+  const isProfileComplete = Boolean(user?.profile_complete);
+  const [showProfileBanner, setShowProfileBanner] = useState(!isProfileComplete);
+
+  useEffect(() => {
+    setShowProfileBanner(!isProfileComplete);
+  }, [isProfileComplete]);
 
   useEffect(() => {
     let active = true;
@@ -50,24 +90,58 @@ export default function ResearcherDashboardPage() {
       const results = await Promise.allSettled([
         datasetsApi.getMyDatasets(),
         datasetsApi.getDashboardStats(),
-        datasetsApi.getDashboardRecentActivity(),
         datasetsApi.getDashboardFeed(),
-        datasetsApi.getMyDownloads?.() ?? Promise.resolve([]),
+        datasetsApi.getMyBookmarks?.() ?? Promise.resolve([]),
       ]);
       if (!active) return;
       if (results[0].status === "fulfilled") setDatasets(normalizeList(results[0].value));
       if (results[1].status === "fulfilled") setStats(results[1].value);
-      if (results[2].status === "fulfilled") setActivity(normalizeList(results[2].value));
-      if (results[3].status === "fulfilled") setFeed(normalizeList(results[3].value));
-      if (results[4].status === "fulfilled") setDownloads(normalizeList(results[4].value));
+      if (results[2].status === "fulfilled") setFeed(normalizeList(results[2].value));
+      if (results[3].status === "fulfilled") setBookmarks(normalizeList(results[3].value));
       setLoading(false);
     }
     load();
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, []);
 
   return (
     <DashboardShell title="Researcher Dashboard" subtitle="Manage your datasets and track engagement">
+      {/* Profile completion banner — reappears on every dashboard load until complete */}
+      {showProfileBanner && (
+        <div className="flex items-center justify-between gap-4 bg-gold-light border border-gold/30 rounded-xl px-5 py-4 mb-8 animate-fade-in-up">
+          <div className="flex items-start gap-3">
+            <span className="w-8 h-8 rounded-full bg-gold/20 flex items-center justify-center shrink-0">
+              <User className="w-4 h-4 text-gold-dark" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-navy">Complete your profile</p>
+              <p className="text-xs text-gray-600 mt-0.5">
+                Enhance your research visibility. Complete your academic profile to unlock personalized recommendations.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 shrink-0">
+            <button
+              type="button"
+              onClick={() => navigate("/profile")}
+              className="bg-navy hover:bg-navy-dark text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors"
+            >
+              Go to Profile
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowProfileBanner(false)}
+              aria-label="Dismiss"
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="flex justify-between items-start mb-6 animate-fade-in-up">
         <div>
           <h1 className="text-2xl font-serif font-bold text-navy">
@@ -87,151 +161,104 @@ export default function ResearcherDashboardPage() {
 
       {/* Stats row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
-        <StatCard label="VIEWS RECEIVED" value={loading ? "…" : (stats?.views_received ?? 1284).toLocaleString()} icon={Eye} trend="+12% this month" delay={50} />
-        <StatCard label="DOWNLOADS RECEIVED" value={loading ? "…" : (stats?.downloads_received ?? 452).toLocaleString()} icon={Download} trend="+5% this month" delay={100} />
-        <StatCard label="DATASETS DOWNLOADED" value={loading ? "…" : (stats?.datasets_downloaded ?? downloads.length ?? 12)} icon={FolderOpen} hint="Across your projects" delay={150} />
-        <StatCard label="MOST VIEWED" value={loading ? "…" : stats?.most_viewed_title ?? "Climate…"} icon={Eye} hint={`${stats?.most_viewed_count ?? 842} views`} delay={200} />
+        <StatCard label="VIEWS RECEIVED" value={loading ? "…" : (stats?.total_views_received ?? 0).toLocaleString()} icon={Eye} trend="+12% this month" delay={50} />
+        <StatCard label="DOWNLOADS RECEIVED" value={loading ? "…" : (stats?.total_downloads_received ?? 0).toLocaleString()} icon={Download} trend="+5% this month" delay={100} />
+        <StatCard label="DOWNLOADS I MADE" value={loading ? "…" : (stats?.downloads_i_made ?? 0)} icon={FolderOpen} hint="Across all datasets" delay={150} />
+        <StatCard label="MOST VIEWED" value={loading ? "…" : (stats?.most_viewed_dataset?.title ?? "None")} icon={Eye} hint={stats?.most_viewed_dataset ? `${stats.most_viewed_dataset.view_count} views` : ""} delay={200} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        {/* My Uploaded Datasets */}
-        <section className="lg:col-span-2 bg-white rounded-xl border border-border shadow-sm overflow-hidden animate-fade-in-up" style={{ animationDelay: "250ms" }}>
-          <div className="px-5 py-4 border-b border-border">
-            <h2 className="text-base font-semibold text-navy">My Uploaded Datasets</h2>
+      {/* Recommendations */}
+      <section className="mb-8 animate-fade-in-up" style={{ animationDelay: "250ms" }}>
+        <div className="flex items-end justify-between mb-4">
+          <div>
+            <h2 className="text-lg font-serif font-bold text-navy">Recommendations</h2>
+            <p className="text-sm text-gray-500 mt-0.5">Discover trending research materials tailored to you.</p>
           </div>
-          {loading ? (
-            <p className="p-5 text-sm text-gray-500">Loading…</p>
-          ) : datasets.length === 0 ? (
-            <div className="p-5"><EmptyState title="No datasets yet" description="Submit your first dataset to get started." actionLabel="Contribute" onAction={() => navigate("/datasets/contribute")} /></div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="text-xs uppercase text-gray-500 bg-gray-50">
-                  <tr>
-                    <th className="px-5 py-3 text-left font-semibold">Name</th>
-                    <th className="px-5 py-3 text-left font-semibold">Status</th>
-                    <th className="px-5 py-3 text-left font-semibold">Last Updated</th>
-                    <th className="px-5 py-3 text-right font-semibold">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {datasets.slice(0, 5).map((d) => (
-                    <tr key={d.id} className="border-t border-gray-100 hover:bg-bg/50">
-                      <td className="px-5 py-3.5 font-medium text-navy">{d.title}</td>
-                      <td className="px-5 py-3.5"><StatusBadge status={d.status || "draft"} /></td>
-                      <td className="px-5 py-3.5 text-gray-500">{timeAgo(d.updated_at)}</td>
-                      <td className="px-5 py-3.5">
-                        <div className="flex items-center justify-end gap-1">
-                          <button type="button" onClick={() => navigate(`/datasets/${d.id}`)} className="p-1.5 text-gray-400 hover:text-gold"><Pencil className="w-4 h-4" /></button>
-                          <button type="button" className="p-1.5 text-gray-400 hover:text-navy"><MoreVertical className="w-4 h-4" /></button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
+          <button
+            type="button"
+            onClick={() => navigate("/datasets")}
+            className="flex items-center gap-1 text-sm font-medium text-gold hover:text-gold-dark"
+          >
+            View All
+            <ArrowRight className="w-4 h-4" />
+          </button>
+        </div>
 
-        {/* Activity timeline */}
-        <section className="bg-white rounded-xl border border-border shadow-sm p-5 animate-fade-in-up" style={{ animationDelay: "300ms" }}>
-          <h2 className="text-base font-semibold text-navy mb-4">Activity on My Datasets</h2>
-          {loading ? (
-            <p className="text-sm text-gray-500">Loading…</p>
-          ) : activity.length === 0 ? (
-            <p className="text-sm text-gray-500">No recent activity.</p>
-          ) : (
-            <ol className="space-y-4">
-              {activity.slice(0, 4).map((item) => (
-                <li key={item.id} className="flex gap-3 text-sm">
-                  <span className="w-2 h-2 rounded-full bg-gold mt-1.5 shrink-0" />
-                  <div>
-                    <p className="text-navy">{item.message}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">{timeAgo(item.timestamp)}</p>
+        {loading ? (
+          <p className="text-sm text-gray-500">Loading…</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {(feed.length > 0 ? feed : MOCK_RECOMMENDATIONS).slice(0, 3).map((item) => (
+              <div
+                key={item.id}
+                onClick={() => navigate(`/datasets/${item.id}`)}
+                className="bg-white rounded-xl border border-border shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition-shadow"
+              >
+                <div className="h-32 bg-gray-100 overflow-hidden">
+                  {(item.thumbnail_key || item.thumbnail_url) ? (
+                    <img src={item.thumbnail_key ?? item.thumbnail_url} alt={item.title} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-navy/10 to-gold/10" />
+                  )}
+                </div>
+                <div className="p-4">
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                    {item.metadata?.category_name || item.category || "General"}
+                  </span>
+                  <p className="text-sm font-semibold text-navy mt-2 line-clamp-2">{item.title}</p>
+                  <p className="text-xs text-gray-500 mt-1 line-clamp-2">{item.metadata?.description || item.description || ""}</p>
+                  <div className="flex items-center gap-4 mt-3 text-xs text-gray-400">
+                    <span className="flex items-center gap-1">
+                      <Eye className="w-3.5 h-3.5" />
+                      {((item.view_count ?? item.views) || 0).toLocaleString()} Views
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Download className="w-3.5 h-3.5" />
+                      {((item.download_count ?? item.downloads) || 0).toLocaleString()} Downloads
+                    </span>
                   </div>
-                </li>
-              ))}
-            </ol>
-          )}
-        </section>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        {/* Downloads */}
-        <section className="lg:col-span-2 bg-white rounded-xl border border-border shadow-sm p-5 animate-fade-in-up" style={{ animationDelay: "350ms" }}>
-          <SectionHeader title="Datasets I've Downloaded" />
-          {downloads.length === 0 ? (
-            <p className="text-sm text-gray-500">No downloads yet.</p>
-          ) : (
-            <ul className="space-y-3">
-              {downloads.slice(0, 4).map((d) => (
-                <li key={d.id} className="flex items-center justify-between p-3 rounded-lg border border-border hover:border-gold/30 cursor-pointer" onClick={() => navigate(`/datasets/${d.id}`)}>
-                  <div>
-                    <p className="text-sm font-medium text-navy">{d.title}</p>
-                    <p className="text-xs text-gray-500">{d.category || d.subject_name}</p>
-                  </div>
-                  <span className="text-xs text-gray-400">{timeAgo(d.downloaded_at)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        {/* Recommended */}
-        <section className="bg-white rounded-xl border border-border shadow-sm p-5 animate-fade-in-up" style={{ animationDelay: "400ms" }}>
-          <SectionHeader title="Recommended" />
-          {feed.length === 0 ? (
-            <p className="text-sm text-gray-500">No recommendations yet.</p>
-          ) : (
-            feed.slice(0, 1).map((item) => (
-              <div key={item.id} className="cursor-pointer" onClick={() => navigate(`/datasets/${item.id}`)}>
-                <span className="text-[10px] font-bold text-gold bg-gold-light px-2 py-0.5 rounded">Match 95%</span>
-                <p className="text-sm font-semibold text-navy mt-2">{item.title}</p>
-                <p className="text-xs text-gray-500 mt-1 line-clamp-2">{item.description}</p>
+                </div>
               </div>
-            ))
-          )}
-        </section>
-      </div>
+            ))}
+          </div>
+        )}
+      </section>
 
-      {/* Bookmarks / Other submissions tabs */}
-      <section className="animate-fade-in-up" style={{ animationDelay: "450ms" }}>
-        <div className="flex gap-1 mb-4 border-b border-border">
-          {[
-            { id: "bookmarks", label: "My Bookmarks", icon: Bookmark },
-            { id: "submissions", label: "My Other Submissions", icon: FileText },
-          ].map(({ id, label, icon: Icon }) => (
+      {/* My Bookmarks */}
+      <section className="mb-8 animate-fade-in-up" style={{ animationDelay: "300ms" }}>
+        <h2 className="text-lg font-serif font-bold text-navy mb-4">My Bookmarks</h2>
+
+        {bookmarks.length === 0 ? (
+          <div className="bg-white rounded-xl border border-border shadow-sm py-14 flex flex-col items-center text-center px-6">
+            <span className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+              <Bookmark className="w-5 h-5 text-gray-400" />
+            </span>
+            <p className="text-sm font-semibold text-navy">No bookmarks yet</p>
+            <p className="text-xs text-gray-500 mt-1 max-w-sm">
+              Explore the directory to save datasets and research papers for quick access later.
+            </p>
             <button
-              key={id}
               type="button"
-              onClick={() => setActiveTab(id)}
-              className={[
-                "flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors",
-                activeTab === id ? "border-gold text-gold" : "border-transparent text-gray-500 hover:text-navy",
-              ].join(" ")}
+              onClick={() => navigate("/datasets")}
+              className="mt-4 border border-gold text-gold hover:bg-gold hover:text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors"
             >
-              <Icon className="w-4 h-4" />
-              {label}
+              Browse Directory
             </button>
-          ))}
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {activeTab === "bookmarks" ? (
-            <>
-              <div className="bg-white rounded-xl p-4 border border-border">
-                <p className="text-sm font-semibold text-navy">Historical Weather Data…</p>
-                <p className="text-xs text-gray-500 mt-1">Meteorology Dept</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {bookmarks.slice(0, 6).map((b) => (
+              <div
+                key={b.id}
+                onClick={() => navigate(`/datasets/${b.id}`)}
+                className="bg-white rounded-xl p-4 border border-border hover:border-gold/30 cursor-pointer transition-colors"
+              >
+                <p className="text-sm font-semibold text-navy">{b.title}</p>
+                <p className="text-xs text-gray-500 mt-1">{b.metadata?.category_name || "Unknown"}</p>
               </div>
-              <div className="bg-white rounded-xl p-4 border border-border">
-                <p className="text-sm font-semibold text-navy">Public Transit Rider Stats</p>
-                <p className="text-xs text-gray-500 mt-1">Urban Planning</p>
-              </div>
-            </>
-          ) : (
-            <EmptyState title="No other submissions" description="Suggestions for categories or interests appear here." actionLabel="Browse datasets" onAction={() => navigate("/datasets")} />
-          )}
-        </div>
+            ))}
+          </div>
+        )}
       </section>
     </DashboardShell>
   );

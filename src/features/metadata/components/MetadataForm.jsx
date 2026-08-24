@@ -3,27 +3,68 @@ import FormField from "../../../components/FormField";
 import TagInput from "../../../components/TagInput";
 import * as datasetsApi from "../../datasets/hooks/datasetsApi";
 
-const DATA_FORMATS = ["CSV", "JSON/JSONL", "Excel", "Images", "Parquet"];
-const CHARACTERISTICS = ["Tabular", "Multivariate", "Time-Series", "Spatial / GIS", "Sequential", "Textual"];
+const DATA_FORMATS = [
+  "CSV",
+  "TSV / Tab-separated values",
+  "JSON",
+  "JSONL / Newline-delimited JSON",
+  "Excel (.xlsx, .xls)",
+  "HDF5",
+  "NetCDF",
+  "Parquet",
+  "XML",
+  "SQLite / Database files",
+  "MATLAB (.mat)",
+  "RData / RDS",
+  "GeoJSON / Shapefile",
+  "Images (JPEG, PNG, TIFF, etc.)",
+  "Audio (WAV, MP3, FLAC, etc.)",
+  "Video (MP4, AVI, etc.)",
+  "PDF / Document files",
+  "Plain text / Markdown",
+  "ZIP / Compressed archives",
+  "Other",
+];
 
-export default function MetadataForm({ initialValues = {}, onNext, onBack }) {
+const CHARACTERISTICS = [
+  "Tabular",
+  "Multivariate",
+  "Time-Series",
+  "Spatial / GIS",
+  "Sequential",
+  "Textual",
+  "Image",
+  "Spatiotemporal",
+  "Other",
+];
+
+export default function MetadataForm({ initialValues = {}, onNext, onBack, isSubmitting = false, submitError = null }) {
   const [categories, setCategories] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [categoryId, setCategoryId] = useState(initialValues.category_id || "");
   const [otherCategory, setOtherCategory] = useState(initialValues.other_category || "");
   const [subjectId, setSubjectId] = useState(initialValues.subject_id || "");
-  const [sponsorOrGrant, setSponsorOrGrant] = useState(initialValues.sponsorOrGrant || "");
   const [keywords, setKeywords] = useState(initialValues.keywords || []);
   const [dataFormats, setDataFormats] = useState(initialValues.dataFormats || []);
+  const [characteristics, setCharacteristics] = useState(initialValues.characteristics || []);
+
+  // Tabular-specific — only shown when "Tabular" is selected
   const [numInstances, setNumInstances] = useState(initialValues.numInstances || "");
   const [numFeatures, setNumFeatures] = useState(initialValues.numFeatures || "");
-  const [characteristics, setCharacteristics] = useState(initialValues.characteristics || []);
   const [includesHeaderRow, setIncludesHeaderRow] = useState(initialValues.includesHeaderRow || false);
   const [hasMissingValues, setHasMissingValues] = useState(initialValues.hasMissingValues || false);
+
+  // Always-visible additional fields
+  const [instancesRepresent, setInstancesRepresent] = useState(initialValues.instancesRepresent || "");
+  const [collectionMethod, setCollectionMethod] = useState(initialValues.collectionMethod || "");
+  const [recommendedSplits, setRecommendedSplits] = useState(initialValues.recommendedSplits || "");
   const [sensitiveData, setSensitiveData] = useState(initialValues.sensitiveData || "");
   const [preprocessingSteps, setPreprocessingSteps] = useState(initialValues.preprocessingSteps || "");
   const [citationNotes, setCitationNotes] = useState(initialValues.citationNotes || "");
+
   const [localError, setLocalError] = useState("");
+
+  const isTabular = characteristics.includes("Tabular");
 
   useEffect(() => {
     let isMounted = true;
@@ -49,7 +90,7 @@ export default function MetadataForm({ initialValues = {}, onNext, onBack }) {
   const selectedCategory = categories.find((c) => c.id === categoryId);
   const selectedSubject = subjects.find((s) => s.id === subjectId);
 
-  const handleContinue = (e) => {
+  const handleContinue = async (e) => {
     e.preventDefault();
     const useOtherCategory = categoryId === "__other__";
     const resolvedCategoryId = useOtherCategory ? "" : categoryId;
@@ -63,24 +104,39 @@ export default function MetadataForm({ initialValues = {}, onNext, onBack }) {
       setLocalError("Please select a subject.");
       return;
     }
+    if (keywords.length < 1) {
+      setLocalError("Please add at least one keyword.");
+      return;
+    }
     setLocalError("");
-    onNext({
+    await onNext({
       category_id: resolvedCategoryId,
       other_category: resolvedOtherCategory,
       categoryName: useOtherCategory ? resolvedOtherCategory : selectedCategory?.name || "",
       subject_id: subjectId,
       subjectName: selectedSubject?.name || "",
-      sponsorOrGrant,
-      keywords, dataFormats, numInstances, numFeatures, characteristics,
-      includesHeaderRow, hasMissingValues,
-      sensitiveData, preprocessingSteps, citationNotes,
+      keywords,
+      dataFormats,
+      characteristics,
+      // Tabular-specific (cleared when Tabular is not selected)
+      numInstances: isTabular ? numInstances : "",
+      numFeatures: isTabular ? numFeatures : "",
+      includesHeaderRow: isTabular ? includesHeaderRow : false,
+      hasMissingValues: isTabular ? hasMissingValues : false,
+      // Always-visible additional fields
+      instancesRepresent,
+      collectionMethod,
+      recommendedSplits,
+      sensitiveData,
+      preprocessingSteps,
+      citationNotes,
     });
   };
 
   const inputClass = "w-full px-4 py-3 border border-[#E3E1DA] rounded-md text-sm bg-[#F7F6F2] focus:outline-none focus:border-navy";
   const sectionClass = "my-9 pt-6 border-t border-[#E3E1DA]";
-  const sectionTitleClass = "text-xl font-serif font-bold text-[#0B1526] mb-2"
-  const checkboxLabelClass = "flex items-center gap-2 text-base";
+  const sectionTitleClass = "text-xl font-serif font-bold text-[#0B1526] mb-2";
+  const checkboxLabelClass = "flex items-center gap-2 text-sm";
 
   return (
     <form className="bg-white border border-[#E3E1DA] shadow-lg rounded-lg p-10" onSubmit={handleContinue}>
@@ -89,6 +145,7 @@ export default function MetadataForm({ initialValues = {}, onNext, onBack }) {
         Provide technical details and characteristics to help other researchers find and use your dataset.
       </p>
 
+      {/* ── Core Metadata ── */}
       <section className={sectionClass}>
         <h2 className={sectionTitleClass}>Core Metadata</h2>
         <div className="grid grid-cols-2 gap-6">
@@ -119,22 +176,19 @@ export default function MetadataForm({ initialValues = {}, onNext, onBack }) {
           </FormField>
         )}
 
-        <FormField label="Sponsor / Grant">
-          <input
-            type="text"
-            value={sponsorOrGrant}
-            onChange={(e) => setSponsorOrGrant(e.target.value)}
-            placeholder="e.g., AASTU Research Grant 2025 / NSF Award #…"
-            className={inputClass}
-          />
-        </FormField>
+        <TagInput label="Keywords / Tags" required tags={keywords} onChange={setKeywords} placeholder="+ Add keyword" />
+        <p className="-mt-4 mb-6 text-sm text-gray-500">At least 3 keywords recommended. Press Enter to add a tag.</p>
 
-        <TagInput label="Keywords / Tags" tags={keywords} onChange={setKeywords} placeholder="+ Add keyword" />
-        <FormField label="Data Format (Select all that apply)">
+        <FormField label="Data Format (Select all that apply)" required>
           <div className="grid grid-cols-3 gap-3">
             {DATA_FORMATS.map((f) => (
               <label key={f} className={checkboxLabelClass}>
-                <input type="checkbox" className="w-4 h-4" checked={dataFormats.includes(f)} onChange={() => toggleCheckbox(dataFormats, setDataFormats, f)} />
+                <input
+                  type="checkbox"
+                  className="w-4 h-4 shrink-0"
+                  checked={dataFormats.includes(f)}
+                  onChange={() => toggleCheckbox(dataFormats, setDataFormats, f)}
+                />
                 {f}
               </label>
             ))}
@@ -142,62 +196,164 @@ export default function MetadataForm({ initialValues = {}, onNext, onBack }) {
         </FormField>
       </section>
 
+      {/* ── Dataset Characteristics ── */}
       <section className={sectionClass}>
-        <h2 className={sectionTitleClass}>Technical Details & Statistics</h2>
-        <div className="grid grid-cols-2 gap-6">
-          <FormField label="Number of Instances">
-            <input type="number" value={numInstances} onChange={(e) => setNumInstances(e.target.value)} placeholder="e.g., 50000" className={inputClass} />
-          </FormField>
-          <FormField label="Number of Features">
-            <input type="number" value={numFeatures} onChange={(e) => setNumFeatures(e.target.value)} placeholder="e.g., 25" className={inputClass} />
-          </FormField>
-        </div>
-        <FormField label="Dataset Characteristics">
+        <h2 className={sectionTitleClass}>Dataset Characteristics</h2>
+
+        <FormField label="Dataset Characteristics (Optional)">
           <div className="grid grid-cols-3 gap-3">
             {CHARACTERISTICS.map((c) => (
               <label key={c} className={checkboxLabelClass}>
-                <input type="checkbox" className="w-4 h-4" checked={characteristics.includes(c)} onChange={() => toggleCheckbox(characteristics, setCharacteristics, c)} />
+                <input
+                  type="checkbox"
+                  className="w-4 h-4 shrink-0"
+                  checked={characteristics.includes(c)}
+                  onChange={() => toggleCheckbox(characteristics, setCharacteristics, c)}
+                />
                 {c}
               </label>
             ))}
           </div>
         </FormField>
-        <div className="grid grid-cols-3 gap-3">
-          <label className={checkboxLabelClass}>
-            <input type="checkbox" className="w-4 h-4" checked={includesHeaderRow} onChange={(e) => setIncludesHeaderRow(e.target.checked)} />
-            Includes Header Row
-          </label>
-          <label className={checkboxLabelClass}>
-            <input type="checkbox" className="w-4 h-4" checked={hasMissingValues} onChange={(e) => setHasMissingValues(e.target.checked)} />
-            Has Missing Values
-          </label>
+
+        {/* Tabular-specific — only visible when "Tabular" is checked */}
+        {isTabular && (
+          <div className="mt-6 p-5 border border-[#E3E1DA] rounded-lg bg-[#FBFAF7]">
+            <p className="text-sm font-semibold text-[#0B1526] mb-4">Tabular Dataset Details</p>
+
+            <div className="grid grid-cols-2 gap-6 mb-4">
+              <FormField label="Number of Instances (Rows)">
+                <input
+                  type="number"
+                  value={numInstances}
+                  onChange={(e) => setNumInstances(e.target.value)}
+                  placeholder="e.g., 50000"
+                  className={inputClass}
+                  min="0"
+                />
+              </FormField>
+              <FormField label="Number of Features / Variables">
+                <input
+                  type="number"
+                  value={numFeatures}
+                  onChange={(e) => setNumFeatures(e.target.value)}
+                  placeholder="e.g., 25"
+                  className={inputClass}
+                  min="0"
+                />
+              </FormField>
+            </div>
+
+            <div className="flex gap-8">
+              <label className={checkboxLabelClass}>
+                <input
+                  type="checkbox"
+                  className="w-4 h-4"
+                  checked={includesHeaderRow}
+                  onChange={(e) => setIncludesHeaderRow(e.target.checked)}
+                />
+                Data has a header row
+              </label>
+              <label className={checkboxLabelClass}>
+                <input
+                  type="checkbox"
+                  className="w-4 h-4"
+                  checked={hasMissingValues}
+                  onChange={(e) => setHasMissingValues(e.target.checked)}
+                />
+                Data has missing values
+              </label>
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* ── Additional Metadata ── */}
+      <section className={sectionClass}>
+        <h2 className={sectionTitleClass}>Additional Metadata</h2>
+
+        <FormField label="What do the instances represent? (Optional)">
+          <textarea
+            value={instancesRepresent}
+            onChange={(e) => setInstancesRepresent(e.target.value)}
+            placeholder="e.g., documents, photos, people, countries, sensor readings…"
+            className={`${inputClass} resize-y`}
+            rows={2}
+          />
+        </FormField>
+
+        <FormField label="How the data were collected / generated (Optional)">
+          <textarea
+            value={collectionMethod}
+            onChange={(e) => setCollectionMethod(e.target.value)}
+            placeholder="1–3 sentences describing the collection or generation method…"
+            className={`${inputClass} resize-y`}
+            rows={3}
+          />
+        </FormField>
+
+        <FormField label="Recommended Data Splits (Optional)">
+          <textarea
+            value={recommendedSplits}
+            onChange={(e) => setRecommendedSplits(e.target.value)}
+            placeholder="e.g., training (70%), validation (15%), testing (15%)…"
+            className={`${inputClass} resize-y`}
+            rows={2}
+          />
+        </FormField>
+
+        <FormField label="Sensitive Data Disclosure (Optional)">
+          <textarea
+            value={sensitiveData}
+            onChange={(e) => setSensitiveData(e.target.value)}
+            placeholder="e.g., racial or ethnic origin, sexual orientation, religious beliefs, political opinions, or union memberships…"
+            className={`${inputClass} resize-y`}
+            rows={3}
+          />
+        </FormField>
+
+        <div className="grid grid-cols-2 gap-6">
+          <FormField label="Data Preprocessing Performed (Optional)">
+            <textarea
+              value={preprocessingSteps}
+              onChange={(e) => setPreprocessingSteps(e.target.value)}
+              placeholder="e.g., tokenization, discretization, removal of instances, processing of missing values…"
+              className={`${inputClass} resize-y`}
+              rows={3}
+            />
+          </FormField>
+          <FormField label="Additional Information / Citation Notes (Optional)">
+            <textarea
+              value={citationNotes}
+              onChange={(e) => setCitationNotes(e.target.value)}
+              placeholder="Any further context, plus preferred citation format if the dataset is made public…"
+              className={`${inputClass} resize-y`}
+              rows={3}
+            />
+          </FormField>
+        </div>
+
+        <div className="mt-4 rounded-lg bg-[#EAF0FB] px-5 py-3 text-sm text-[#2C5AAE]">
+          ⓘ A persistent identifier (DOI or equivalent) will be assigned automatically when the dataset is published.
         </div>
       </section>
 
-      {/* NOTE: "Sensitive Data Disclosure" was marked ambiguous (??) in the advisor's
-          feedback — left in place for now. Confirm with your advisor whether to keep
-          or remove, then update here accordingly. */}
-      <FormField label="Sensitive Data & Ethics (Optional)">
-        <textarea value={sensitiveData} onChange={(e) => setSensitiveData(e.target.value)}
-          placeholder="List any PII, ethical considerations, or de-identification steps taken" className={`${inputClass} resize-y`} rows={3} />
-      </FormField>
-
-      <div className="grid grid-cols-2 gap-6">
-        <FormField label="Data Preprocessing Performed (Optional)">
-          <textarea value={preprocessingSteps} onChange={(e) => setPreprocessingSteps(e.target.value)}
-            placeholder="Outline cleaning, scaling, or transformation logic" className={`${inputClass} resize-y`} rows={3} />
-        </FormField>
-        <FormField label="Additional Information / Citation Notes">
-          <textarea value={citationNotes} onChange={(e) => setCitationNotes(e.target.value)}
-            placeholder="Special instructions for citing this specific dataset" className={`${inputClass} resize-y`} rows={3} />
-        </FormField>
-      </div>
-
-      {localError && <p className="text-danger text-sm mt-2">{localError}</p>}
+      {localError && (
+        <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3.5 text-sm text-amber-700 mt-4">
+          <span className="shrink-0 text-base">⚠</span>
+          <span>{localError}</span>
+        </div>
+      )}
+      {submitError && (
+        <div className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3.5 text-sm text-red-700 mt-4">
+          <span className="shrink-0 text-base">⚠️</span>
+          <span>{submitError}</span>
+        </div>
+      )}
 
       <div className="flex justify-between items-center mt-10 pt-6 border-t border-[#E3E1DA]">
         <button type="button" className="text-gray-500 text-base font-semibold" onClick={onBack}>← Back</button>
-        <button type="submit" className="bg-[#A67A0D] hover:bg-[#8f690b] text-white rounded-md px-7 py-3.5 text-base font-semibold">Continue →</button>
+        <button type="submit" disabled={isSubmitting} className="bg-[#A67A0D] hover:bg-[#8f690b] text-white rounded-md px-7 py-3.5 text-base font-semibold disabled:opacity-60">{isSubmitting ? "Saving…" : "Continue →"}</button>
       </div>
     </form>
   );

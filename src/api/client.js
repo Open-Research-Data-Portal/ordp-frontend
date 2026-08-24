@@ -1,71 +1,101 @@
 import axios from "axios";
-import { getRefreshToken, notifyTokensUpdated, clearTokens } from "./tokenStore";
+import { getAccessToken, getRefreshToken, setTokens, clearTokens } from "./tokenStore";
+
+const BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 const client = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL,
+  baseURL: BASE_URL,
   withCredentials: true,
 });
 
-let isRefreshing = false;
-let queue = []; // requests waiting on a refresh already in flight
+// ── Request interceptor ──────────────────────────────────────────────────────
+// Attach the current in-memory access token to every outgoing request.
+// This means callers never have to manage the Authorization header themselves.
+client.interceptors.request.use((config) => {
+  const token = getAccessToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
 
-function processQueue(error, newAccessToken) {
-  queue.forEach(({ resolve, reject }) => {
-    if (error) reject(error);
-    else resolve(newAccessToken);
-  });
-  queue = [];
+// ── Response interceptor — silent token refresh on 401 ──────────────────────
+// When any request returns 401, we try to exchange the stored refresh token
+// for a new access token and then replay the original request exactly once.
+// Requests that arrive while a refresh is already in-flight are queued and
+// replayed after the refresh resolves, so only one refresh call is ever made.
+
+let isRefreshing = false;
+let failedQueue = []; // [{ resolve, reject }]
+
+function processQueue(error, newToken = null) {
+  failedQueue.forEach(({ resolve, reject }) =>
+    error ? reject(error) : resolve(newToken)
+  );
+  failedQueue = [];
 }
 
 client.interceptors.response.use(
   (response) => response,
   async (error) => {
-    const originalRequest = error.config;
-    const status = error.response?.status;
+    const original = error.config;
 
-    // Only act on 401s, and never retry the refresh call itself in a loop
-    if (status !== 401 || originalRequest._retried || originalRequest.url?.includes("/refresh/")) {
+    // Don't retry if:
+    //   • not a 401 response
+    //   • already retried once (_retry flag)
+    //   • the failing request WAS the refresh endpoint (prevents infinite loops)
+    if (
+      error.response?.status !== 401 ||
+      original._retry ||
+      original.url?.includes("/accounts/refresh/")
+    ) {
       return Promise.reject(error);
     }
 
-    const currentRefresh = getRefreshToken();
-    if (!currentRefresh) {
-      return Promise.reject(error); // not logged in / no refresh available
+    const refreshToken = getRefreshToken();
+    if (!refreshToken) {
+      // No refresh token at all — nothing we can do, caller must re-login.
+      clearTokens();
+      return Promise.reject(error);
     }
 
     if (isRefreshing) {
-      // A refresh is already happening — queue this request behind it
+      // A refresh is already in progress — queue this request to replay later.
       return new Promise((resolve, reject) => {
-        queue.push({ resolve, reject });
-      })
-        .then((newAccessToken) => {
-          originalRequest._retried = true;
-          originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
-          return client(originalRequest);
-        })
-        .catch((err) => Promise.reject(err));
+        failedQueue.push({ resolve, reject });
+      }).then((token) => {
+        original.headers.Authorization = `Bearer ${token}`;
+        return client(original);
+      });
     }
 
-    originalRequest._retried = true;
+    original._retry = true;
     isRefreshing = true;
 
     try {
-      // Raw axios call (not `client`) to avoid re-triggering this interceptor
-      const { data } = await axios.post(
-        `${import.meta.env.VITE_API_BASE_URL}/refresh/`,
-        { refresh: currentRefresh },
-        { withCredentials: true }
-      );
-      client.defaults.headers.common.Authorization = `Bearer ${data.access}`;
-      notifyTokensUpdated(data.access, data.refresh);
-      processQueue(null, data.access);
-      originalRequest.headers.Authorization = `Bearer ${data.access}`;
-      return client(originalRequest);
-    } catch (refreshErr) {
-      processQueue(refreshErr, null);
+      // Use a raw axios instance (NOT `client`) so this refresh call itself
+      // does not re-trigger this interceptor.
+      const { data } = await axios.post(`${BASE_URL}/accounts/refresh/`, {
+        refresh: refreshToken,
+      });
+
+      const newAccess = data.access;
+      const newRefresh = data.refresh ?? refreshToken; // backend may rotate it
+
+      setTokens(newAccess, newRefresh);
+      // Keep the axios default header in sync for any code that checks it directly.
+      client.defaults.headers.common.Authorization = `Bearer ${newAccess}`;
+
+      processQueue(null, newAccess);
+
+      original.headers.Authorization = `Bearer ${newAccess}`;
+      return client(original);
+    } catch (refreshError) {
+      // Refresh itself failed (token revoked / expired) — clear everything.
+      processQueue(refreshError, null);
       clearTokens();
       delete client.defaults.headers.common.Authorization;
-      return Promise.reject(refreshErr);
+      return Promise.reject(refreshError);
     } finally {
       isRefreshing = false;
     }

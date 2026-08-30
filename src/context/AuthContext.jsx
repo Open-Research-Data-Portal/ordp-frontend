@@ -29,6 +29,21 @@ export function AuthProvider({ children }) {
     }
   }, [accessToken]);
 
+  // When the shared axios client realises the session is unrecoverable
+  // (refresh token revoked/expired — e.g. a 401 mid-request), it dispatches
+  // "ordp:session-expired". We reset the React-side auth state to match.
+  useEffect(() => {
+    function handleSessionExpired() {
+      clearTokens();
+      delete client.defaults.headers.common.Authorization;
+      setAccessToken(null);
+      setUser(null);
+    }
+    window.addEventListener("ordp:session-expired", handleSessionExpired);
+    return () =>
+      window.removeEventListener("ordp:session-expired", handleSessionExpired);
+  }, []);
+
   // On mount: silently exchange any stored refresh token for a fresh access
   // token so the user doesn't have to log in again after a page refresh.
   useEffect(() => {
@@ -88,6 +103,42 @@ export function AuthProvider({ children }) {
     return updated;
   }, []);
 
+  /**
+   * Establish a session from tokens that were NOT obtained via the login
+   * endpoint — used after email verification, which the backend resolves by
+   * returning fresh access/refresh JWTs directly. Persists the tokens, sets
+   * the axios default header, and loads the profile.
+   *
+   * @param {{access: string, refresh: string, user?: object|null, stayLoggedIn?: boolean}} session
+   * @returns {Promise<object|null>} the loaded profile (or the raw user payload fallback)
+   */
+  const establishSession = useCallback(
+    async ({ access, refresh, user: userPayload = null, stayLoggedIn = false }) => {
+      if (!access || !refresh) return null;
+
+      setTokens(access, refresh);
+      // "Stay logged in" — also persist to localStorage so the session
+      // survives the tab being closed and re-opened.
+      if (stayLoggedIn) {
+        localStorage.setItem(REFRESH_KEY, refresh);
+      }
+
+      client.defaults.headers.common.Authorization = `Bearer ${access}`;
+      setAccessToken(access);
+
+      let profile;
+      try {
+        profile = await authApi.getProfile();
+        setUser(profile);
+      } catch {
+        profile = userPayload;
+        setUser(profile);
+      }
+      return profile;
+    },
+    []
+  );
+
   const logout = useCallback(async () => {
     const currentRefresh = getRefreshToken();
     try {
@@ -109,8 +160,9 @@ export function AuthProvider({ children }) {
       login,
       logout,
       updateProfile,
+      establishSession,
     }),
-    [user, accessToken, loading, login, logout, updateProfile]
+    [user, accessToken, loading, login, logout, updateProfile, establishSession]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

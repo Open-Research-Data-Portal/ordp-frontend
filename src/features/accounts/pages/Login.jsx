@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { Mail, Lock, ArrowRight } from "lucide-react";
 import { useAuth } from "../../../context/useAuth";
-import { AuthApiError } from "../api/authApi";
+import * as authApi from "../api/authApi";
 import AuthLayout from "../components/AuthLayout";
 import TextInput from "../../../components/ui/TextInput";
 import Button from "../../../components/ui/Button";
@@ -41,22 +41,40 @@ export default function LoginPage() {
 
     try {
       const result = await login(identifier, password, stayLoggedIn);
-      const completed = Boolean(
-        result.profile?.researchInterestsCompleted ||
-        result.profile?.onboardingCompleted ||
-        result.profile?.research_interests_completed ||
-        result.profile?.onboarding_completed
-      );
+
+      // Route new users to onboarding until their profile completion
+      // answers "yes". The dedicated endpoint is authoritative when the
+      // fresh access token is usable; otherwise fall back to profile flags.
+      let completed =
+        authApi.isProfileCompleted(result?.profile) ||
+        Boolean(
+          result.profile?.researchInterestsCompleted ||
+            result.profile?.onboardingCompleted ||
+            result.profile?.research_interests_completed ||
+            result.profile?.onboarding_completed ||
+            result.profile?.profileCompleted ||
+            result.profile?.profile_completed
+        );
+
       if (!completed) {
-        navigate("/research-interests-onboarding");
+        try {
+          const completion = await authApi.getProfileCompletion();
+          completed = completed || authApi.isProfileCompleted(completion);
+        } catch {
+          // Ignore — profile flags above are the fallback.
+        }
+      }
+
+      if (!completed) {
+        navigate("/research-interests-onboarding", { replace: true });
       } else {
-        navigate("/dashboard");
+        navigate("/dashboard", { replace: true });
       }
     } catch (err) {
       setApiError(
-        err instanceof AuthApiError
+        err instanceof authApi.AuthApiError
           ? err
-          : new AuthApiError({ code: "UNKNOWN_ERROR", message: "Something went wrong. Please try again." })
+          : new authApi.AuthApiError({ code: "UNKNOWN_ERROR", message: "Something went wrong. Please try again." })
       );
     } finally {
       setSubmitting(false);

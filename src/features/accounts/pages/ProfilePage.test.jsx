@@ -7,6 +7,7 @@ import ProfilePage from "./ProfilePage";
 const authApi = vi.hoisted(() => ({
   getProfile: vi.fn(),
   updateProfile: vi.fn(),
+  updateProfileCompletion: vi.fn(),
 }));
 
 const mockAuthUser = vi.hoisted(() => ({
@@ -37,6 +38,7 @@ describe("ProfilePage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     authApi.updateProfile.mockResolvedValue({});
+    authApi.updateProfileCompletion.mockResolvedValue({});
   });
 
   it("renders Email Address and Username as read-only and does not allow editing", async () => {

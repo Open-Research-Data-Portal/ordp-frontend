@@ -147,7 +147,7 @@ export default function ProfilePage() {
     setSaved(false);
     try {
       const fullName = [firstName, fatherName, grandFatherName].filter(Boolean).join(" ").trim();
-      await authApi.updateProfile({
+      await authApi.updateProfileCompletion({
         first_name: firstName,
         last_name: fatherName,
         grand_father_name: grandFatherName,

@@ -1,12 +1,12 @@
 /**
- * Auth API client — wraps the endpoints documented in
- * ORDP_Auth_API_Reference_for_Sosina.md (owner: Rebika, branch:
- * feature/login-session-auth).
+ * Auth & profile API client — wraps the endpoints documented in the ORDP
+ * backend spec. All paths are relative and resolved against the shared
+ * axios instance (src/api/client.js), whose baseURL comes from
+ * VITE_API_BASE_URL. No endpoint is hardcoded to a local server.
  */
 import client from "../../../api/client"; // shared axios instance
 
-// const BASE = "/accounts";
-const BASE = 'http://localhost:8000/api/accounts'
+const BASE = "/accounts";
 
 /**
  * @param {string} identifier
@@ -98,14 +98,156 @@ export async function updateProfile(patch) {
 }
 
 /**
- * @param {string} uid
- * @param {string} token
- * @returns {Promise<{detail: string}>}
+ * Profile-completion / onboarding endpoints.
+ *
+ * The onboarding flow is: college → department → research interests.
+ * Each step's data is submitted (and can be re-fetched) through
+ * `/accounts/profile/complete/`.
+ */
+
+/** GET /accounts/profile/complete/ — current completion + profile fields. */
+export async function getProfileCompletion() {
+  try {
+    const { data } = await client.get(`${BASE}/profile/complete/`);
+    return data;
+  } catch (err) {
+    throw normalizeError(err);
+  }
+}
+
+/**
+ * PATCH /accounts/profile/complete/ — submit/update onboarding fields
+ * (college, department, research interests, etc.).
+ * @param {Partial<{college: number|string, department: number|string, research_interests: string[]}>} patch
+ */
+export async function updateProfileCompletion(patch) {
+  try {
+    const { data } = await client.patch(`${BASE}/profile/complete/`, patch);
+    return data;
+  } catch (err) {
+    throw normalizeError(err, { allowDjangoFieldErrors: true });
+  }
+}
+
+/** GET /accounts/profile/options/ — options for profile fields. */
+export async function getProfileOptions() {
+  try {
+    const { data } = await client.get(`${BASE}/profile/options/`);
+    return data;
+  } catch (err) {
+    throw normalizeError(err);
+  }
+}
+
+/**
+ * POST /accounts/profile/interests/other/ — add a custom interest that is not
+ * in the predefined list.
+ * @param {string} name
+ * @returns {Promise<{id?: number, name: string}>}
+ */
+export async function addCustomInterest(name) {
+  try {
+    const { data } = await client.post(`${BASE}/profile/interests/other/`, {
+      name,
+    });
+    return data;
+  } catch (err) {
+    throw normalizeError(err, { allowDjangoFieldErrors: true });
+  }
+}
+
+/** GET /accounts/users/{id}/profile/ — view another user's public profile. */
+export async function getUserProfile(userId) {
+  try {
+    const { data } = await client.get(`${BASE}/users/${userId}/profile/`);
+    return data;
+  } catch (err) {
+    throw normalizeError(err);
+  }
+}
+
+/**
+ * True when a profile-completion payload/response indicates the user has
+ * finished onboarding. Defensive against the exact key the backend uses.
+ */
+export function isProfileCompleted(value) {
+  if (!value || typeof value !== "object") return false;
+  return Boolean(
+    value.completed ||
+      value.complete ||
+      value.is_complete ||
+      value.is_profile_complete ||
+      value.profile_completed ||
+      value.profile_completion_completed ||
+      value.onboarding_completed ||
+      value.research_interests_completed
+  );
+}
+
+/** Normalizes a list endpoint response (plain array or paginated wrapper). */
+function unwrapList(data) {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.results)) return data.results;
+  if (Array.isArray(data?.data)) return data.data;
+  return [];
+}
+
+/** GET /accounts/colleges/ — colleges used in profile setup. */
+export async function getColleges() {
+  try {
+    const { data } = await client.get(`${BASE}/colleges/`);
+    return unwrapList(data);
+  } catch (err) {
+    throw normalizeError(err);
+  }
+}
+
+/** GET /accounts/centers-of-excellence/ — centers of excellence. */
+export async function getCentersOfExcellence() {
+  try {
+    const { data } = await client.get(`${BASE}/centers-of-excellence/`);
+    return unwrapList(data);
+  } catch (err) {
+    throw normalizeError(err);
+  }
+}
+
+/**
+ * GET /accounts/departments/?parent_type=college|center_of_excellence&parent_id=...
+ * @param {{parentType?: "college"|"center_of_excellence", parentId?: string|number}} [params]
+ */
+export async function getDepartments({ parentType, parentId } = {}) {
+  try {
+    const params = {};
+    if (parentType) params.parent_type = parentType;
+    if (parentId != null && parentId !== "") params.parent_id = parentId;
+    const { data } = await client.get(`${BASE}/departments/`, { params });
+    return unwrapList(data);
+  } catch (err) {
+    throw normalizeError(err);
+  }
+}
+
+/**
+ * Verifies the emailed activation token and auto-logs the user in.
+ *
+ * Backend contract (confirmed from the ordp-backend source + Postman):
+ *   POST /accounts/verify-email/
+ *   Body: { token }  ← the UUID from the email link (?token=<uuid>)
+ *
+ * On success the endpoint returns access/refresh JWT pairs plus the user,
+ * i.e. the account is activated AND the user is signed in. Callers should
+ * persist those tokens (see AuthContext.establishSession) and then check
+ * /accounts/profile/complete/ to route the user to onboarding or the
+ * dashboard.
+ *
+ * @param {string} token The UUID verification token from the emailed link.
+ * @returns {Promise<{detail: string, access?: string, refresh?: string, user?: {id:number,email:string}}>}
  * @throws {AuthApiError}
  */
-export async function verifyEmail(uid, token) {
+export async function verifyEmail(token) {
   try {
-    const { data } = await client.post(`${BASE}/verify-email/`, { uid, token });
+    const { data } = await client.post(`${BASE}/verify-email/`, { token });
     return data;
   } catch (err) {
     throw normalizeError(err);
@@ -208,6 +350,31 @@ function normalizeError(
         status,
       });
     }
+  }
+
+  // Preserve any message the backend actually sent, even when it isn't wrapped
+  // in the documented { error: { code, message } } envelope (e.g. a bare
+  // { detail: "..." } body). Collapsing these into one generic string makes
+  // genuinely different failures — invalid link vs expired token vs
+  // already-used token — indistinguishable to the user and to us.
+  const backendMessage =
+    (typeof body?.detail === "string" && body.detail.trim()) ||
+    (typeof body?.message === "string" && body.message.trim()) ||
+    // A plain-text body, but never an HTML error page (e.g. a Django 500),
+    // which would dump markup into the UI.
+    (typeof body === "string" &&
+      !/^\s*</.test(body) &&
+      body.trim().length > 0 &&
+      body.trim().length <= 300 &&
+      body.trim()) ||
+    null;
+
+  if (backendMessage) {
+    return new AuthApiError({
+      code: body?.code ? String(body.code).toUpperCase() : "ERROR",
+      message: backendMessage,
+      status,
+    });
   }
 
   return new AuthApiError({

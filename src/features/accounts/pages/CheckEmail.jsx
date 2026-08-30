@@ -2,19 +2,24 @@ import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { CheckCircle2, ArrowLeft, ArrowRight, RotateCw } from "lucide-react";
 import AuthSplitCard from "../components/AuthSplitCard";
+import * as authApi from "../api/authApi";
 
 export default function CheckEmailPage() {
   const location = useLocation();
   const email = location.state?.email;
   const [resent, setResent] = useState(false);
   const [resending, setResending] = useState(false);
+  const [resendError, setResendError] = useState(null);
 
   async function handleResend() {
+    if (!email) return;
     setResending(true);
+    setResendError(null);
     try {
-      // TODO(backend): POST /api/accounts/password-reset/ { email }
-      await new Promise((r) => setTimeout(r, 600));
+      await authApi.requestPasswordReset(email);
       setResent(true);
+    } catch (err) {
+      setResendError(err?.message || "Could not resend the link. Please try again.");
     } finally {
       setResending(false);
     }
@@ -38,11 +43,14 @@ export default function CheckEmailPage() {
 
       <div className="w-full max-w-sm border-t border-slate-100 pt-6">
         <p className="text-sm text-slate-500 mb-2">Didn&apos;t receive the email?</p>
+        {resendError && (
+          <p role="alert" className="text-xs text-red-600 mb-2">{resendError}</p>
+        )}
         <button
           type="button"
           onClick={handleResend}
-          disabled={resending}
-          className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#B8860B] hover:underline disabled:opacity-60"
+          disabled={resending || !email}
+          className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#B8860B] hover:underline disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {resending ? "Resending…" : resent ? "Link resent ✓" : "Resend link"}
           {!resending && !resent && <ArrowRight className="w-3.5 h-3.5" />}

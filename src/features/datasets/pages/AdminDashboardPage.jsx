@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import StatCard from "../../../components/dashboard/StatCard";
-import { SectionHeader, StatusBadge } from "../../../components/dashboard/dashboardUi";
+import { SectionHeader, StatusBadge, ProfileSavedNotice } from "../../../components/dashboard/dashboardUi";
 import * as datasetsApi from "../hooks/datasetsApi";
 
 function normalizeList(data) {
@@ -93,6 +93,7 @@ export default function AdminDashboardPage() {
 
   return (
     <DashboardShell title="ORDP Admin Console" subtitle="System status and key metrics">
+      <ProfileSavedNotice />
       <div className="flex justify-between items-start mb-6 animate-fade-in-up">
         <div>
           <h1 className="text-2xl font-serif font-bold text-navy">

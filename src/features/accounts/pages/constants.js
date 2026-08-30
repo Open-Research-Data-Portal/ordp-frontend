@@ -1,36 +1,46 @@
+/**
+ * Select options are `{ value, label }` pairs where `value` is the exact choice
+ * key the backend stores (see UserProfile.*_CHOICES in
+ * apps/accounts/models.py) and `label` is what the user reads.
+ *
+ * This matters: these lists previously held display labels only ("Student",
+ * "Bachelor's Degree"), so a profile save sent those strings straight into
+ * choice-validated fields and the backend rejected the whole PATCH.
+ */
 export const OCCUPATION_OPTIONS = [
-  "Student",
-  "Researcher",
-  "Lecturer",
-  "Professor",
-  "Assistant Lecturer",
-  "Data Scientist",
-  "Software Engineer",
-  "Government Officer",
-  "Industry Professional",
-  "Other",
+  { value: "student", label: "Student" },
+  { value: "researcher", label: "Researcher" },
+  { value: "lecturer", label: "Lecturer" },
+  { value: "professor", label: "Professor" },
+  { value: "assistant_lecturer", label: "Assistant Lecturer" },
+  { value: "data_scientist", label: "Data Scientist" },
+  { value: "software_engineer", label: "Software Engineer" },
+  { value: "government_officer", label: "Government Officer" },
+  { value: "industry_professional", label: "Industry Professional" },
+  { value: "other", label: "Other" },
 ];
 
 export const ACADEMIC_RANK_OPTIONS = [
-  "Assistant Lecturer",
-  "Lecturer",
-  "Senior Lecturer",
-  "Associate Professor",
-  "Professor",
-  "Other",
+  { value: "none", label: "None" },
+  { value: "graduate_assistant", label: "Graduate Assistant" },
+  { value: "assistant_lecturer", label: "Assistant Lecturer" },
+  { value: "lecturer", label: "Lecturer" },
+  { value: "assistant_professor", label: "Assistant Professor" },
+  { value: "associate_professor", label: "Associate Professor" },
+  { value: "professor", label: "Professor" },
 ];
 
 export const ACADEMIC_TITLE_OPTIONS = [
-  "None",
-  "Mr.",
-  "Ms.",
-  "Mrs.",
-  "Eng.",
-  "Research Assistant",
-  "Dr.",
-  "Prof.",
+  { value: "none", label: "None" },
+  { value: "mr", label: "Mr." },
+  { value: "ms", label: "Ms." },
+  { value: "mrs", label: "Mrs." },
+  { value: "eng", label: "Eng." },
+  { value: "dr", label: "Dr." },
+  { value: "prof", label: "Prof." },
 ];
 
+// Not a backend choice field — kept as free labels.
 export const STUDENT_TYPE_OPTIONS = [
   "Undergraduate Student",
   "Masters Student",
@@ -39,14 +49,44 @@ export const STUDENT_TYPE_OPTIONS = [
 ];
 
 export const HIGHEST_DEGREE_OPTIONS = [
-  "High School Diploma",
-  "Diploma",
-  "Bachelor's Degree",
-  "Master's Degree",
-  "PhD",
-  "Postdoctoral Fellowship",
-  "Other",
+  { value: "high_school", label: "High School Diploma" },
+  { value: "diploma", label: "Diploma" },
+  { value: "bachelor", label: "Bachelor's Degree" },
+  { value: "master", label: "Master's Degree" },
+  { value: "phd", label: "PhD" },
+  { value: "postdoc", label: "Postdoctoral Fellowship" },
+  { value: "other", label: "Other" },
 ];
+
+export const PROFILE_VISIBILITY_OPTIONS = [
+  { value: "public", label: "Everyone (Public)" },
+  { value: "trusted", label: "Trusted Parties" },
+  { value: "private", label: "Only Me (Private)" },
+];
+
+/**
+ * Normalizes a stored/incoming choice into one of `options`' values.
+ *
+ * The backend is expected to return the slug ("bachelor"), but this also
+ * accepts a human label ("Bachelor's Degree") and loose punctuation/casing so a
+ * legacy or differently-shaped value still selects the right option instead of
+ * silently falling back to the placeholder.
+ */
+export function toOptionValue(options, raw) {
+  if (raw == null || raw === "") return "";
+  const candidate = String(raw).trim();
+  const loose = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, "");
+  const target = loose(candidate);
+
+  for (const option of options) {
+    const value = typeof option === "string" ? option : option.value;
+    const label = typeof option === "string" ? option : option.label;
+    if (value === candidate) return value;
+    if (loose(value) === target || loose(label) === target) return value;
+  }
+  return "";
+}
+
 
 export const RESEARCH_INTEREST_OPTIONS = [
   "Artificial Intelligence",
@@ -397,8 +437,6 @@ export const RESEARCH_INTEREST_CATEGORIES = [
 ];
 
 export const PREFERRED_LANGUAGE_OPTIONS = ["English", "Amharic", "Other"];
-
-export const PROFILE_VISIBILITY_OPTIONS = ["Public", "Private"];
 
 export const DEFAULT_AFFILIATION =
   "Addis Ababa Science and Technology University (AASTU)";

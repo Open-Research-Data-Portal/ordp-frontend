@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import TopBar from "../../../layouts/TopBar";
 import { useAuth } from "../../../context/useAuth";
+import { getDashboardPath } from "../../../utils/userRoles";
 import * as datasetsApi from "../hooks/datasetsApi";
 import { getDownloadUrl } from "../../../api/sharing";
 
@@ -393,10 +394,10 @@ export default function DatasetDetailPage() {
           <p className="text-sm text-gray-500">{error || "This dataset couldn't be found."}</p>
           <button
             type="button"
-            onClick={() => navigate("/my-datasets")}
+            onClick={() => navigate(getDashboardPath(user))}
             className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
           >
-            Back to My Datasets
+            Back to dashboard
           </button>
         </div>
       </div>
@@ -416,7 +417,14 @@ export default function DatasetDetailPage() {
             {dataset.title}
           </span>
         </nav>
-        <div className="mb-4">
+        <div className="mb-4 flex flex-wrap items-center gap-4">
+          <button
+            type="button"
+            onClick={() => navigate(getDashboardPath(user))}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-slate-900 transition-colors"
+          >
+            ← Back to dashboard
+          </button>
           <button
             type="button"
             onClick={() => navigate("/my-datasets")}

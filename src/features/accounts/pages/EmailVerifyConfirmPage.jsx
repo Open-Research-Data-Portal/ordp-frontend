@@ -4,6 +4,10 @@ import { Loader2, CheckCircle2 } from "lucide-react";
 import AuthSplitCard from "../components/AuthSplitCard";
 import * as authApi from "../api/authApi";
 import { useAuth } from "../../../context/useAuth";
+import {
+  INTERESTS_ONBOARDING_PATH,
+  isInterestsOnboardingSatisfied,
+} from "../onboarding";
 
 export default function EmailVerifyConfirmPage() {
   const navigate = useNavigate();
@@ -56,13 +60,18 @@ export default function EmailVerifyConfirmPage() {
           user: data.user || null,
         });
 
-        // Route to onboarding or the dashboard based on profile completion —
-        // the same decision the login page makes.
+        // Route to the optional interests onboarding or the dashboard — the
+        // same decision the login page makes.
         let completed = Boolean(profile) && authApi.isProfileCompleted(profile);
         if (!completed) {
           try {
             const completion = await authApi.getProfileCompletion();
-            completed = authApi.isProfileCompleted(completion);
+            completed = isInterestsOnboardingSatisfied({
+              completion,
+              profile,
+              user: data.user || profile,
+              backendCompleted: authApi.isProfileCompleted(completion),
+            });
           } catch {
             // Fall back to onboarding; it re-checks completion before
             // requiring any input and redirects to the dashboard if done.
@@ -74,10 +83,9 @@ export default function EmailVerifyConfirmPage() {
         setStatus("success");
         setTimeout(
           () =>
-            navigate(
-              completed ? "/dashboard" : "/research-interests-onboarding",
-              { replace: true }
-            ),
+            navigate(completed ? "/dashboard" : INTERESTS_ONBOARDING_PATH, {
+              replace: true,
+            }),
           1200
         );
       } catch (err) {

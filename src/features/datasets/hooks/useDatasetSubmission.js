@@ -1,5 +1,13 @@
 import { useState } from "react";
 import * as datasetsApi from "./datasetsApi";
+import * as authApi from "../../accounts/api/authApi";
+import {
+  extractSelectedInterests,
+  parseInterestCatalog,
+  pickerCategories,
+  buildProfileCompletionPatch,
+  saveProfileCompletion,
+} from "../../accounts/onboarding";
 
 const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB per chunk
 
@@ -70,14 +78,111 @@ function parseNonNegativeInt(value) {
   return Math.trunc(n);
 }
 
+function normalizeInitResponse(data) {
+  if (!data || typeof data !== "object") return data;
+  return {
+    ...data,
+    dataset_id: data.dataset_id || data.id || data.dataset?.id,
+    upload_session_id:
+      data.upload_session_id ||
+      data.session_id ||
+      data.upload_session?.id ||
+      data.uploadSessionId,
+  };
+}
+
 function extractError(err) {
   const status = err.response?.status;
-  const detail = err.response?.data?.detail;
+  const data = err.response?.data;
+  const detail = data?.detail || data?.message;
   if (status === 401) return detail || "Your session has expired. Please sign in again.";
-  if (status === 403) return detail || "You do not have permission to perform this action.";
-  if (detail) return detail;
-  if (err.message) return err.message;
+  if (status === 403) {
+    return typeof detail === "string"
+      ? detail
+      : "You do not have permission to start this upload. Try Continue again.";
+  }
+  if (status === 404) {
+    return typeof detail === "string"
+      ? detail
+      : "Could not start the upload session. Please try again.";
+  }
+  if (typeof detail === "string") return detail;
+  if (detail && typeof detail === "object") return JSON.stringify(detail);
+  if (data && typeof data === "object" && !data.toString?.().includes("[object")) {
+    try {
+      const text = JSON.stringify(data);
+      if (text && text !== "{}") return text;
+    } catch {
+      /* ignore */
+    }
+  }
+  if (err.message && !/status code 404/i.test(err.message)) return err.message;
   return "Something went wrong. Please try again.";
+}
+
+function isCompleteProfileError(err) {
+  const blob = JSON.stringify(err?.response?.data || err?.message || "").toLowerCase();
+  return /complete.{0,40}profile|profile.{0,40}incomplete|profile.{0,20}not.{0,20}complete/.test(
+    blob
+  );
+}
+
+async function markProfileReadyForUpload() {
+  try {
+    const [completionResult, optionsResult] = await Promise.allSettled([
+      authApi.getProfileCompletion(),
+      authApi.getProfileOptions(),
+    ]);
+    const completion = completionResult.status === "fulfilled" ? completionResult.value : {};
+    const options = optionsResult.status === "fulfilled" ? optionsResult.value : {};
+    const catalog = parseInterestCatalog(options);
+    await saveProfileCompletion(
+      buildProfileCompletionPatch({
+        labels: extractSelectedInterests(completion, pickerCategories(catalog)),
+        catalog,
+        completion,
+        options,
+      })
+    );
+  } catch {
+    // Best-effort: retry the upload even if this patch is rejected.
+  }
+}
+
+async function startUploadSession(detailsData) {
+  const payloads = [
+    {
+      title: detailsData.title,
+      description: detailsData.description || detailsData.title,
+      visibility: "restricted",
+    },
+    { title: detailsData.title, visibility: "restricted" },
+    { name: detailsData.title, title: detailsData.title, visibility: "public" },
+  ];
+  let lastErr;
+  for (const payload of payloads) {
+    try {
+      return normalizeInitResponse(await datasetsApi.initUpload(payload));
+    } catch (err) {
+      lastErr = err;
+      const status = err.response?.status;
+      if (isCompleteProfileError(err) || status === 403) {
+        await markProfileReadyForUpload();
+        try {
+          return normalizeInitResponse(await datasetsApi.initUpload(payload));
+        } catch (retryErr) {
+          lastErr = retryErr;
+          const retryStatus = retryErr.response?.status;
+          if (retryStatus !== 400) throw retryErr;
+        }
+      } else if (status === 400) {
+        continue;
+      } else {
+        throw err;
+      }
+    }
+  }
+  throw lastErr;
 }
 
 async function uploadFileInChunks(file, sessionId) {
@@ -109,7 +214,8 @@ export default function useDatasetSubmission() {
       let did = datasetId;
       let sid = uploadSessionId;
       if (!did) {
-        const r = await datasetsApi.initUpload({ title: detailsData.title, visibility: "restricted" });
+        await markProfileReadyForUpload();
+        const r = await startUploadSession(detailsData);
         did = r.dataset_id;
         sid = r.upload_session_id;
         setDatasetId(did);

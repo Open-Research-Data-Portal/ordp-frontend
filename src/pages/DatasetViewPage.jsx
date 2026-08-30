@@ -22,6 +22,8 @@ import {
 import { getDatasetById } from "../api/datasets";
 import { getDownloadUrl, requestShareAccess } from "../api/sharing";
 import TopBar from "../layouts/TopBar";
+import { useAuth } from "../context/useAuth";
+import { getDashboardPath } from "../utils/userRoles";
 
 // ---------------------------------------------------------------------
 // DatasetViewPage — the PUBLIC read-only view a researcher lands on when
@@ -437,6 +439,7 @@ function ShareAccessModal({ datasetId, onClose }) {
 export default function DatasetViewPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user, isAuthenticated } = useAuth();
 
   const [dataset, setDataset] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -495,10 +498,10 @@ export default function DatasetViewPage() {
           </p>
           <button
             type="button"
-            onClick={() => navigate("/datasets")}
+            onClick={() => navigate(isAuthenticated ? getDashboardPath(user) : "/datasets")}
             className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
           >
-            Back to Datasets
+            {isAuthenticated ? "Back to dashboard" : "Back to Datasets"}
           </button>
         </div>
       </div>
@@ -557,7 +560,14 @@ export default function DatasetViewPage() {
       <TopBar />
       <div className="w-full px-6 lg:px-10 py-8 flex-1">
       {/* Back to Datasets navigation */}
-      <div className="mb-4">
+      <div className="mb-4 flex flex-wrap items-center gap-4">
+        <button
+          type="button"
+          onClick={() => navigate(isAuthenticated ? getDashboardPath(user) : "/")}
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-navy transition-colors"
+        >
+          ← Back to dashboard
+        </button>
         <button
           type="button"
           onClick={() => navigate("/datasets")}

@@ -7,8 +7,7 @@ import {
   Database,
   Download,
 } from "lucide-react";
-import TopBar from "../../../layouts/TopBar";
-import Sidebar from "../../../layouts/Sidebar";
+import DashboardShell from "../../../components/dashboard/DashboardShell";
 import * as bookmarksApi from "../../../api/bookmarks";
 
 function formatRelativeDate(dateString) {
@@ -206,15 +205,9 @@ export default function BookmarksPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#F5F5F3]">
-      <TopBar title="Bookmarks" />
-
-      <div className="flex flex-1 min-w-0">
-        <Sidebar />
-
-        <div className="flex-1 min-w-0">
-          <main className="px-8 py-8">
-            <div className="bg-white rounded-2xl border border-[#E3E1DA] min-h-[calc(100vh-120px)] overflow-hidden">
+    <DashboardShell title="Bookmarks" subtitle="Datasets you've saved for later.">
+          <main>
+            <div className="bg-white rounded-2xl border border-[#E3E1DA] min-h-[calc(100vh-180px)] overflow-hidden">
               {/* Page header */}
               <div className="px-8 lg:px-10 pt-8">
                 <div className="mb-7">
@@ -453,8 +446,6 @@ export default function BookmarksPage() {
               )}
             </div>
           </main>
-        </div>
-      </div>
-    </div>
+    </DashboardShell>
   );
 }

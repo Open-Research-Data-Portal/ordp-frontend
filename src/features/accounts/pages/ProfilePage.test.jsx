@@ -6,8 +6,11 @@ import ProfilePage from "./ProfilePage";
 
 const authApi = vi.hoisted(() => ({
   getProfile: vi.fn(),
+  getProfileCompletion: vi.fn(),
+  getProfileOptions: vi.fn(),
   updateProfile: vi.fn(),
   updateProfileCompletion: vi.fn(),
+  addCustomInterest: vi.fn(),
 }));
 
 const mockAuthUser = vi.hoisted(() => ({
@@ -16,13 +19,25 @@ const mockAuthUser = vi.hoisted(() => ({
   full_name: "Researcher User",
 }));
 
+// Mutable so individual tests can exercise the authenticated fetch path.
+const mockAuth = vi.hoisted(() => ({
+  isAuthenticated: false,
+  user: null,
+  setUser: vi.fn(),
+}));
+
 vi.mock("../../../layouts/Sidebar", () => ({ default: () => <aside /> }));
 vi.mock("../../../layouts/TopBar", () => ({ default: ({ title }) => <header>{title}</header> }));
+vi.mock("../../../components/dashboard/DashboardShell", () => ({
+  default: ({ children, title }) => (
+    <div>
+      <h1>{title}</h1>
+      {children}
+    </div>
+  ),
+}));
 vi.mock("../../../context/useAuth", () => ({
-  useAuth: () => ({
-    isAuthenticated: false,
-    user: mockAuthUser,
-  }),
+  useAuth: () => mockAuth,
 }));
 vi.mock("../api/authApi", () => authApi);
 
@@ -37,8 +52,14 @@ function renderProfilePage() {
 describe("ProfilePage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAuth.isAuthenticated = false;
+    mockAuth.user = mockAuthUser;
+    authApi.getProfile.mockResolvedValue({});
+    authApi.getProfileCompletion.mockResolvedValue({});
+    authApi.getProfileOptions.mockResolvedValue({ research_interests: [] });
     authApi.updateProfile.mockResolvedValue({});
     authApi.updateProfileCompletion.mockResolvedValue({});
+    authApi.addCustomInterest.mockResolvedValue({ name: "Engineering — Mining" });
   });
 
   it("renders Email Address and Username as read-only and does not allow editing", async () => {
@@ -107,11 +128,79 @@ describe("ProfilePage", () => {
   });
 
   it("shows a saved confirmation after clicking Save Changes", async () => {
+    mockAuth.isAuthenticated = true;
+    mockAuth.setUser = vi.fn();
+    authApi.getProfile.mockResolvedValue({ email: "researcher@aastu.edu.et" });
+    authApi.getProfileCompletion.mockResolvedValue({
+      research_interests: ["Law — Cyber Law"],
+    });
+
     renderProfilePage();
+
     await screen.findByDisplayValue("researcher@aastu.edu.et");
     await userEvent.selectOptions(screen.getByLabelText(/profile visibility/i), "public");
     await userEvent.click(screen.getByLabelText(/ordp terms/i));
     await userEvent.click(screen.getByRole("button", { name: /save changes/i }));
-    expect(await screen.findByRole("status")).toHaveTextContent(/saved/i);
+
+    await waitFor(() => expect(authApi.updateProfileCompletion).toHaveBeenCalled());
+    expect(authApi.updateProfileCompletion).toHaveBeenCalledWith(
+      expect.objectContaining({ terms_accepted: true })
+    );
+    const payload = authApi.updateProfileCompletion.mock.calls[0][0];
+    expect(payload.research_interests).toBeUndefined();
+  });
+
+  it("loads interests chosen during onboarding from /profile/complete/ so they stay editable", async () => {
+    mockAuth.isAuthenticated = true;
+    authApi.getProfile.mockResolvedValue({ email: "researcher@aastu.edu.et" });
+    authApi.getProfileCompletion.mockResolvedValue({
+      research_interests: ["Artificial Intelligence — Deep Learning"],
+    });
+
+    renderProfilePage();
+
+    // Rendered as a removable chip, i.e. editable rather than a one-time form.
+    const remove = await screen.findByRole("button", {
+      name: /remove .*deep learning/i,
+    });
+    await userEvent.click(remove);
+    expect(
+      screen.queryByRole("button", { name: /remove .*deep learning/i })
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps existing interests when saving the profile", async () => {
+    mockAuth.isAuthenticated = true;
+    authApi.getProfile.mockResolvedValue({ email: "researcher@aastu.edu.et" });
+    authApi.getProfileCompletion.mockResolvedValue({
+      research_interests: ["Law — Cyber Law"],
+    });
+
+    renderProfilePage();
+    await screen.findByRole("button", { name: /remove .*cyber law/i });
+
+    await userEvent.selectOptions(screen.getByLabelText(/profile visibility/i), "public");
+    await userEvent.click(screen.getByLabelText(/ordp terms/i));
+    await userEvent.click(screen.getByRole("button", { name: /save changes/i }));
+
+    await waitFor(() =>
+      expect(authApi.updateProfileCompletion).toHaveBeenCalledWith(
+        expect.objectContaining({ terms_accepted: true })
+      )
+    );
+    expect(authApi.updateProfileCompletion.mock.calls[0][0].research_interests).toBeUndefined();
+  });
+
+  it("requests an unlisted category through POST /profile/interests/other/", async () => {
+    renderProfilePage();
+    await screen.findByDisplayValue("researcher@aastu.edu.et");
+
+    await userEvent.type(screen.getByLabelText(/new category/i), "Engineering");
+    await userEvent.type(screen.getByLabelText(/new subcategory/i), "Mining");
+    await userEvent.click(screen.getByRole("button", { name: /send request/i }));
+
+    await waitFor(() =>
+      expect(authApi.addCustomInterest).toHaveBeenCalledWith("Engineering — Mining")
+    );
   });
 });

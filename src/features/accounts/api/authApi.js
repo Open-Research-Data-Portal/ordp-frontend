@@ -184,50 +184,6 @@ export function isProfileCompleted(value) {
   );
 }
 
-/** Normalizes a list endpoint response (plain array or paginated wrapper). */
-function unwrapList(data) {
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data?.results)) return data.results;
-  if (Array.isArray(data?.data)) return data.data;
-  return [];
-}
-
-/** GET /accounts/colleges/ — colleges used in profile setup. */
-export async function getColleges() {
-  try {
-    const { data } = await client.get(`${BASE}/colleges/`);
-    return unwrapList(data);
-  } catch (err) {
-    throw normalizeError(err);
-  }
-}
-
-/** GET /accounts/centers-of-excellence/ — centers of excellence. */
-export async function getCentersOfExcellence() {
-  try {
-    const { data } = await client.get(`${BASE}/centers-of-excellence/`);
-    return unwrapList(data);
-  } catch (err) {
-    throw normalizeError(err);
-  }
-}
-
-/**
- * GET /accounts/departments/?parent_type=college|center_of_excellence&parent_id=...
- * @param {{parentType?: "college"|"center_of_excellence", parentId?: string|number}} [params]
- */
-export async function getDepartments({ parentType, parentId } = {}) {
-  try {
-    const params = {};
-    if (parentType) params.parent_type = parentType;
-    if (parentId != null && parentId !== "") params.parent_id = parentId;
-    const { data } = await client.get(`${BASE}/departments/`, { params });
-    return unwrapList(data);
-  } catch (err) {
-    throw normalizeError(err);
-  }
-}
-
 /**
  * Verifies the emailed activation token and auto-logs the user in.
  *

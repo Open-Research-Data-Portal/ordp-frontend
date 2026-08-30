@@ -8,9 +8,9 @@ import {
   Download,
   Image as ImageIcon,
 } from "lucide-react";
-import TopBar from "../../../layouts/TopBar";
-import Sidebar from "../../../layouts/Sidebar";
+import DashboardShell from "../../../components/dashboard/DashboardShell";
 import { useAuth } from "../../../context/useAuth";
+import { getDashboardPath } from "../../../utils/userRoles";
 import * as datasetsApi from "../hooks/datasetsApi";
 
 const STATUS_META = {
@@ -84,13 +84,6 @@ export default function DatasetListPage() {
     return () => { isMounted = false; };
   }, []);
 
-  const displayName =
-    (user?.full_name ??
-      [user?.first_name, user?.last_name].filter(Boolean).join(" ").trim()) ||
-    user?.username ||
-    user?.email ||
-    "User";
-
   const filtered = useMemo(() => {
     const active = datasets.filter((d) => d.is_active !== false);
     return active
@@ -110,16 +103,18 @@ export default function DatasetListPage() {
   const canGoNext = pageEnd < totalRows;
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#F5F5F3]">
-      <TopBar title="My Datasets" user={{ name: displayName }} />
-      <div className="flex flex-1 min-w-0">
-        <Sidebar />
-        <div className="flex-1 flex flex-col min-w-0">
-          <main className="flex-1 px-8 py-8">
-            <div className="p-8 lg:p-10 bg-white min-h-screen rounded-2xl border border-[#E3E1DA]">
+    <DashboardShell title="My Datasets" subtitle="Track the status of every dataset you've submitted.">
+            <div className="p-8 lg:p-10 bg-white min-h-full rounded-2xl border border-[#E3E1DA]">
               {/* Header */}
               <div className="flex items-start justify-between gap-4 mb-6">
                 <div>
+                  <button
+                    type="button"
+                    onClick={() => navigate(getDashboardPath(user))}
+                    className="mb-3 inline-flex items-center text-xs font-semibold text-gray-500 hover:text-navy transition-colors"
+                  >
+                    ← Back to dashboard
+                  </button>
                   <h1 className="text-3xl font-serif font-bold text-navy">My Datasets</h1>
                   <p className="text-sm text-gray-500 mt-1">
                     Track the status of every dataset you've submitted.
@@ -307,9 +302,6 @@ export default function DatasetListPage() {
                 </>
               )}
             </div>
-          </main>
-        </div>
-      </div>
-    </div>
+    </DashboardShell>
   );
 }

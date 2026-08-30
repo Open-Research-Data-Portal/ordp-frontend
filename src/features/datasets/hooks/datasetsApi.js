@@ -3,6 +3,11 @@ import client from "../../../api/client";
 const DATASETS_BASE = "/datasets";
 const METADATA_BASE = "/metadata";
 
+export async function createDataset(payload) {
+  const { data } = await client.post(`${DATASETS_BASE}/`, payload);
+  return data;
+}
+
 // Step 1: create the dataset + start an upload session
 export async function initUpload(detailsPayload) {
   const { data } = await client.post(`${DATASETS_BASE}/upload/init/`, detailsPayload);

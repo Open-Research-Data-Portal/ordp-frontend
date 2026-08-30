@@ -11,7 +11,6 @@ import ResetPasswordPage from "../features/accounts/pages/ResetPassword.jsx";
 import ProfilePage from "../features/accounts/pages/ProfilePage.jsx";
 import ResearchInterestsOnboardingPage from "../features/accounts/pages/ResearchInterestsOnboardingPage.jsx";
 
-import DataUploadPage from "../pages/DataUpload/DataUploadPage.jsx";
 import DashboardRouter from "../pages/Dashboard/DashboardRouter.jsx";
 
 import ContributeDatasetPage from "../features/datasets/pages/ContributeDatasetPage.jsx";
@@ -69,9 +68,6 @@ export default function AppRoutes() {
 
       {/* Profile */}
       <Route path="/profile" element={<ProfilePage />} />
-
-      {/* Data upload request (researcher/uploader access) */}
-      <Route path="/data-upload" element={<DataUploadPage />} />
 
       {/* Datasets — public browsing */}
       <Route path="/datasets" element={<BrowseDatasetsPage />} />

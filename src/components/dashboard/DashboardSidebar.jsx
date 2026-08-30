@@ -1,4 +1,4 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutGrid,
   FolderKanban,
@@ -85,14 +85,20 @@ function isNavActive(to, pathname, search) {
 
 export default function DashboardSidebar() {
   const location = useLocation();
+  const navigate = useNavigate();
   const { logout, user } = useAuth();
   const roleKey = getRoleKey(user);
   const config = ROLE_CONFIG[roleKey];
   const dashboardPath = getDashboardPath(user);
   const { pathname, search } = location;
 
+  async function handleSignOut() {
+    await logout();
+    navigate("/login", { replace: true });
+  }
+
   return (
-    <aside className="w-64 shrink-0 bg-navy text-slate-300 flex flex-col min-h-screen">
+    <aside className="w-64 shrink-0 bg-navy text-slate-300 flex flex-col h-screen max-h-screen sticky top-0 overflow-hidden">
       {/* Logo + branding */}
       <div className="px-5 pt-6 pb-4 border-b border-white/10">
         <Link to={dashboardPath} className="flex items-center gap-3">
@@ -108,7 +114,7 @@ export default function DashboardSidebar() {
       
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 space-y-0.5">
+      <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto min-h-0">
         {config.nav.map(({ label, icon: Icon, to }) => {
           const active = isNavActive(to, pathname, search);
           return (
@@ -150,7 +156,7 @@ export default function DashboardSidebar() {
       </nav>
 
       {/* Bottom links */}
-      <div className="px-3 pb-6 space-y-0.5 border-t border-white/10 pt-4 mt-auto">
+      <div className="px-3 pb-6 space-y-0.5 border-t border-white/10 pt-4 shrink-0">
         <Link
           to="/support"
           className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:bg-white/5 hover:text-white transition"
@@ -159,7 +165,7 @@ export default function DashboardSidebar() {
         </Link>
         <button
           type="button"
-          onClick={logout}
+          onClick={handleSignOut}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:bg-white/5 hover:text-white transition"
         >
           <LogOut className="w-4 h-4" /> Sign Out

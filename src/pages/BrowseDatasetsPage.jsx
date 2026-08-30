@@ -15,6 +15,8 @@ import {
   History,
   Bookmark,
 } from "lucide-react";
+import { useAuth } from "../context/useAuth";
+import { getDashboardPath } from "../utils/userRoles";
 import TopBar from "../layouts/TopBar";
 import { searchDatasets } from "../api/search";
 import * as bookmarksApi from "../api/bookmarks";
@@ -247,6 +249,7 @@ function CuratedSection({ icon: Icon, title, datasets, navigate, onSeeAll, bookm
 
 export default function BrowseDatasetsPage() {
   const navigate = useNavigate();
+  const { user, isAuthenticated } = useAuth();
   const [query, setQuery] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState("All datasets");
@@ -414,6 +417,15 @@ export default function BrowseDatasetsPage() {
         {/* Header */}
         <div className="flex items-start justify-between gap-6 mb-8 animate-fade-in-up">
           <div>
+            {isAuthenticated && (
+              <button
+                type="button"
+                onClick={() => navigate(getDashboardPath(user))}
+                className="mb-3 inline-flex items-center text-xs font-semibold text-gray-500 hover:text-navy transition-colors"
+              >
+                ← Back to dashboard
+              </button>
+            )}
             <h1 className="text-4xl font-serif font-bold text-navy">Datasets</h1>
             <p className="text-gray-500 mt-2 text-sm max-w-2xl">
               Explore, analyze, and donate quality research data.{" "}

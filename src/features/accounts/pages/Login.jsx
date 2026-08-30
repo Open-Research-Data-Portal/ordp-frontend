@@ -3,6 +3,8 @@ import { useNavigate, Link, useLocation } from "react-router-dom";
 import { Mail, Lock, ArrowRight } from "lucide-react";
 import { useAuth } from "../../../context/useAuth";
 import * as authApi from "../api/authApi";
+import { INTERESTS_ONBOARDING_PATH, isInterestsOnboardingSatisfied } from "../onboarding";
+import { getDashboardPath, isAdmin } from "../../../utils/userRoles";
 import AuthLayout from "../components/AuthLayout";
 import TextInput from "../../../components/ui/TextInput";
 import Button from "../../../components/ui/Button";
@@ -42,9 +44,15 @@ export default function LoginPage() {
     try {
       const result = await login(identifier, password, stayLoggedIn);
 
-      // Route new users to onboarding until their profile completion
-      // answers "yes". The dedicated endpoint is authoritative when the
-      // fresh access token is usable; otherwise fall back to profile flags.
+      const signedIn = result.user || result.profile;
+      if (isAdmin(signedIn)) {
+        navigate(getDashboardPath(signedIn), { replace: true });
+        return;
+      }
+
+      // Route new users to the optional interests onboarding until there is
+      // nothing left for them to do there (interests already chosen, skipped
+      // previously, or the backend reports the wider profile as complete).
       let completed =
         authApi.isProfileCompleted(result?.profile) ||
         Boolean(
@@ -57,18 +65,30 @@ export default function LoginPage() {
         );
 
       if (!completed) {
+        completed = isInterestsOnboardingSatisfied({
+          profile: result?.profile,
+          user: result?.user || result?.profile,
+        });
+      }
+
+      if (!completed) {
         try {
           const completion = await authApi.getProfileCompletion();
-          completed = completed || authApi.isProfileCompleted(completion);
+          completed = isInterestsOnboardingSatisfied({
+            completion,
+            profile: result?.profile,
+            user: result?.user || result?.profile,
+            backendCompleted: authApi.isProfileCompleted(completion),
+          });
         } catch {
           // Ignore — profile flags above are the fallback.
         }
       }
 
       if (!completed) {
-        navigate("/research-interests-onboarding", { replace: true });
+        navigate(INTERESTS_ONBOARDING_PATH, { replace: true });
       } else {
-        navigate("/dashboard", { replace: true });
+        navigate(getDashboardPath(signedIn), { replace: true });
       }
     } catch (err) {
       setApiError(

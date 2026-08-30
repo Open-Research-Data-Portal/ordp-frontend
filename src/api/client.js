@@ -1,7 +1,8 @@
 import axios from "axios";
 import { getAccessToken, getRefreshToken, setTokens, clearTokens } from "./tokenStore";
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "https://ordp-backend.onrender.com/api";
 
 const client = axios.create({
   baseURL: BASE_URL,

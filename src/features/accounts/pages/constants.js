@@ -1,34 +1,34 @@
 export const OCCUPATION_OPTIONS = [
-  "Student",
-  "Researcher",
-  "Lecturer",
-  "Professor",
-  "Assistant Lecturer",
-  "Data Scientist",
-  "Software Engineer",
-  "Government Officer",
-  "Industry Professional",
-  "Other",
+  { value: "student", label: "Student" },
+  { value: "researcher", label: "Researcher" },
+  { value: "lecturer", label: "Lecturer" },
+  { value: "professor", label: "Professor" },
+  { value: "assistant_lecturer", label: "Assistant Lecturer" },
+  { value: "data_scientist", label: "Data Scientist" },
+  { value: "software_engineer", label: "Software Engineer" },
+  { value: "government_officer", label: "Government Officer" },
+  { value: "industry_professional", label: "Industry Professional" },
+  { value: "other", label: "Other" },
 ];
 
 export const ACADEMIC_RANK_OPTIONS = [
-  "Assistant Lecturer",
-  "Lecturer",
-  "Senior Lecturer",
-  "Associate Professor",
-  "Professor",
-  "Other",
+  { value: "none", label: "None" },
+  { value: "graduate_assistant", label: "Graduate Assistant" },
+  { value: "assistant_lecturer", label: "Assistant Lecturer" },
+  { value: "lecturer", label: "Lecturer" },
+  { value: "assistant_professor", label: "Assistant Professor" },
+  { value: "associate_professor", label: "Associate Professor" },
+  { value: "professor", label: "Professor" },
 ];
 
 export const ACADEMIC_TITLE_OPTIONS = [
-  "None",
-  "Mr.",
-  "Ms.",
-  "Mrs.",
-  "Eng.",
-  "Research Assistant",
-  "Dr.",
-  "Prof.",
+  { value: "none", label: "None" },
+  { value: "mr", label: "Mr." },
+  { value: "ms", label: "Ms." },
+  { value: "mrs", label: "Mrs." },
+  { value: "eng", label: "Eng." },
+  { value: "dr", label: "Dr." },
+  { value: "prof", label: "Prof." },
 ];
 
 export const STUDENT_TYPE_OPTIONS = [
@@ -39,13 +39,13 @@ export const STUDENT_TYPE_OPTIONS = [
 ];
 
 export const HIGHEST_DEGREE_OPTIONS = [
-  "High School Diploma",
-  "Diploma",
-  "Bachelor's Degree",
-  "Master's Degree",
-  "PhD",
-  "Postdoctoral Fellowship",
-  "Other",
+  { value: "high_school", label: "High School Diploma" },
+  { value: "diploma", label: "Diploma" },
+  { value: "bachelor", label: "Bachelor's Degree" },
+  { value: "master", label: "Master's Degree" },
+  { value: "phd", label: "PhD" },
+  { value: "postdoc", label: "Postdoctoral Fellowship" },
+  { value: "other", label: "Other" },
 ];
 
 export const RESEARCH_INTEREST_OPTIONS = [

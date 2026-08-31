@@ -10,6 +10,7 @@ export default function DetailsForm({ initialValues = {}, onNext, isSubmitting, 
   const [description, setDescription] = useState(initialValues.description || "");
   const [language, setLanguage] = useState(initialValues.language || "English");
   const [coAuthors, setCoAuthors] = useState(initialValues.coAuthors || []);
+  const [contributors, setContributors] = useState(initialValues.contributors || []);
   const [relatedResources, setRelatedResources] = useState(initialValues.relatedResources || []);
   const [geographicCoverage, setGeographicCoverage] = useState(initialValues.geographicCoverage || "");
   const [temporalCoverage, setTemporalCoverage] = useState(initialValues.temporalCoverage || "");
@@ -32,6 +33,7 @@ export default function DetailsForm({ initialValues = {}, onNext, isSubmitting, 
       language,
       authorId: user?.id,
       coAuthors,
+      contributors,
       relatedResources,
       geographicCoverage,
       temporalCoverage,
@@ -67,6 +69,14 @@ export default function DetailsForm({ initialValues = {}, onNext, isSubmitting, 
 
       {/* Primary author is auto-filled from the logged-in user */}
       <TagInput label="Co-Author(s)" tags={coAuthors} onChange={setCoAuthors} placeholder="+ Add Co-Author" />
+      <p className="-mt-4 mb-6 text-sm text-gray-500">
+        Researchers who contributed significantly to the intellectual work and co-author credit.
+      </p>
+
+      <TagInput label="Contributor(s)" tags={contributors} onChange={setContributors} placeholder="+ Add Contributor" />
+      <p className="-mt-4 mb-6 text-sm text-gray-500">
+        Individuals who assisted with data collection, preparation, or technical support.
+      </p>
 
       <TagInput
         label="Related Resources (Optional)"

@@ -5,8 +5,13 @@ import client from "./client";
  * Backend: GET /api/datasets/bookmarks/
  */
 export async function getBookmarks() {
-  const { data } = await client.get("/datasets/bookmarks/");
-  return data;
+  try {
+    const { data } = await client.get("/datasets/bookmarks/");
+    return data;
+  } catch (err) {
+    console.warn("getBookmarks failed (returning empty):", err?.message);
+    return [];
+  }
 }
 
 /**
@@ -24,6 +29,7 @@ export async function toggleBookmark(datasetId) {
   const { data } = await client.post(`/datasets/${datasetId}/bookmark/`);
   return data;
 }
+
 
 /**
  * Normalizes whatever shape getBookmarks() returns into a plain array of

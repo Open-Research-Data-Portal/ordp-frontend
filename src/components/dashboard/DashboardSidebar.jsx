@@ -28,8 +28,9 @@ const ROLE_CONFIG = {
     cta: { label: "New Submission", to: "/datasets/contribute", icon: Plus },
     nav: [
       { label: "Dashboard", icon: LayoutGrid, to: "/user-dashboard" },
-      { label: "My Projects", icon: FolderKanban, to: "/my-datasets" },
-      { label: "Analytics", icon: BarChart3, to: "/analytics" },
+      { label: "My Datasets", icon: FolderKanban, to: "/my-datasets" },
+      { label: "Other Datasets", icon: Database, to: "/datasets" },
+      { label: "Bookmarks", icon: Bookmark, to: "/bookmarks" },
       { label: "Settings", icon: Settings, to: "/profile" },
     ],
   },

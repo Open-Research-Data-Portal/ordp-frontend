@@ -57,15 +57,16 @@ export function AuthProvider({ children }) {
   const login = useCallback(async (identifier, password, stayLoggedIn) => {
     const data = await authApi.login(identifier, password, stayLoggedIn); // throws AuthApiError on failure
 
+    // "Stay logged in" — persist to localStorage before setTokens so token rotation updates it.
+    if (stayLoggedIn) {
+      localStorage.setItem(REFRESH_KEY, data.refresh);
+    } else {
+      localStorage.removeItem(REFRESH_KEY);
+    }
+
     // Write tokens to the in-memory store and sessionStorage so the axios
     // interceptor can use them immediately for any subsequent request.
     setTokens(data.access, data.refresh);
-
-    // "Stay logged in" — also persist to localStorage so the session survives
-    // the tab being closed and re-opened.
-    if (stayLoggedIn) {
-      localStorage.setItem(REFRESH_KEY, data.refresh);
-    }
 
     client.defaults.headers.common.Authorization = `Bearer ${data.access}`;
     setAccessToken(data.access);

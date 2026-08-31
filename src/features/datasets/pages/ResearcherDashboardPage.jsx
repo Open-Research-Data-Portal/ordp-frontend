@@ -17,6 +17,9 @@ import { StatusBadge, EmptyState } from "../../../components/dashboard/dashboard
 import { useAuth } from "../../../context/useAuth";
 import { getDisplayName } from "../../../utils/userRoles";
 import * as datasetsApi from "../hooks/datasetsApi";
+import * as authApi from "../../accounts/api/authApi";
+import { getDatasetImage } from "../../../utils/datasetImage";
+
 
 function normalizeList(data) {
   if (Array.isArray(data)) return data;
@@ -32,37 +35,7 @@ function formatDate(dateString) {
   });
 }
 
-// Placeholder recommendations shown until the backend feed endpoint
-// returns real personalized results.
-const MOCK_RECOMMENDATIONS = [
-  {
-    id: "mock-1",
-    title: "Structural Integrity Analysis of High-Rise Concrete Frames",
-    description: "Comprehensive dataset detailing stress test results over a 10-year simulation period.",
-    category: "Civil Engineering",
-    views: 2400,
-    downloads: 450,
-    thumbnail_url: null,
-  },
-  {
-    id: "mock-2",
-    title: "Ethiopian Language Processing Model Corpus",
-    description: "A curated collection of text data aimed at training LLMs for Amharic, Oromo, and Tigrinya.",
-    category: "Machine Learning",
-    views: 5100,
-    downloads: 1200,
-    thumbnail_url: null,
-  },
-  {
-    id: "mock-3",
-    title: "Genomic Sequencing Variations in Indigenous Flora",
-    description: "Raw sequencing data mapped against climate change indicators over the last decade.",
-    category: "Bio-Informatics",
-    views: 890,
-    downloads: 120,
-    thumbnail_url: null,
-  },
-];
+
 
 export default function ResearcherDashboardPage() {
   const { user } = useAuth();
@@ -76,8 +49,22 @@ export default function ResearcherDashboardPage() {
 
   // Profile completion banner: reappears every time the dashboard loads
   // until the user's profile is actually marked complete.
-  const isProfileComplete = Boolean(user?.profile_complete);
+  const isProfileComplete = Boolean(
+    user?.can_upload_datasets ||
+    user?.profile?.can_upload_datasets ||
+    user?.profile_complete ||
+    user?.profile?.profile_complete ||
+    user?.is_profile_complete
+  );
   const [showProfileBanner, setShowProfileBanner] = useState(!isProfileComplete);
+
+  useEffect(() => {
+    authApi.getCompleteProfile().then((profile) => {
+      const complete = Boolean(profile?.can_upload_datasets || profile?.is_profile_complete ||
+        (profile?.full_name && profile?.affiliation && profile?.department && profile?.academia && profile?.profile_visibility && profile?.terms_accepted));
+      setShowProfileBanner(!complete);
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     setShowProfileBanner(!isProfileComplete);
@@ -151,7 +138,7 @@ export default function ResearcherDashboardPage() {
         </div>
         <button
           type="button"
-          onClick={() => navigate("/datasets/contribute")}
+          onClick={() => navigate("/datasets/contribute?new=1")}
           className="flex items-center gap-2 bg-gold hover:bg-gold-dark text-white rounded-lg px-5 py-2.5 text-sm font-semibold transition-all hover:shadow-lg"
         >
           <Plus className="w-4 h-4" />
@@ -186,17 +173,19 @@ export default function ResearcherDashboardPage() {
 
         {loading ? (
           <p className="text-sm text-gray-500">Loading…</p>
+        ) : feed.length === 0 ? (
+          <p className="text-sm text-gray-500">No recommendations available at the moment.</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {(feed.length > 0 ? feed : MOCK_RECOMMENDATIONS).slice(0, 3).map((item) => (
+            {feed.slice(0, 3).map((item) => (
               <div
                 key={item.id}
                 onClick={() => navigate(`/datasets/${item.id}`)}
                 className="bg-white rounded-xl border border-border shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition-shadow"
               >
                 <div className="h-32 bg-gray-100 overflow-hidden">
-                  {(item.thumbnail_key || item.thumbnail_url) ? (
-                    <img src={item.thumbnail_key ?? item.thumbnail_url} alt={item.title} className="w-full h-full object-cover" />
+                  {getDatasetImage(item) ? (
+                    <img src={getDatasetImage(item)} alt={item.title} className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full bg-gradient-to-br from-navy/10 to-gold/10" />
                   )}

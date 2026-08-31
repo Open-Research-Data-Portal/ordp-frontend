@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import FileUploadItem from "./FileUploadItem";
 
 export default function UploadForm({ initialValues = {}, onNext, onBack, isSubmitting = false, submitError = null }) {
@@ -6,6 +6,9 @@ export default function UploadForm({ initialValues = {}, onNext, onBack, isSubmi
   const [access, setAccess] = useState(initialValues.access || "public");
   const [isDragging, setIsDragging] = useState(false);
   const [thumbnail, setThumbnail] = useState(initialValues.thumbnail || null);
+  useEffect(() => {
+    if (initialValues.files) setFiles(initialValues.files);
+  }, [initialValues.files]);
   const [thumbnailPreview, setThumbnailPreview] = useState(
     initialValues.thumbnail ? URL.createObjectURL(initialValues.thumbnail) : null
   );

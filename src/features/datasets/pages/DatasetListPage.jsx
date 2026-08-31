@@ -7,10 +7,13 @@ import {
   FileText,
   Download,
   Image as ImageIcon,
+  Trash2,
 } from "lucide-react";
 import TopBar from "../../../layouts/TopBar";
 import Sidebar from "../../../layouts/Sidebar";
 import { useAuth } from "../../../context/useAuth";
+import { getDatasetImage } from "../../../utils/datasetImage";
+
 import * as datasetsApi from "../hooks/datasetsApi";
 
 const STATUS_META = {
@@ -56,8 +59,21 @@ export default function DatasetListPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [rowsPerPage, setRowsPerPage] = useState(6);
   const [page, setPage] = useState(0);
+  const [menuId, setMenuId] = useState(null);
+  const [confirmDraft, setConfirmDraft] = useState(null);
   const navigate = useNavigate();
   const { user } = useAuth();
+
+  async function deleteDraft(dataset) {
+    setMenuId(null);
+    if (dataset.status !== "draft") return;
+    try {
+      await datasetsApi.deleteDataset(dataset.id);
+      setDatasets((items) => items.filter((item) => item.id !== dataset.id));
+    } catch (err) {
+      setError(err.response?.data?.detail || "Failed to delete draft.");
+    }
+  }
 
   useEffect(() => {
     let isMounted = true;
@@ -127,7 +143,7 @@ export default function DatasetListPage() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => navigate("/datasets/contribute")}
+                  onClick={() => navigate("/datasets/contribute?new=1")}
                   className="flex items-center gap-2 bg-navy hover:bg-navy-dark text-white rounded-full px-5 py-2.5 text-sm font-semibold shrink-0 transition-colors"
                 >
                   <Plus className="w-4 h-4" />
@@ -191,7 +207,7 @@ export default function DatasetListPage() {
                   </p>
                   {datasets.length === 0 && (
                     <button
-                      onClick={() => navigate("/datasets/contribute")}
+                      onClick={() => navigate("/datasets/contribute?new=1")}
                       className="bg-[#A67A0D] hover:bg-[#8f690b] text-white rounded-md px-4 py-2 text-sm font-semibold transition"
                     >
                       Upload your first dataset
@@ -215,12 +231,12 @@ export default function DatasetListPage() {
                           // resolves to the PUBLIC DatasetViewPage. This is the
                           // researcher's own dataset list, so it needs to land on
                           // /my-datasets/${id} -> DatasetDetailPage instead.
-                          onClick={() => navigate(`/my-datasets/${dataset.id}`)}
+                          onClick={() => navigate(dataset.status === "draft" ? `/datasets/contribute?draft=${dataset.id}` : `/my-datasets/${dataset.id}`)}
                         >
                           <div className="h-40 w-full bg-gray-100 overflow-hidden">
-                            {dataset.thumbnail_url ? (
+                            {getDatasetImage(dataset) ? (
                               <img
-                                src={dataset.thumbnail_url}
+                                src={getDatasetImage(dataset)}
                                 alt={dataset.title}
                                 loading="lazy"
                                 className="w-full h-full object-cover"
@@ -237,12 +253,17 @@ export default function DatasetListPage() {
                               <p className="text-sm font-semibold text-navy line-clamp-2">{dataset.title}</p>
                               <button
                                 type="button"
-                                onClick={(e) => e.stopPropagation()}
+                                onClick={(e) => { e.stopPropagation(); dataset.status === "draft" ? setConfirmDraft(dataset) : setMenuId(menuId === dataset.id ? null : dataset.id); }}
                                 className="p-1 text-gray-400 hover:text-navy shrink-0"
-                                aria-label="More options"
+                                aria-label={dataset.status === "draft" ? "Delete draft" : "More options"}
                               >
-                                <MoreVertical className="w-4 h-4" />
+                                {dataset.status === "draft" ? <Trash2 className="w-4 h-4 text-red-500" /> : <MoreVertical className="w-4 h-4" />}
                               </button>
+                              {menuId === dataset.id && dataset.status !== "draft" && (
+                                <div className="absolute right-4 mt-2 z-10 w-36 rounded-lg border border-[#E3E1DA] bg-white p-1.5 shadow-lg">
+                                  <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmDraft(dataset); setMenuId(null); }} className="w-full rounded-md px-3 py-2 text-left text-xs font-semibold text-red-600 hover:bg-red-50">Delete draft</button>
+                                </div>
+                              )}
                             </div>
 
                             {/* Status under the title */}
@@ -307,7 +328,19 @@ export default function DatasetListPage() {
                 </>
               )}
             </div>
-          </main>
+      </main>
+      {confirmDraft && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 px-4" onClick={() => setConfirmDraft(null)}>
+          <div className="w-full max-w-sm rounded-xl border border-[#E3E1DA] bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-base font-semibold text-navy">Delete draft?</h2>
+            <p className="mt-2 text-sm text-gray-500">This will permanently remove “{confirmDraft.title}”.</p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={() => setConfirmDraft(null)} className="rounded-md border border-[#E3E1DA] px-3 py-2 text-sm font-medium text-gray-600">Cancel</button>
+              <button type="button" onClick={() => { const draft = confirmDraft; setConfirmDraft(null); deleteDraft(draft); }} className="rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white">Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
         </div>
       </div>
     </div>

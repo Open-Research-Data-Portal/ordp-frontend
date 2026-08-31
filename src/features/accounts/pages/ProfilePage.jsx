@@ -58,7 +58,7 @@ function SectionCard({ icon: Icon, title, children }) {
 }
 
 export default function ProfilePage() {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, updateProfile } = useAuth();
   const [avatarUrl, setAvatarUrl] = useState(null);
   const [firstName, setFirstName] = useState("");
   const [fatherName, setFatherName] = useState("");
@@ -67,7 +67,9 @@ export default function ProfilePage() {
   const [username, setUsername] = useState("");
 
   const [affiliation, setAffiliation] = useState(DEFAULT_AFFILIATION);
-  const [academicRole, setAcademicRole] = useState("Researcher");
+  const [department, setDepartment] = useState("");
+  const [departments, setDepartments] = useState([]);
+  const [academicRole, setAcademicRole] = useState("researcher");
   const [studentType, setStudentType] = useState("");
   const [academicTitle, setAcademicTitle] = useState("");
   const [academicRank, setAcademicRank] = useState("");
@@ -83,6 +85,7 @@ export default function ProfilePage() {
 
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     const parts = getNameParts(user);
@@ -94,7 +97,7 @@ export default function ProfilePage() {
       setEmail(user?.email ?? "");
       setUsername(user?.username ?? "");
       setAffiliation(user?.affiliation ?? DEFAULT_AFFILIATION);
-      setAcademicRole(user?.occupation ?? user?.academicRole ?? "Researcher");
+      setAcademicRole(user?.academia ?? user?.occupation ?? user?.academicRole ?? "researcher");
       setResearchInterests(user?.researchInterests ?? user?.research_interests ?? []);
       setBio(user?.bio ?? "");
       setOrcidId(user?.orcidId ?? user?.orcid_id ?? "");
@@ -106,35 +109,43 @@ export default function ProfilePage() {
     if (!isAuthenticated) return;
 
     let cancelled = false;
-    authApi
-      .getProfile()
-      .then((profile) => {
+    Promise.all([
+      authApi.getProfile().catch(() => null),
+      authApi.getCompleteProfile().catch(() => null),
+    ])
+      .then(([profile, completeProfile]) => {
         if (cancelled) return;
-        const parts = getNameParts(profile);
+        const data = { ...(profile || {}), ...(completeProfile || {}) };
+        const parts = getNameParts(data);
         setFirstName(parts.firstName);
         setFatherName(parts.fatherName);
         setGrandFatherName(parts.grandFatherName);
-        setEmail(profile?.email ?? "");
-        setUsername(profile?.username ?? "");
-        setAffiliation(profile?.affiliation ?? DEFAULT_AFFILIATION);
-        setAcademicRole(profile?.occupation ?? profile?.academicRole ?? "Researcher");
-        setStudentType(profile?.studentType ?? "");
-        setAcademicTitle(profile?.academicTitle ?? "");
-        setAcademicRank(profile?.academicRank ?? "");
-        setHighestDegree(profile?.highestDegree ?? "");
-        setResearchInterests(profile?.researchInterests ?? profile?.research_interests ?? []);
-        setBio(profile?.bio ?? "");
-        setOrcidId(profile?.orcidId ?? profile?.orcid_id ?? "");
-        setProjectWork(profile?.projectWork ?? profile?.project_work ?? "");
-        setAdditionalLink(profile?.additionalLink ?? profile?.additional_link ?? "");
-        setProfileVisibility(profile?.profileVisibility ?? profile?.profile_visibility ?? "");
-        setTermsAccepted(Boolean(profile?.termsAccepted ?? profile?.terms_accepted ?? false));
+        setEmail(data?.email ?? "");
+        setUsername(data?.username ?? "");
+        setAffiliation(data?.affiliation ?? DEFAULT_AFFILIATION);
+        setDepartment(data?.department ?? data?.department_id ?? "");
+        setAcademicRole(data?.academia ?? data?.occupation ?? data?.academicRole ?? "researcher");
+        setStudentType(data?.studentType ?? data?.student_type ?? "");
+        setAcademicTitle(data?.academicTitle ?? data?.academic_title ?? "");
+        setAcademicRank(data?.academicRank ?? data?.academic_rank ?? "");
+        setHighestDegree(data?.highestDegree ?? data?.highest_degree ?? "");
+        setResearchInterests(data?.researchInterests ?? data?.research_interests ?? data?.interests ?? []);
+        setBio(data?.bio ?? "");
+        setOrcidId(data?.orcidId ?? data?.orcid_id ?? "");
+        setProjectWork(data?.projectWork ?? data?.project_work ?? "");
+        setAdditionalLink(data?.additionalLink ?? data?.additional_link ?? "");
+        setProfileVisibility(data?.profileVisibility ?? data?.profile_visibility ?? "");
+        setTermsAccepted(Boolean(data?.termsAccepted ?? data?.terms_accepted ?? false));
       })
       .catch(() => {});
 
     return () => {
       cancelled = true;
     };
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (isAuthenticated) authApi.getDepartments().then(setDepartments).catch(() => {});
   }, [isAuthenticated]);
 
   function handleAvatarChange(e) {
@@ -145,30 +156,56 @@ export default function ProfilePage() {
   async function handleSave() {
     setSaving(true);
     setSaved(false);
+    setError("");
     try {
       const fullName = [firstName, fatherName, grandFatherName].filter(Boolean).join(" ").trim();
-      await authApi.updateProfile({
+      let interestIds = researchInterests;
+      try {
+        const categories = await authApi.getCategories();
+        const byName = new Map(categories.map((c) => [String(c.name).toLowerCase(), c.id]));
+        interestIds = researchInterests.map((interest) => {
+          if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(interest)) return interest;
+          return byName.get(String(interest).toLowerCase()) || byName.get(String(interest).split(" — ")[0].toLowerCase());
+        }).filter(Boolean);
+      } catch { /* preserve profile save if category lookup is unavailable */ }
+      const payload = {
         first_name: firstName,
         last_name: fatherName,
         grand_father_name: grandFatherName,
         full_name: fullName,
         affiliation,
-        occupation: academicRole,
+        department,
+        academia: academicRole,
         student_type: studentType,
         academic_title: academicTitle,
         academic_rank: academicRank,
         highest_degree: highestDegree,
-        research_interests: researchInterests,
+        interests: interestIds,
         bio,
         orcid_id: orcidId,
         project_work: projectWork,
         additional_link: additionalLink,
         profile_visibility: profileVisibility,
         terms_accepted: termsAccepted,
-      });
+      };
+      await Promise.all([
+        authApi.updateProfile({ first_name: firstName, last_name: fatherName, full_name: fullName }),
+        authApi.updateCompleteProfile(payload),
+      ]);
+      try {
+        const freshProfile = await authApi.getCompleteProfile();
+        if (updateProfile) {
+          await updateProfile({ ...user, ...freshProfile, profile_complete: true, is_profile_complete: true });
+        }
+      } catch {
+        if (updateProfile) {
+          await updateProfile({ ...user, ...payload, profile_complete: true, is_profile_complete: true });
+        }
+      }
       setSaved(true);
     } catch (err) {
       console.error("Failed to save profile:", err);
+      setError(err?.message || "Failed to save profile. Please check your inputs.");
     } finally {
       setSaving(false);
     }
@@ -182,6 +219,12 @@ export default function ProfilePage() {
             {saved && (
               <div role="status" className="mb-4 rounded-xl border border-green-200 bg-green-50 px-4 py-2.5 text-sm text-green-700">
                 Profile changes saved.
+              </div>
+            )}
+
+            {error && (
+              <div role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
+                {error}
               </div>
             )}
 
@@ -290,6 +333,7 @@ export default function ProfilePage() {
                     onChange={(e) => setAffiliation(e.target.value)}
                   />
                 </div>
+                <Select id="department" label="Department" required value={department} onChange={(e) => setDepartment(e.target.value)} options={departments.map((d) => ({ value: d.id, label: d.name }))} placeholder="Choose your department..." />
                 <Select
                   id="academicRole"
                   label="Occupation"
@@ -298,11 +342,11 @@ export default function ProfilePage() {
                   onChange={(e) => {
                     const next = e.target.value;
                     setAcademicRole(next);
-                    if (next !== "Student") setStudentType("");
+                    if (next !== "student") setStudentType("");
                   }}
                   options={OCCUPATION_OPTIONS}
                 />
-                {academicRole === "Student" && (
+                {academicRole === "student" && (
                   <Select
                     id="studentType"
                     label="Student Type"

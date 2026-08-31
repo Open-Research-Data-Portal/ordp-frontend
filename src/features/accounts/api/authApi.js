@@ -6,7 +6,7 @@
 import client from "../../../api/client"; // shared axios instance
 
 // const BASE = "/accounts";
-const BASE = 'http://localhost:8000/api/accounts'
+const BASE = '/accounts';
 
 /**
  * @param {string} identifier
@@ -93,7 +93,24 @@ export async function updateProfile(patch) {
     const { data } = await client.patch(`${BASE}/profile/`, patch);
     return data;
   } catch (err) {
+    throw normalizeError(err, { allowDjangoFieldErrors: true });
+  }
+}
+export async function getCompleteProfile() {
+  try {
+    const { data } = await client.get(`${BASE}/profile/complete/`);
+    return data;
+  } catch (err) {
     throw normalizeError(err);
+  }
+}
+
+export async function updateCompleteProfile(patch) {
+  try {
+    const { data } = await client.patch(`${BASE}/profile/complete/`, patch);
+    return data;
+  } catch (err) {
+    throw normalizeError(err, { allowDjangoFieldErrors: true });
   }
 }
 
@@ -226,4 +243,14 @@ function pickFirstFieldErrorMessage(body) {
     }
   }
   return null;
+}
+
+export async function getCategories() {
+  const { data } = await client.get('/metadata/categories/');
+  return Array.isArray(data) ? data : (data?.results || []);
+}
+
+export async function getDepartments() {
+  const { data } = await client.get(`${BASE}/departments/`);
+  return data?.results || [];
 }

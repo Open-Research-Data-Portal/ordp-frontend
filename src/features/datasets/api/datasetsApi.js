@@ -15,7 +15,7 @@ export async function listCategories() {
 
 export async function listSubjects() {
   const { data } = await client.get(`${METADATA_BASE}/subjects/`);
-  return data;
+  return Array.isArray(data) ? data : (data?.results || data?.subjects || []);
 }
 
 export async function listKeywords() {

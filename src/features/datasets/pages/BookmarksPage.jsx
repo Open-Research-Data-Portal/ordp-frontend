@@ -10,6 +10,8 @@ import {
 import TopBar from "../../../layouts/TopBar";
 import Sidebar from "../../../layouts/Sidebar";
 import * as bookmarksApi from "../../../api/bookmarks";
+import { getDatasetImage } from "../../../utils/datasetImage";
+
 
 function formatRelativeDate(dateString) {
   if (!dateString) return "";
@@ -77,15 +79,7 @@ function getFileInfo(dataset) {
   };
 }
 
-function getDatasetImage(dataset) {
-  return (
-    dataset.thumbnail_url ??
-    dataset.thumbnail ??
-    dataset.image ??
-    dataset.thumbnail_key ??
-    null
-  );
-}
+
 
 function BookmarkButton({ bookmarked, onClick }) {
   return (

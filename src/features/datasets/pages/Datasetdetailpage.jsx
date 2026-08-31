@@ -16,6 +16,8 @@ import TopBar from "../../../layouts/TopBar";
 import { useAuth } from "../../../context/useAuth";
 import * as datasetsApi from "../hooks/datasetsApi";
 import { getDownloadUrl } from "../../../api/sharing";
+import { getDatasetImage } from "../../../utils/datasetImage";
+
 
 // ---------------------------------------------------------------------
 // DatasetDetailPage — the OWNER'S view of their own dataset.
@@ -91,7 +93,7 @@ function normalizeDataset(raw) {
     is_owner: raw.is_owner,
     owner_name: raw.author || raw.owner_name || null,
     updated_at: raw.updated_at,
-    thumbnail_url: raw.thumbnail_key || raw.thumbnail_url || null,
+    thumbnail_url: getDatasetImage(raw),
 
     description: meta.description ?? raw.description ?? "",
     keywords: meta.keywords ?? raw.keywords ?? [],

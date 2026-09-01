@@ -23,6 +23,27 @@ function normalizeList(data) {
 
 const CHART_COLORS = ["#B8860B", "#0B1526", "#ef4444", "#10b981", "#6366f1", "#f59e0b"];
 
+const MOCK_USERS = [
+  { id: "u1", email: "admin@aastu.edu.et", full_name: "Admin User", role: "admin", status: "active", initials: "AU" },
+  { id: "u2", email: "reviewer@aastu.edu.et", full_name: "Reviewer One", role: "checker", status: "active", initials: "RO" },
+  { id: "u3", email: "researcher@aastu.edu.et", full_name: "Researcher Abebe", role: "researcher", status: "active", initials: "RA" },
+  { id: "u4", email: "student1@aastustudent.edu.et", full_name: "Student Alem", role: "user", status: "pending", initials: "SA" },
+  { id: "u5", email: "lecturer@aastu.edu.et", full_name: "Lecturer Tadesse", role: "user", status: "active", initials: "LT" },
+];
+
+const MOCK_DELETIONS = [
+  { id: "d1", code: "DS-2015-112", reason: "Expired retention policy", requested_by: "admin@aastu.edu.et", requested_at: "2024-10-25" },
+  { id: "d2", code: "DS-2018-044", reason: "Owner request approved", requested_by: "researcher@aastu.edu.et", requested_at: "2024-10-26" },
+  { id: "d3", code: "DS-2019-087", reason: "Duplicate dataset", requested_by: "reviewer@aastu.edu.et", requested_at: "2024-10-27" },
+];
+
+const roleBadge = {
+  user: "bg-gray-100 text-gray-700 border-gray-200",
+  checker: "bg-violet-50 text-violet-700 border-violet-200",
+  admin: "bg-gold-light text-gold border-gold/30",
+  researcher: "bg-blue-50 text-blue-700 border-blue-200",
+};
+
 export default function AdminDashboardPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -31,10 +52,19 @@ export default function AdminDashboardPage() {
 
   const [cards, setCards] = useState(null);
   const [auditLog, setAuditLog] = useState([]);
-  const [deletions, setDeletions] = useState([]);
+  const [deletions, setDeletions] = useState(MOCK_DELETIONS);
   const [queue, setQueue] = useState([]);
   const [contentUpdates, setContentUpdates] = useState([]);
+  const [users, setUsers] = useState(MOCK_USERS);
   const [loading, setLoading] = useState(true);
+
+  const [userSearch, setUserSearch] = useState("");
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [newUserEmail, setNewUserEmail] = useState("");
+  const [newUserFullName, setNewUserFullName] = useState("");
+  const [newUserRole, setNewUserRole] = useState("user");
+  const [creatingUser, setCreatingUser] = useState(false);
+  const [createError, setCreateError] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -109,6 +139,51 @@ export default function AdminDashboardPage() {
       .map(([name, count]) => ({ name, count }))
       .slice(-14);
   }, [queue, contentUpdates]);
+
+  const filteredUsers = useMemo(() => {
+    if (!userSearch.trim()) return users;
+    const q = userSearch.trim().toLowerCase();
+    return users.filter(
+      (u) =>
+        String(u.email || "").toLowerCase().includes(q) ||
+        String(u.full_name || u.name || "").toLowerCase().includes(q) ||
+        String(u.id || u.user_id || "").includes(q)
+    );
+  }, [users, userSearch]);
+
+  async function handleCreateUser(e) {
+    e.preventDefault();
+    setCreateError("");
+    setCreatingUser(true);
+    try {
+      await new Promise((r) => setTimeout(r, 600));
+      const created = {
+        id: `new-${Date.now()}`,
+        email: newUserEmail.trim(),
+        full_name: newUserFullName.trim(),
+        role: newUserRole,
+        status: "active",
+        initials: (newUserFullName.trim() || newUserEmail.trim()).slice(0, 2).toUpperCase(),
+      };
+      setUsers((s) => [created, ...s]);
+      setNewUserEmail("");
+      setNewUserFullName("");
+      setNewUserRole("user");
+      setShowCreateForm(false);
+      addToast("User created successfully (mock).", "success");
+    } catch (err) {
+      setCreateError(err?.message || "Failed to create user.");
+    } finally {
+      setCreatingUser(false);
+    }
+  }
+
+  async function handleDeleteUser(user) {
+    const id = user.id || user.user_id;
+    if (!id) return;
+    setUsers((s) => s.filter((u) => (u.id || u.user_id) !== id));
+    addToast("User deleted successfully (mock).", "success");
+  }
 
   return (
     <DashboardShell title="ORDP Admin Console" subtitle="System status and key metrics">
@@ -194,9 +269,99 @@ export default function AdminDashboardPage() {
         </section>
       ) : tab === "users" ? (
         <section className="bg-white rounded-xl border border-border shadow-sm overflow-hidden animate-fade-in-up">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-            <p className="text-sm text-gray-500">User management requires backend endpoints that are not yet exposed.</p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-5 py-4 border-b border-border">
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={userSearch}
+                onChange={(e) => setUserSearch(e.target.value)}
+                placeholder="Search by name, email, or ID"
+                className="rounded-lg border border-slate-200 text-sm py-2 pl-3 pr-3 bg-white"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowCreateForm((s) => !s)}
+              className="bg-gold hover:bg-gold-dark text-white text-sm font-semibold rounded-lg px-4 py-2.5 transition-colors min-h-[40px]"
+            >
+              {showCreateForm ? "Cancel" : "+ Create User"}
+            </button>
           </div>
+
+          {showCreateForm && (
+            <form onSubmit={handleCreateUser} className="mx-5 mt-4 mb-2 rounded-xl border border-slate-200 bg-[#F8F7F4] p-5">
+              <p className="text-sm font-semibold text-navy mb-3">New User</p>
+              {createError && (
+                <div role="alert" className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                  {createError}
+                </div>
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-gray-600 block mb-1" htmlFor="newEmail">
+                    Email
+                  </label>
+                  <input
+                    id="newEmail"
+                    type="email"
+                    required
+                    value={newUserEmail}
+                    onChange={(e) => setNewUserEmail(e.target.value)}
+                    className="w-full rounded-lg border border-slate-200 text-sm py-2 px-3"
+                    placeholder="user@example.com"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-600 block mb-1" htmlFor="newFullName">
+                    Full Name
+                  </label>
+                  <input
+                    id="newFullName"
+                    type="text"
+                    required
+                    value={newUserFullName}
+                    onChange={(e) => setNewUserFullName(e.target.value)}
+                    className="w-full rounded-lg border border-slate-200 text-sm py-2 px-3"
+                    placeholder="Dr. Jane Doe"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-gray-600 block mb-1" htmlFor="newRole">
+                    Role
+                  </label>
+                  <select
+                    id="newRole"
+                    required
+                    value={newUserRole}
+                    onChange={(e) => setNewUserRole(e.target.value)}
+                    className="w-full rounded-lg border border-slate-200 text-sm py-2 px-3 bg-[#F7F6F2]"
+                  >
+                    <option value="user">Normal User</option>
+                    <option value="checker">Reviewer (Checker)</option>
+                    <option value="admin">Admin</option>
+                    <option value="researcher">Researcher</option>
+                  </select>
+                </div>
+              </div>
+              <div className="mt-3 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateForm(false)}
+                  className="text-xs font-semibold text-gray-600 hover:text-navy px-3 py-2"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={creatingUser}
+                  className="bg-navy hover:bg-navy-light text-white text-sm font-semibold rounded-lg px-4 py-2 disabled:opacity-50 transition-colors min-h-[40px]"
+                >
+                  {creatingUser ? "Creating…" : "Create User"}
+                </button>
+              </div>
+            </form>
+          )}
+
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="text-xs uppercase text-gray-500 bg-gray-50">
@@ -208,11 +373,45 @@ export default function AdminDashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td colSpan={4} className="px-5 py-10 text-center text-sm text-gray-500">
-                    The backend does not currently expose user list/create/delete endpoints under /admin-panel/. Flagged for backend implementation.
-                  </td>
-                </tr>
+                {filteredUsers.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-5 py-10 text-center text-sm text-gray-500">
+                      No users found.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredUsers.map((u) => (
+                    <tr key={u.id || u.user_id} className="border-t border-gray-100 hover:bg-bg/50">
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <span className="w-9 h-9 rounded-full bg-navy text-white text-xs font-bold flex items-center justify-center">
+                            {(u.full_name || u.name || u.email || "U").slice(0, 2).toUpperCase()}
+                          </span>
+                          <div>
+                            <p className="font-medium text-navy">{u.full_name || u.name || "—"}</p>
+                            <p className="text-xs text-gray-500">{u.email}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${roleBadge[u.role] || "bg-gray-100 text-gray-700"}`}>{u.role || "user"}</span>
+                      </td>
+                      <td className="px-5 py-4">
+                        <StatusBadge status={u.is_active === false ? "inactive" : "active"} />
+                      </td>
+                      <td className="px-5 py-4 text-right">
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteUser(u)}
+                          className="text-gray-400 hover:text-red-600 transition-colors min-h-[40px] px-2"
+                          aria-label={`Delete ${u.email}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

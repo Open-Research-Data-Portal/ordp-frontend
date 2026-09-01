@@ -18,6 +18,8 @@ import {
 import TopBar from "../layouts/TopBar";
 import { searchDatasets } from "../api/search";
 import * as bookmarksApi from "../api/bookmarks";
+import { getDatasetImage } from "../utils/datasetImage";
+
 
 const QUICK_CATEGORIES = [
   "All datasets", "Computer Science", "Education", "Classification",
@@ -159,7 +161,7 @@ function BookmarkButton({ bookmarked, onToggle, className = "" }) {
 
 function DatasetCard({ dataset, navigate, bookmarked, onToggleBookmark }) {
   const Icon = dataset.icon || Database;
-  const image = dataset.image ?? dataset.thumbnail_key ?? null;
+  const image = getDatasetImage(dataset);
   const author = dataset.author ?? dataset.owner_name ?? "Unknown";
   const fileCount = dataset.fileCount ?? dataset.files?.length ?? 0;
   const sizeBytes = dataset.files?.reduce((acc, f) => acc + (f.file_size || 0), 0) ?? 0;
@@ -424,7 +426,7 @@ export default function BrowseDatasetsPage() {
             </p>
           </div>
           <button
-            onClick={() => navigate("/datasets/contribute")}
+            onClick={() => navigate("/datasets/contribute?new=1")}
             className="flex items-center gap-2 bg-[#A67A0D] hover:bg-[#8f690b] text-white rounded-full px-5 py-2.5 text-sm font-semibold transition-all duration-200 hover:shadow-md hover:scale-[1.03] active:scale-[0.98] shrink-0"
           >
             <Plus className="w-4 h-4" /> New Dataset
@@ -633,7 +635,7 @@ export default function BrowseDatasetsPage() {
               <div className="bg-white border border-[#E3E1DA] rounded-xl overflow-hidden">
                 {results.map((dataset, i) => {
                   const isOpen = expandedId === dataset.id;
-                  const thumb = dataset.image ?? dataset.thumbnail_key ?? null;
+                  const thumb = getDatasetImage(dataset);
                   const authorName = dataset.author ?? dataset.owner_name ?? "Unknown";
                   const desc = dataset.metadata?.description ?? dataset.description ?? "";
                   const fCount = dataset.fileCount ?? dataset.files?.length ?? 0;

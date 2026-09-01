@@ -79,6 +79,9 @@ export default function MetadataForm({ initialValues = {}, onNext, onBack, isSub
       if (subsRes.status === "fulfilled") {
         setSubjects(Array.isArray(subsRes.value) ? subsRes.value : []);
       }
+      if (subsRes.status !== "fulfilled" || !Array.isArray(subsRes.value) || subsRes.value.length === 0) {
+        setSubjects(catsRes.status === "fulfilled" && Array.isArray(catsRes.value) ? catsRes.value : []);
+      }
     });
     return () => { isMounted = false; };
   }, []);

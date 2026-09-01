@@ -1,4 +1,4 @@
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import ContributeLayout from "../../../layouts/ContributeLayout";
 import DetailsForm from "../components/DetailsForm";
 import MetadataForm from "../../metadata/components/MetadataForm";
@@ -12,6 +12,7 @@ const STEPS = ["Details", "Metadata", "Upload", "Policy"];
 
 export default function ContributeDatasetPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { isAuthenticated, loading } = useAuth();
   const {
     step, formData,
@@ -21,7 +22,7 @@ export default function ContributeDatasetPage() {
     submitUpload,
     submitFinal,
     isSubmitting, submitError,
-  } = useDatasetSubmission();
+  } = useDatasetSubmission(searchParams.get("new") ? "__new__" : searchParams.get("draft"));
 
   if (loading) {
     return null;

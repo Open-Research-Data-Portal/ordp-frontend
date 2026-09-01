@@ -73,9 +73,13 @@ export default function DataUploadPage() {
     async function loadProfile() {
       let profile = null;
       try {
-        profile = await authApi.getProfile();
+        const [basic, complete] = await Promise.all([
+          authApi.getProfile().catch(() => null),
+          authApi.getCompleteProfile().catch(() => null),
+        ]);
+        profile = { ...(basic || {}), ...(complete || {}) };
       } catch {
-        // Fall back to context user below.
+        profile = user;
       }
       if (cancelled) return;
 
@@ -88,6 +92,16 @@ export default function DataUploadPage() {
       setGrandFatherName(parts.grandFatherName);
       setEmail(source?.email ?? "");
       setUsername(source?.username ?? "");
+      setAffiliation(source?.affiliation ?? DEFAULT_AFFILIATION);
+      setAcademicRole(source?.academia ?? source?.occupation ?? source?.academicRole ?? "");
+      setStudentType(source?.student_type ?? source?.studentType ?? "");
+      setAcademicTitle(source?.academic_title ?? source?.academicTitle ?? "");
+      setAcademicRank(source?.academic_rank ?? source?.academicRank ?? "");
+      setHighestDegree(source?.highest_degree ?? source?.highestDegree ?? "");
+      setBio(source?.bio ?? "");
+      setOrcidId(source?.orcid_id ?? source?.orcidId ?? "");
+      setAdditionalLink(source?.additional_link ?? source?.additionalLink ?? "");
+      setProjectWork(source?.project_work ?? source?.projectWork ?? "");
     }
 
     loadProfile();
@@ -109,7 +123,7 @@ export default function DataUploadPage() {
     username.trim() &&
     affiliation.trim() &&
     academicRole.trim() &&
-    (academicRole !== "Student" || studentType.trim());
+    (academicRole !== "student" || studentType.trim());
 
   async function handleSubmit() {
     if (!canSubmit) {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import * as datasetsApi from "./datasetsApi";
 
 const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB per chunk
@@ -80,21 +80,59 @@ function extractError(err) {
   return "Something went wrong. Please try again.";
 }
 
-async function uploadFileInChunks(file, sessionId) {
+async function uploadFileInChunks(file, sessionId, onProgress) {
+  const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+  const fileChecksum = Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  try { await datasetsApi.prepareUpload(sessionId, { filename: file.name, file_size: file.size, file_checksum: fileChecksum }); } catch (e) {
+    if (e?.response?.status !== 404) throw e;
+  }
   const totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
   for (let i = 0; i < totalChunks; i++) {
     const blob = file.slice(i * CHUNK_SIZE, Math.min((i + 1) * CHUNK_SIZE, file.size));
-    await datasetsApi.uploadChunk(sessionId, i, blob);
+    const digest = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
+    const checksum = Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+    const fileDigest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+    const fileChecksum = Array.from(new Uint8Array(fileDigest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+    await datasetsApi.uploadChunk(sessionId, i, blob, checksum, { filename: file.name, fileSize: file.size, fileChecksum });
+    onProgress?.(Math.round(((i + 1) / totalChunks) * 100));
   }
 }
 
-export default function useDatasetSubmission() {
-  const [step, setStep] = useState(1);
-  const [formData, setFormData] = useState({ details: {}, metadata: {}, upload: {}, policy: {} });
-  const [datasetId, setDatasetId] = useState(null);
-  const [uploadSessionId, setUploadSessionId] = useState(null);
+export default function useDatasetSubmission(draftId = null) {
+  const draftKey = "ordp-contribute-draft";
+  const storedDraft = JSON.parse(localStorage.getItem(draftKey) || "null");
+  const [step, setStep] = useState(() => Number(storedDraft?.step) || 1);
+  const [formData, setFormData] = useState(() => storedDraft?.formData || { details: {}, metadata: {}, upload: {}, policy: {} });
+  const [datasetId, setDatasetId] = useState(() => JSON.parse(localStorage.getItem(draftKey) || "null")?.datasetId || null);
+  const [uploadSessionId, setUploadSessionId] = useState(() => JSON.parse(localStorage.getItem(draftKey) || "null")?.uploadSessionId || null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
+  useEffect(() => {
+    if (draftId === "__new__") {
+      localStorage.removeItem(draftKey);
+      setStep(1); setFormData({ details: {}, metadata: {}, upload: {}, policy: {} });
+      setDatasetId(null); setUploadSessionId(null);
+    }
+  }, [draftId]);
+
+  useEffect(() => {
+    if (!draftId || draftId === "__new__") return;
+    datasetsApi.getDatasetDetail(draftId).then((raw) => {
+      const metadata = raw?.metadata || {};
+      setDatasetId(draftId);
+      setFormData((prev) => ({
+        ...prev,
+        details: { ...prev.details, title: raw?.title || "", description: metadata.description || raw?.description || "" },
+        metadata: { ...prev.metadata, category_id: metadata.category || metadata.category_id || "", subject_id: metadata.subject || metadata.subject_id || "", keywords: metadata.keywords || [] },
+      }));
+      setStep(raw?.status === "draft" ? 1 : 1);
+    }).catch(() => {});
+  }, [draftId, datasetId]);
+
+  useEffect(() => {
+    if (draftId === "__new__") return;
+    localStorage.setItem(draftKey, JSON.stringify({ step, formData, datasetId, uploadSessionId }));
+  }, [draftId, step, formData, datasetId, uploadSessionId]);
 
   const goToPreviousStep = () => {
     setSubmitError(null);
@@ -106,17 +144,6 @@ export default function useDatasetSubmission() {
     setIsSubmitting(true);
     setSubmitError(null);
     try {
-      let did = datasetId;
-      let sid = uploadSessionId;
-      if (!did) {
-        const r = await datasetsApi.initUpload({ title: detailsData.title, visibility: "restricted" });
-        did = r.dataset_id;
-        sid = r.upload_session_id;
-        setDatasetId(did);
-        setUploadSessionId(sid);
-      } else {
-        await datasetsApi.updateDataset(did, { title: detailsData.title });
-      }
       setFormData((prev) => ({ ...prev, details: detailsData }));
       setStep(2);
     } catch (err) {
@@ -132,23 +159,50 @@ export default function useDatasetSubmission() {
     setSubmitError(null);
     try {
       const details = formData.details;
+      let did = datasetId;
+      let sid = uploadSessionId;
+      if (!did) {
+        const r = await datasetsApi.initUpload({ title: details.title, visibility: "restricted" });
+        did = r.dataset_id; sid = r.upload_session_id;
+        setDatasetId(did); setUploadSessionId(sid);
+      }
       const metadataPayload = {
         category_id: metadataData.category_id || undefined,
         other_category: metadataData.other_category || undefined,
         description: details.description || "",
-        subject: metadataData.subject_id || undefined,
         keywords: Array.isArray(metadataData.keywords) ? metadataData.keywords : [],
-        related_resources: Array.isArray(details.relatedResources) ? details.relatedResources : [],
         geographic_coverage: details.geographicCoverage || "",
         temporal_coverage: details.temporalCoverage || "",
         instances_represent: metadataData.instancesRepresent || "",
         collection_method: metadataData.collectionMethod || "",
         recommended_splits: metadataData.recommendedSplits || "",
       };
-      await datasetsApi.attachMetadata(datasetId, metadataPayload);
-      await datasetsApi.setDatasetLanguages(datasetId, {
+      await datasetsApi.attachMetadata(did, metadataPayload);
+      await datasetsApi.setDatasetLanguages(did, {
         other_languages: [details.language || "English"],
       });
+
+      // Integrate Co-Authors and Contributors API
+      const coAuthors = details.coAuthors || [];
+      for (const name of coAuthors) {
+        if (name.trim()) {
+          try {
+            await datasetsApi.addContributor(did, { name: name.trim(), contributor_type: "co_author" });
+          } catch (e) {
+            console.warn("Failed to add co-author", e);
+          }
+        }
+      }
+      const contributors = details.contributors || [];
+      for (const name of contributors) {
+        if (name.trim()) {
+          try {
+            await datasetsApi.addContributor(did, { name: name.trim(), contributor_type: "contributor" });
+          } catch (e) {
+            console.warn("Failed to add contributor", e);
+          }
+        }
+      }
       setFormData((prev) => ({ ...prev, metadata: metadataData }));
       setStep(3);
     } catch (err) {
@@ -163,11 +217,19 @@ export default function useDatasetSubmission() {
     setIsSubmitting(true);
     setSubmitError(null);
     try {
-      await datasetsApi.updateDataset(datasetId, { visibility: uploadData.access || "restricted" });
+      const details = formData.details || {};
+      let activeDatasetId = datasetId;
+      let activeSessionId = uploadSessionId;
+      if (!activeDatasetId || !activeSessionId) {
+        const fresh = await datasetsApi.initUpload({ title: details.title || "Untitled dataset", visibility: "restricted" });
+        activeDatasetId = fresh.dataset_id; activeSessionId = fresh.upload_session_id;
+        setDatasetId(activeDatasetId); setUploadSessionId(activeSessionId);
+      }
+      await datasetsApi.updateDataset(activeDatasetId, { visibility: uploadData.access || "restricted" });
 
       if (uploadData.thumbnail) {
         try {
-          await datasetsApi.uploadThumbnail(datasetId, uploadData.thumbnail);
+          await datasetsApi.uploadThumbnail(activeDatasetId, uploadData.thumbnail);
         } catch (e) {
           console.warn("Thumbnail upload failed (non-fatal):", e);
         }
@@ -201,15 +263,31 @@ export default function useDatasetSubmission() {
             ? parseNonNegativeInt(metadata.numInstances)
             : undefined;
 
-        await uploadFileInChunks(entry.file, uploadSessionId);
-        await datasetsApi.completeUpload(uploadSessionId, {
-          datasetId,
+        try {
+          await uploadFileInChunks(entry.file, activeSessionId, (progress) => {
+          setFormData((prev) => ({ ...prev, upload: { ...uploadData, files: files.map((f) => f.id === entry.id ? { ...f, status: progress === 100 ? "complete" : "uploading", progress } : f) } }));
+          });
+        } catch (uploadError) {
+          const detail = uploadError?.response?.data?.detail || uploadError?.message || "";
+          if (!/unknown upload session/i.test(detail)) throw uploadError;
+          const fresh = await datasetsApi.initUpload({ title: details.title, visibility: "restricted" });
+          activeSessionId = fresh.upload_session_id;
+          activeDatasetId = fresh.dataset_id;
+          setDatasetId(fresh.dataset_id); setUploadSessionId(activeSessionId);
+          await uploadFileInChunks(entry.file, activeSessionId, (progress) => {
+            setFormData((prev) => ({ ...prev, upload: { ...uploadData, files: files.map((f) => f.id === entry.id ? { ...f, status: progress === 100 ? "complete" : "uploading", progress } : f) } }));
+          });
+        }
+        await datasetsApi.completeUpload(activeSessionId, {
+          datasetId: activeDatasetId,
           filename: entry.file.name,
           fileType,
           isStructured: isStructuredFileType && metadata.includesHeaderRow !== false,
           columnCount,
           featureNames,
           itemCount,
+          fileSize: entry.file.size,
+          fileChecksum: Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", await entry.file.arrayBuffer()))).map((b) => b.toString(16).padStart(2, "0")).join(""),
         });
       }
 
@@ -238,6 +316,8 @@ export default function useDatasetSubmission() {
         await datasetsApi.submitDataset(datasetId, true);
         status = "pending";
       }
+
+      localStorage.removeItem(draftKey);
 
       return {
         id: datasetId,

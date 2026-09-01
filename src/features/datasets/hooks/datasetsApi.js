@@ -17,7 +17,7 @@ export async function listCategories() {
 
 export async function listSubjects() {
   const { data } = await client.get(`${METADATA_BASE}/subjects/`);
-  return data;
+  return Array.isArray(data) ? data : (data?.results || data?.subjects || []);
 }
 
 export async function attachMetadata(datasetId, metadataPayload) {
@@ -42,14 +42,23 @@ export async function uploadThumbnail(datasetId, file) {
 // Backend contract (apps/datasets/views.py -> upload_chunk):
 //   request.FILES["chunk"] and request.data["chunk_index"] are required.
 // NB: do NOT set the Content-Type manually — axios must compute the boundary.
-export async function uploadChunk(uploadSessionId, chunkIndex, fileBlob) {
+export async function uploadChunk(uploadSessionId, chunkIndex, fileBlob, chunkChecksum, fileMeta = {}) {
   const formData = new FormData();
   formData.append("chunk_index", chunkIndex);
   formData.append("chunk", fileBlob);
+  formData.append("chunk_checksum", chunkChecksum);
+  if (fileMeta.filename) formData.append("filename", fileMeta.filename);
+  if (fileMeta.fileSize != null) formData.append("file_size", String(fileMeta.fileSize));
+  if (fileMeta.fileChecksum) formData.append("file_checksum", fileMeta.fileChecksum);
   const { data } = await client.post(
     `${DATASETS_BASE}/upload/chunk/${uploadSessionId}/`,
     formData
   );
+  return data;
+}
+
+export async function prepareUpload(uploadSessionId, payload) {
+  const { data } = await client.post(`${DATASETS_BASE}/upload/prepare/${uploadSessionId}/`, payload);
   return data;
 }
 
@@ -66,6 +75,8 @@ export async function completeUpload(
     columnCount,
     featureNames,
     itemCount,
+    fileSize,
+    fileChecksum,
   }
 ) {
   const payload = {
@@ -83,6 +94,8 @@ export async function completeUpload(
   if (itemCount !== undefined && itemCount !== null && itemCount !== "") {
     payload.item_count = Number(itemCount);
   }
+  payload.file_size = fileSize;
+  payload.file_checksum = fileChecksum;
   const { data } = await client.post(
     `${DATASETS_BASE}/upload/complete/${uploadSessionId}/`,
     payload
@@ -204,3 +217,13 @@ export async function getMyDownloads() {
   const { data } = await client.get(`${DATASETS_BASE}/dashboard/my-downloads/`);
   return data;
 }
+export async function addContributor(datasetId, payload) {
+  const { data } = await client.post(`${DATASETS_BASE}/${datasetId}/contributors/`, payload);
+  return data;
+}
+
+export async function listContributors(datasetId) {
+  const { data } = await client.get(`${DATASETS_BASE}/${datasetId}/contributors/`);
+  return data;
+}
+

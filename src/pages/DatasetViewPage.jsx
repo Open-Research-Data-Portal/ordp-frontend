@@ -22,6 +22,8 @@ import {
 import { getDatasetById } from "../api/datasets";
 import { getDownloadUrl, requestShareAccess } from "../api/sharing";
 import TopBar from "../layouts/TopBar";
+import { getDatasetImage } from "../utils/datasetImage";
+
 
 // ---------------------------------------------------------------------
 // DatasetViewPage — the PUBLIC read-only view a researcher lands on when
@@ -178,7 +180,7 @@ function normalizeDataset(raw) {
       avatarUrl: null,
     },
     updatedLabel: formatRelativeDate(raw.updated_at) || "—",
-    thumbnailUrl: raw.thumbnail_key || raw.thumbnail_url || null,
+    thumbnailUrl: getDatasetImage(raw),
     tags: meta.keywords || [],
     aboutText: meta.description || raw.description || "No description provided.",
     dataFile: primaryFile

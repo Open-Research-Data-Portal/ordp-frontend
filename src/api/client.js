@@ -11,7 +11,17 @@ const client = axios.create({
 // ── Request interceptor ──────────────────────────────────────────────────────
 // Attach the current in-memory access token to every outgoing request.
 // This means callers never have to manage the Authorization header themselves.
-client.interceptors.request.use((config) => {
+let requestRefresh = null;
+client.interceptors.request.use(async (config) => {
+  if (!getAccessToken() && getRefreshToken() && !config.url?.includes("/accounts/refresh/")) {
+    requestRefresh ||= axios.post(`${BASE_URL}/accounts/refresh/`, { refresh: getRefreshToken() });
+    try {
+      const { data } = await requestRefresh;
+      setTokens(data.access, data.refresh ?? getRefreshToken());
+    } finally {
+      requestRefresh = null;
+    }
+  }
   const token = getAccessToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -39,6 +49,7 @@ client.interceptors.response.use(
   (response) => response,
   async (error) => {
     const original = error.config;
+    original.headers = original.headers || {};
 
     // Don't retry if:
     //   • not a 401 response

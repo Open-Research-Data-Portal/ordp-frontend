@@ -15,9 +15,10 @@
  */
 
 export const REFRESH_KEY = "ordp_refresh_token";
+export const ACCESS_KEY = "ordp_access_token";
 
 const _store = {
-  accessToken: null,
+  accessToken: sessionStorage.getItem(ACCESS_KEY) ?? null,
   // Seed from sessionStorage first, fall back to localStorage ("stay logged in").
   refreshToken:
     sessionStorage.getItem(REFRESH_KEY) ?? localStorage.getItem(REFRESH_KEY) ?? null,
@@ -40,6 +41,7 @@ export function getRefreshToken() {
 export function setTokens(access, refresh) {
   if (access != null) {
     _store.accessToken = access;
+    sessionStorage.setItem(ACCESS_KEY, access);
   }
   if (refresh != null) {
     _store.refreshToken = refresh;
@@ -56,5 +58,6 @@ export function clearTokens() {
   _store.accessToken = null;
   _store.refreshToken = null;
   sessionStorage.removeItem(REFRESH_KEY);
+  sessionStorage.removeItem(ACCESS_KEY);
   localStorage.removeItem(REFRESH_KEY);
 }

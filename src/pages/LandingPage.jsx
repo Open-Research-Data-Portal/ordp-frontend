@@ -22,6 +22,8 @@ import TopBar from "../layouts/TopBar";
 import logo from "../assets/aastulogo.png";
 import campusImg from "../assets/1.jfif";
 import { searchDatasets } from "../api/search";
+import { getDatasetImage } from "../utils/datasetImage";
+
 
 const CATEGORIES = [
   { label: "Machine Learning", icon: Bot, slug: "machine-learning" },
@@ -68,7 +70,7 @@ function DatasetCard({ dataset, onClick }) {
   // of which exist on the API response. This was why images rendered
   // fine on the /datasets page (whose DatasetCard already read
   // thumbnail_key correctly) but never showed up here.
-  const thumbnailUrl = dataset.thumbnail_key || dataset.thumbnail_url || dataset.thumbnailUrl;
+  const thumbnailUrl = getDatasetImage(dataset);
 
   return (
     <div onClick={onClick} role="button" tabIndex={0} className="group flex flex-col bg-white rounded-lg overflow-hidden border border-border hover:border-gold hover:shadow-md cursor-pointer transition">

@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import StatCard from "../../../components/dashboard/StatCard";
-import { SectionHeader, StatusBadge } from "../../../components/dashboard/dashboardUi";
+import { SectionHeader, StatusBadge, ProfileSavedNotice } from "../../../components/dashboard/dashboardUi";
 import { useAuth } from "../../../context/useAuth";
 import { getDisplayName } from "../../../utils/userRoles";
 import * as datasetsApi from "../hooks/datasetsApi";
@@ -75,6 +75,7 @@ export default function ReviewerDashboardPage() {
 
   return (
     <DashboardShell title="Reviewer Dashboard" subtitle="Manage pending approvals and moderation queues">
+      <ProfileSavedNotice />
       <div className="flex justify-between items-start mb-6 animate-fade-in-up">
         <div>
           <h1 className="text-2xl font-serif font-bold text-navy">Reviewer Dashboard</h1>

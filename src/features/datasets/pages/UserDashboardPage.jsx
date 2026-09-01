@@ -2,11 +2,10 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Bookmark, Download, Eye, MoreVertical } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
-import { ProfileBanner, SectionHeader, StatusBadge, EmptyState } from "../../../components/dashboard/dashboardUi";
+import { ProfileBanner, ProfileSavedNotice, SectionHeader, StatusBadge, EmptyState } from "../../../components/dashboard/dashboardUi";
 import { useAuth } from "../../../context/useAuth";
 import { getDisplayName } from "../../../utils/userRoles";
 import * as datasetsApi from "../hooks/datasetsApi";
-
 import { getDatasetImage } from "../../../utils/datasetImage";
 
 function normalizeList(data) {
@@ -34,7 +33,7 @@ export default function UserDashboardPage() {
       if (!active) return;
       if (feedRes.status === "fulfilled") setFeed(normalizeList(feedRes.value));
       if (bookmarksRes.status === "fulfilled") setBookmarks(normalizeList(bookmarksRes.value));
-      setProfileComplete(Boolean(user?.can_upload_datasets || user?.profile?.can_upload_datasets || user?.profile_complete || user?.profile?.profile_complete || user?.is_profile_complete));
+setProfileComplete(Boolean(user?.can_upload_datasets || user?.profile?.can_upload_datasets || user?.profile_complete || user?.profile?.profile_complete || user?.is_profile_complete));
       setLoading(false);
     }
     load();
@@ -45,6 +44,7 @@ export default function UserDashboardPage() {
 
   return (
     <DashboardShell title="Research Hub" subtitle="AASTU Academic Portal">
+      <ProfileSavedNotice />
       {!profileComplete && !bannerDismissed && (
         <ProfileBanner onDismiss={() => setBannerDismissed(true)} onGoToProfile={() => navigate("/profile")} />
       )}

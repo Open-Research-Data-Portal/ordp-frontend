@@ -11,7 +11,6 @@ import ResetPasswordPage from "../features/accounts/pages/ResetPassword.jsx";
 import ProfilePage from "../features/accounts/pages/ProfilePage.jsx";
 import ResearchInterestsOnboardingPage from "../features/accounts/pages/ResearchInterestsOnboardingPage.jsx";
 
-import DataUploadPage from "../pages/DataUpload/DataUploadPage.jsx";
 import DashboardRouter from "../pages/Dashboard/DashboardRouter.jsx";
 
 import ContributeDatasetPage from "../features/datasets/pages/ContributeDatasetPage.jsx";
@@ -29,10 +28,16 @@ import BookmarksPage from "../features/datasets/pages/BookmarksPage";
 
 function VerifyEmailRoute() {
   const [searchParams] = useSearchParams();
-  const uid = searchParams.get("uid");
+
+  // The backend's verification emails link to
+  //   {FRONTEND_URL}/verify-email?token=<uuid>
+  // (confirmed from ordp-backend apps/accounts/views.py RegisterView), so the
+  // presence of the `token` query param means the user clicked the link in
+  // their email → show the confirming page. The bare /verify-email path
+  // (right after registration) is the "check your email" page.
   const token = searchParams.get("token");
 
-  if (uid && token) return <EmailVerifyConfirmPage />;
+  if (token) return <EmailVerifyConfirmPage />;
   return <VerifyEmailPage />;
 }
 
@@ -63,9 +68,6 @@ export default function AppRoutes() {
 
       {/* Profile */}
       <Route path="/profile" element={<ProfilePage />} />
-
-      {/* Data upload request (researcher/uploader access) */}
-      <Route path="/data-upload" element={<DataUploadPage />} />
 
       {/* Datasets — public browsing */}
       <Route path="/datasets" element={<BrowseDatasetsPage />} />

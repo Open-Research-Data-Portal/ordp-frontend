@@ -2,12 +2,41 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import * as authApi from "../features/accounts/api/authApi";
 import client from "../api/client";
 import AuthContext from "./AuthContextInstance";
+import { mergeAuthUser, claimsFromAccessToken } from "../utils/userRoles";
 import {
   setTokens,
   clearTokens,
   getRefreshToken,
   REFRESH_KEY,
 } from "../api/tokenStore";
+
+const AUTH_FLAGS_KEY = "ordp:auth-flags";
+
+function persistAuthFlags(user) {
+  try {
+    sessionStorage.setItem(
+      AUTH_FLAGS_KEY,
+      JSON.stringify({
+        is_staff: Boolean(user?.is_staff),
+        is_superuser: Boolean(user?.is_superuser),
+        is_admin: Boolean(user?.is_admin),
+        role: user?.role || null,
+        username: user?.username || null,
+        groups: user?.groups || [],
+      })
+    );
+  } catch {
+    // ignore
+  }
+}
+
+function readAuthFlags() {
+  try {
+    return JSON.parse(sessionStorage.getItem(AUTH_FLAGS_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -29,6 +58,21 @@ export function AuthProvider({ children }) {
     }
   }, [accessToken]);
 
+  // When the shared axios client realises the session is unrecoverable
+  // (refresh token revoked/expired — e.g. a 401 mid-request), it dispatches
+  // "ordp:session-expired". We reset the React-side auth state to match.
+  useEffect(() => {
+    function handleSessionExpired() {
+      clearTokens();
+      delete client.defaults.headers.common.Authorization;
+      setAccessToken(null);
+      setUser(null);
+    }
+    window.addEventListener("ordp:session-expired", handleSessionExpired);
+    return () =>
+      window.removeEventListener("ordp:session-expired", handleSessionExpired);
+  }, []);
+
   // On mount: silently exchange any stored refresh token for a fresh access
   // token so the user doesn't have to log in again after a page refresh.
   useEffect(() => {
@@ -43,7 +87,9 @@ export function AuthProvider({ children }) {
         setTokens(access, newRefresh);
         client.defaults.headers.common.Authorization = `Bearer ${access}`;
         setAccessToken(access);
-        return authApi.getProfile();
+        return authApi.getProfile().then((profile) =>
+          mergeAuthUser({ ...readAuthFlags(), ...claimsFromAccessToken(access) }, profile)
+        );
       })
       .then(setUser)
       .catch(() => {
@@ -74,13 +120,23 @@ export function AuthProvider({ children }) {
     let profile;
     try {
       profile = await authApi.getProfile();
-      setUser(profile);
     } catch {
       profile = data.user;
-      setUser(profile);
     }
+    const claims = claimsFromAccessToken(data.access);
+    const merged = mergeAuthUser(
+      {
+        ...claims,
+        ...data.user,
+        login_identifier: identifier,
+        username: data.user?.username || identifier,
+      },
+      profile
+    );
+    persistAuthFlags(merged);
+    setUser(merged);
 
-    return { ...data, profile };
+    return { ...data, profile: merged, user: merged };
   }, []);
 
   const updateProfile = useCallback(async (patch) => {
@@ -88,6 +144,46 @@ export function AuthProvider({ children }) {
     setUser((current) => ({ ...current, ...(updated || patch) }));
     return updated;
   }, []);
+
+  /**
+   * Establish a session from tokens that were NOT obtained via the login
+   * endpoint — used after email verification, which the backend resolves by
+   * returning fresh access/refresh JWTs directly. Persists the tokens, sets
+   * the axios default header, and loads the profile.
+   *
+   * @param {{access: string, refresh: string, user?: object|null, stayLoggedIn?: boolean}} session
+   * @returns {Promise<object|null>} the loaded profile (or the raw user payload fallback)
+   */
+  const establishSession = useCallback(
+    async ({ access, refresh, user: userPayload = null, stayLoggedIn = false }) => {
+      if (!access || !refresh) return null;
+
+      setTokens(access, refresh);
+      // "Stay logged in" — also persist to localStorage so the session
+      // survives the tab being closed and re-opened.
+      if (stayLoggedIn) {
+        localStorage.setItem(REFRESH_KEY, refresh);
+      }
+
+      client.defaults.headers.common.Authorization = `Bearer ${access}`;
+      setAccessToken(access);
+
+      let profile;
+      try {
+        profile = await authApi.getProfile();
+      } catch {
+        profile = userPayload;
+      }
+      const merged = mergeAuthUser(
+        { ...claimsFromAccessToken(access), ...userPayload },
+        profile
+      );
+      persistAuthFlags(merged);
+      setUser(merged);
+      return merged;
+    },
+    []
+  );
 
   const logout = useCallback(async () => {
     const currentRefresh = getRefreshToken();
@@ -104,14 +200,16 @@ export function AuthProvider({ children }) {
   const value = useMemo(
     () => ({
       user,
+      setUser,
       accessToken,
       isAuthenticated: Boolean(accessToken),
       loading,
       login,
       logout,
       updateProfile,
+      establishSession,
     }),
-    [user, accessToken, loading, login, logout, updateProfile]
+    [user, accessToken, loading, login, logout, updateProfile, establishSession]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

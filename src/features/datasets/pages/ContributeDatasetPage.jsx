@@ -1,10 +1,12 @@
 import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
 import ContributeLayout from "../../../layouts/ContributeLayout";
 import DetailsForm from "../components/DetailsForm";
 import MetadataForm from "../../metadata/components/MetadataForm";
 import UploadForm from "../components/UploadForm";
 import PolicyForm from "../components/PolicyForm";
 import { useAuth } from "../../../context/useAuth";
+import { getDashboardPath } from "../../../utils/userRoles";
 import useDatasetSubmission from "../hooks/useDatasetSubmission";
 
 
@@ -12,8 +14,8 @@ const STEPS = ["Details", "Metadata", "Upload", "Policy"];
 
 export default function ContributeDatasetPage() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const { isAuthenticated, loading } = useAuth();
+const [searchParams] = useSearchParams();
+  const { user, isAuthenticated, loading } = useAuth();
   const {
     step, formData,
     goToPreviousStep,
@@ -39,6 +41,13 @@ export default function ContributeDatasetPage() {
 
   return (
     <ContributeLayout currentStep={step} steps={STEPS}>
+      <button
+        type="button"
+        onClick={() => navigate(getDashboardPath(user))}
+        className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-slate-600 hover:text-navy transition"
+      >
+        <ArrowLeft className="w-4 h-4" /> Back to Dashboard
+      </button>
       <div key={step} className="animate-[fadeSlideIn_0.35s_ease-out]">
         {step === 1 && (
           <DetailsForm

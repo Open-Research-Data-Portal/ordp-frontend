@@ -13,13 +13,12 @@ import {
 } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import StatCard from "../../../components/dashboard/StatCard";
-import { StatusBadge, EmptyState } from "../../../components/dashboard/dashboardUi";
+import { StatusBadge, EmptyState, ProfileSavedNotice } from "../../../components/dashboard/dashboardUi";
 import { useAuth } from "../../../context/useAuth";
 import { getDisplayName } from "../../../utils/userRoles";
 import * as datasetsApi from "../hooks/datasetsApi";
 import * as authApi from "../../accounts/api/authApi";
 import { getDatasetImage } from "../../../utils/datasetImage";
-
 
 function normalizeList(data) {
   if (Array.isArray(data)) return data;
@@ -69,7 +68,6 @@ export default function ResearcherDashboardPage() {
   useEffect(() => {
     setShowProfileBanner(!isProfileComplete);
   }, [isProfileComplete]);
-
   useEffect(() => {
     let active = true;
     async function load() {
@@ -95,6 +93,7 @@ export default function ResearcherDashboardPage() {
 
   return (
     <DashboardShell title="Researcher Dashboard" subtitle="Manage your datasets and track engagement">
+      <ProfileSavedNotice />
       {/* Profile completion banner — reappears on every dashboard load until complete */}
       {showProfileBanner && (
         <div className="flex items-center justify-between gap-4 bg-gold-light border border-gold/30 rounded-xl px-5 py-4 mb-8 animate-fade-in-up">

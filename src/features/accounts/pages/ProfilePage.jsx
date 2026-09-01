@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Camera, User as UserIcon, GraduationCap, Database, Save, RotateCcw } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import TextInput from "../../../components/ui/TextInput";
@@ -9,6 +9,16 @@ import Button from "../../../components/ui/Button";
 import { useAuth } from "../../../context/useAuth";
 import * as authApi from "../api/authApi";
 import {
+  asEntityId,
+  extractSelectedInterests,
+  loadPersistedInterests,
+  parseInterestCatalog,
+  persistSelectedInterests,
+  pickerCategories,
+  buildProfileCompletionPatch,
+  saveProfileCompletion,
+} from "../onboarding";
+import {
   OCCUPATION_OPTIONS,
   ACADEMIC_TITLE_OPTIONS,
   ACADEMIC_RANK_OPTIONS,
@@ -17,13 +27,25 @@ import {
   RESEARCH_INTEREST_CATEGORIES,
   DEFAULT_AFFILIATION,
   BIO_MAX_LENGTH,
+  toOptionValue,
 } from "./constants";
+import { getDashboardPath } from "../../../utils/userRoles";
+import { useNavigate } from "react-router-dom";
 
 const PROFILE_VISIBILITY_OPTIONS = [
   { value: "public", label: "Everyone (Public)" },
   { value: "trusted", label: "Trusted Parties" },
   { value: "private", label: "Only Me (Private)" },
 ];
+
+function uniqueInterestLabels(...lists) {
+  const labels = [];
+  lists.flat().forEach((item) => {
+    const value = String(item || "").trim();
+    if (value && !asEntityId(value) && !labels.includes(value)) labels.push(value);
+  });
+  return labels;
+}
 
 function getNameParts(source) {
   const full =
@@ -58,7 +80,8 @@ function SectionCard({ icon: Icon, title, children }) {
 }
 
 export default function ProfilePage() {
-  const { user, isAuthenticated, updateProfile } = useAuth();
+  const { user, isAuthenticated, setUser } = useAuth();
+  const navigate = useNavigate();
   const [avatarUrl, setAvatarUrl] = useState(null);
   const [firstName, setFirstName] = useState("");
   const [fatherName, setFatherName] = useState("");
@@ -76,6 +99,12 @@ export default function ProfilePage() {
   const [highestDegree, setHighestDegree] = useState("");
 
   const [researchInterests, setResearchInterests] = useState(user?.researchInterests || []);
+  const [interestCatalog, setInterestCatalog] = useState(() =>
+    parseInterestCatalog(RESEARCH_INTEREST_CATEGORIES)
+  );
+  const [interestCategories, setInterestCategories] = useState(RESEARCH_INTEREST_CATEGORIES);
+  const completionRef = useRef({});
+  const optionsRef = useRef({});
   const [bio, setBio] = useState("");
   const [orcidId, setOrcidId] = useState("");
   const [projectWork, setProjectWork] = useState("");
@@ -86,6 +115,7 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+  const [saveError, setSaveError] = useState("");
 
   useEffect(() => {
     const parts = getNameParts(user);
@@ -97,11 +127,21 @@ export default function ProfilePage() {
       setEmail(user?.email ?? "");
       setUsername(user?.username ?? "");
       setAffiliation(user?.affiliation ?? DEFAULT_AFFILIATION);
-      setAcademicRole(user?.academia ?? user?.occupation ?? user?.academicRole ?? "researcher");
-      setResearchInterests(user?.researchInterests ?? user?.research_interests ?? []);
+      setAcademicRole(
+        toOptionValue(OCCUPATION_OPTIONS, user?.occupation ?? user?.academicRole) ||
+          "researcher"
+      );
+      setResearchInterests(
+        uniqueInterestLabels(
+          extractSelectedInterests(user, RESEARCH_INTEREST_CATEGORIES),
+          loadPersistedInterests(user)
+        )
+      );
       setBio(user?.bio ?? "");
       setOrcidId(user?.orcidId ?? user?.orcid_id ?? "");
-      setProfileVisibility(user?.profileVisibility ?? user?.profile_visibility ?? "");
+      setProfileVisibility(
+        user?.profileVisibility ?? user?.profile_visibility ?? "public"
+      );
     });
   }, [user]);
 
@@ -109,40 +149,90 @@ export default function ProfilePage() {
     if (!isAuthenticated) return;
 
     let cancelled = false;
-    Promise.all([
-      authApi.getProfile().catch(() => null),
-      authApi.getCompleteProfile().catch(() => null),
-    ])
-      .then(([profile, completeProfile]) => {
+    Promise.allSettled([
+      authApi.getProfile(),
+      authApi.getProfileCompletion(),
+      authApi.getProfileOptions(),
+    ]).then(([profileResult, completionResult, optionsResult]) => {
         if (cancelled) return;
-        const data = { ...(profile || {}), ...(completeProfile || {}) };
-        const parts = getNameParts(data);
+
+        const profile =
+          profileResult.status === "fulfilled" ? profileResult.value : null;
+        const completion =
+          completionResult.status === "fulfilled" ? completionResult.value : null;
+        const options =
+          optionsResult.status === "fulfilled" ? optionsResult.value : null;
+
+        completionRef.current = completion || {};
+        optionsRef.current = options || {};
+        const remoteCatalog = options ? parseInterestCatalog(options) : [];
+        const catalog =
+          remoteCatalog.length > 0
+            ? remoteCatalog
+            : parseInterestCatalog(RESEARCH_INTEREST_CATEGORIES);
+        setInterestCatalog(catalog);
+        const picker = pickerCategories(catalog);
+        if (picker.length > 0) setInterestCategories(picker);
+
+        const merged = { ...(user || {}), ...(profile || {}), ...(completion || {}) };
+        const parts = getNameParts(merged);
         setFirstName(parts.firstName);
         setFatherName(parts.fatherName);
         setGrandFatherName(parts.grandFatherName);
-        setEmail(data?.email ?? "");
-        setUsername(data?.username ?? "");
-        setAffiliation(data?.affiliation ?? DEFAULT_AFFILIATION);
-        setDepartment(data?.department ?? data?.department_id ?? "");
-        setAcademicRole(data?.academia ?? data?.occupation ?? data?.academicRole ?? "researcher");
-        setStudentType(data?.studentType ?? data?.student_type ?? "");
-        setAcademicTitle(data?.academicTitle ?? data?.academic_title ?? "");
-        setAcademicRank(data?.academicRank ?? data?.academic_rank ?? "");
-        setHighestDegree(data?.highestDegree ?? data?.highest_degree ?? "");
-        setResearchInterests(data?.researchInterests ?? data?.research_interests ?? data?.interests ?? []);
-        setBio(data?.bio ?? "");
-        setOrcidId(data?.orcidId ?? data?.orcid_id ?? "");
-        setProjectWork(data?.projectWork ?? data?.project_work ?? "");
-        setAdditionalLink(data?.additionalLink ?? data?.additional_link ?? "");
-        setProfileVisibility(data?.profileVisibility ?? data?.profile_visibility ?? "");
-        setTermsAccepted(Boolean(data?.termsAccepted ?? data?.terms_accepted ?? false));
+        setEmail(merged?.email ?? "");
+        setUsername(merged?.username ?? "");
+        setAffiliation(merged?.affiliation ?? DEFAULT_AFFILIATION);
+        setDepartment(merged?.department ?? merged?.department_id ?? "");
+        setAcademicRole(
+          toOptionValue(
+            OCCUPATION_OPTIONS,
+            merged?.occupation ?? merged?.academia ?? merged?.academicRole
+          ) || "researcher"
+        );
+        setStudentType(merged?.studentType ?? merged?.student_type ?? "");
+        setAcademicTitle(
+          toOptionValue(
+            ACADEMIC_TITLE_OPTIONS,
+            merged?.academicTitle ?? merged?.academic_title
+          )
+        );
+        setAcademicRank(
+          toOptionValue(
+            ACADEMIC_RANK_OPTIONS,
+            merged?.academicRank ?? merged?.academic_rank
+          )
+        );
+        setHighestDegree(
+          toOptionValue(
+            HIGHEST_DEGREE_OPTIONS,
+            merged?.highestDegree ?? merged?.highest_degree
+          )
+        );
+        setResearchInterests(
+          uniqueInterestLabels(
+            loadPersistedInterests(user),
+            extractSelectedInterests(user, picker),
+            extractSelectedInterests(profile, picker),
+            extractSelectedInterests(completion, picker)
+          )
+        );
+        setBio(merged?.bio ?? "");
+        setOrcidId(merged?.orcidId ?? merged?.orcid_id ?? "");
+        setProjectWork(merged?.projectWork ?? merged?.project_work ?? "");
+        setAdditionalLink(merged?.additionalLink ?? merged?.additional_link ?? "");
+        setProfileVisibility(
+          merged?.profileVisibility ?? merged?.profile_visibility ?? "public"
+        );
+        setTermsAccepted(
+          Boolean(merged?.termsAccepted ?? merged?.terms_accepted ?? false)
+        );
       })
       .catch(() => {});
 
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated]);
+  }, [isAuthenticated, user]);
 
   useEffect(() => {
     if (isAuthenticated) authApi.getDepartments().then(setDepartments).catch(() => {});
@@ -153,59 +243,106 @@ export default function ProfilePage() {
     if (file) setAvatarUrl(URL.createObjectURL(file));
   }
 
+  /**
+   * POST /accounts/profile/interests/other/ — request an unlisted category.
+   * Same behaviour as the onboarding page, so interests picked during
+   * onboarding remain fully editable (add / remove / request new) here.
+   */
+  async function handleRequestCategory(name) {
+    await authApi.addCustomInterest(name);
+  }
+
   async function handleSave() {
-    setSaving(true);
     setSaved(false);
-    setError("");
+    setSaveError("");
+
+    if (!firstName.trim() || !fatherName.trim()) {
+      setSaveError("First name and father name are required.");
+      return;
+    }
+    if (!profileVisibility) {
+      setSaveError("Choose who can see your profile.");
+      return;
+    }
+    if (!termsAccepted) {
+      setSaveError("Please accept the terms of use to save your profile.");
+      return;
+    }
+
+    setSaving(true);
     try {
       const fullName = [firstName, fatherName, grandFatherName].filter(Boolean).join(" ").trim();
-      let interestIds = researchInterests;
+      const occupation =
+        toOptionValue(OCCUPATION_OPTIONS, academicRole) || academicRole;
+      const payload = buildProfileCompletionPatch({
+        labels: researchInterests,
+        catalog: interestCatalog,
+        completion: completionRef.current,
+        options: optionsRef.current,
+        extra: {
+          first_name: firstName,
+          last_name: fatherName,
+          grand_father_name: grandFatherName,
+          full_name: fullName,
+          affiliation,
+          occupation,
+          student_type: studentType,
+          academic_title: toOptionValue(ACADEMIC_TITLE_OPTIONS, academicTitle) || academicTitle,
+          academic_rank: toOptionValue(ACADEMIC_RANK_OPTIONS, academicRank) || academicRank,
+          highest_degree: toOptionValue(HIGHEST_DEGREE_OPTIONS, highestDegree) || highestDegree,
+          bio,
+          orcid_id: orcidId,
+          project_work: projectWork,
+          additional_link: additionalLink,
+          profile_visibility: profileVisibility,
+          terms_accepted: termsAccepted,
+        },
+      });
+
+      const completion = await saveProfileCompletion(payload);
+
       try {
-        const categories = await authApi.getCategories();
-        const byName = new Map(categories.map((c) => [String(c.name).toLowerCase(), c.id]));
-        interestIds = researchInterests.map((interest) => {
-          if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(interest)) return interest;
-          return byName.get(String(interest).toLowerCase()) || byName.get(String(interest).split(" — ")[0].toLowerCase());
-        }).filter(Boolean);
-      } catch { /* preserve profile save if category lookup is unavailable */ }
-      const payload = {
-        first_name: firstName,
+        await authApi.updateProfile({
+          first_name: firstName,
+          last_name: fatherName,
+          affiliation,
+          occupation,
+          bio,
+          orcid_id: orcidId,
+        });
+      } catch {
+        // Completion endpoint is the source of truth for interests; a
+        // narrower /profile/ PATCH may reject extra fields.
+      }
+
+      persistSelectedInterests(user, researchInterests);
+      const nextUser = {
+        ...(user || {}),
+        ...(completion || {}),        first_name: firstName,
         last_name: fatherName,
-        grand_father_name: grandFatherName,
         full_name: fullName,
         affiliation,
-        department,
-        academia: academicRole,
-        student_type: studentType,
-        academic_title: academicTitle,
-        academic_rank: academicRank,
-        highest_degree: highestDegree,
-        interests: interestIds,
+department,
+        occupation,
+        research_interests: researchInterests,
+        researchInterests,
         bio,
         orcid_id: orcidId,
-        project_work: projectWork,
-        additional_link: additionalLink,
         profile_visibility: profileVisibility,
         terms_accepted: termsAccepted,
+profile_complete: true,
       };
-      await Promise.all([
-        authApi.updateProfile({ first_name: firstName, last_name: fatherName, full_name: fullName }),
-        authApi.updateCompleteProfile(payload),
-      ]);
-      try {
-        const freshProfile = await authApi.getCompleteProfile();
-        if (updateProfile) {
-          await updateProfile({ ...user, ...freshProfile, profile_complete: true, is_profile_complete: true });
-        }
-      } catch {
-        if (updateProfile) {
-          await updateProfile({ ...user, ...payload, profile_complete: true, is_profile_complete: true });
-        }
-      }
-      setSaved(true);
+      setUser?.(nextUser);
+      navigate(getDashboardPath(nextUser), {
+        replace: true,
+        state: { profileJustCompleted: true },
+      });
     } catch (err) {
-      console.error("Failed to save profile:", err);
-      setError(err?.message || "Failed to save profile. Please check your inputs.");
+      const message =
+        typeof err?.message === "string" && err.message
+          ? err.message
+          : "Couldn't save your profile. Please try again.";
+      setSaveError(message);
     } finally {
       setSaving(false);
     }
@@ -216,9 +353,21 @@ export default function ProfilePage() {
   return (
     <DashboardShell title="Settings" subtitle={displayName ? `Profile — ${displayName}` : "Manage your profile and research identity"}>
         <div className="max-w-4xl">
+            <button
+              type="button"
+              onClick={() => navigate(getDashboardPath(user))}
+              className="mb-4 inline-flex items-center text-xs font-semibold text-gray-500 hover:text-navy transition-colors"
+            >
+              ← Back to dashboard
+            </button>
             {saved && (
               <div role="status" className="mb-4 rounded-xl border border-green-200 bg-green-50 px-4 py-2.5 text-sm text-green-700">
-                Profile changes saved.
+                Profile completed. Your changes have been saved.
+              </div>
+            )}
+            {saveError && (
+              <div role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
+                {saveError}
               </div>
             )}
 
@@ -421,7 +570,8 @@ export default function ProfilePage() {
                 required
                 value={researchInterests}
                 onChange={setResearchInterests}
-                categories={RESEARCH_INTEREST_CATEGORIES}
+                categories={interestCategories}
+                onRequestCategory={handleRequestCategory}
               />
 
               <TextArea
@@ -475,7 +625,7 @@ export default function ProfilePage() {
                 icon={Save}
                 loading={saving}
                 onClick={handleSave}
-                disabled={!profileVisibility || !termsAccepted}
+                disabled={saving}
               >
                 Save Changes
               </Button>

@@ -1,3 +1,12 @@
+/**
+ * Select options are `{ value, label }` pairs where `value` is the exact choice
+ * key the backend stores (see UserProfile.*_CHOICES in
+ * apps/accounts/models.py) and `label` is what the user reads.
+ *
+ * This matters: these lists previously held display labels only ("Student",
+ * "Bachelor's Degree"), so a profile save sent those strings straight into
+ * choice-validated fields and the backend rejected the whole PATCH.
+ */
 export const OCCUPATION_OPTIONS = [
   { value: "student", label: "Student" },
   { value: "researcher", label: "Researcher" },
@@ -31,6 +40,7 @@ export const ACADEMIC_TITLE_OPTIONS = [
   { value: "prof", label: "Prof." },
 ];
 
+// Not a backend choice field — kept as free labels.
 export const STUDENT_TYPE_OPTIONS = [
   "Undergraduate Student",
   "Masters Student",
@@ -47,6 +57,36 @@ export const HIGHEST_DEGREE_OPTIONS = [
   { value: "postdoc", label: "Postdoctoral Fellowship" },
   { value: "other", label: "Other" },
 ];
+
+export const PROFILE_VISIBILITY_OPTIONS = [
+  { value: "public", label: "Everyone (Public)" },
+  { value: "trusted", label: "Trusted Parties" },
+  { value: "private", label: "Only Me (Private)" },
+];
+
+/**
+ * Normalizes a stored/incoming choice into one of `options`' values.
+ *
+ * The backend is expected to return the slug ("bachelor"), but this also
+ * accepts a human label ("Bachelor's Degree") and loose punctuation/casing so a
+ * legacy or differently-shaped value still selects the right option instead of
+ * silently falling back to the placeholder.
+ */
+export function toOptionValue(options, raw) {
+  if (raw == null || raw === "") return "";
+  const candidate = String(raw).trim();
+  const loose = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, "");
+  const target = loose(candidate);
+
+  for (const option of options) {
+    const value = typeof option === "string" ? option : option.value;
+    const label = typeof option === "string" ? option : option.label;
+    if (value === candidate) return value;
+    if (loose(value) === target || loose(label) === target) return value;
+  }
+  return "";
+}
+
 
 export const RESEARCH_INTEREST_OPTIONS = [
   "Artificial Intelligence",
@@ -397,8 +437,6 @@ export const RESEARCH_INTEREST_CATEGORIES = [
 ];
 
 export const PREFERRED_LANGUAGE_OPTIONS = ["English", "Amharic", "Other"];
-
-export const PROFILE_VISIBILITY_OPTIONS = ["Public", "Private"];
 
 export const DEFAULT_AFFILIATION =
   "Addis Ababa Science and Technology University (AASTU)";

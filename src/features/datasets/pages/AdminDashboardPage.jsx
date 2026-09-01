@@ -7,7 +7,6 @@ import {
   Trash2,
   Activity,
   ShieldCheck,
-  Search,
 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis } from "recharts";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
@@ -111,16 +110,6 @@ export default function AdminDashboardPage() {
       .slice(-14);
   }, [queue, contentUpdates]);
 
-  async function handleDecide(datasetId, decision) {
-    try {
-      await datasetsApi.moderateDataset(datasetId, { decision });
-      addToast(`Dataset ${decision} successfully.`, "success");
-      setQueue((s) => s.filter((d) => String(d.id || d.dataset_id) !== String(datasetId)));
-    } catch (err) {
-      addToast(err?.message || `Failed to ${decision} dataset.`, "error");
-    }
-  }
-
   return (
     <DashboardShell title="ORDP Admin Console" subtitle="System status and key metrics">
       <ProfileSavedNotice />
@@ -182,17 +171,17 @@ export default function AdminDashboardPage() {
                         <div className="flex items-center justify-end gap-2">
                           <button
                             type="button"
-                            onClick={() => handleDecide(d.id || d.dataset_id, "approved")}
-                            className="text-xs font-semibold bg-emerald-600 text-white rounded-lg px-4 py-2.5 hover:bg-emerald-700 transition-colors min-h-[40px]"
+                            onClick={() => navigate(`/datasets/${d.id || d.dataset_id}`)}
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold bg-navy text-white rounded-lg px-4 py-2.5 hover:bg-navy-light transition-colors min-h-[40px]"
                           >
-                            Approve
+                            View
                           </button>
                           <button
                             type="button"
-                            onClick={() => handleDecide(d.id || d.dataset_id, "rejected")}
-                            className="text-xs font-semibold bg-red-600 text-white rounded-lg px-4 py-2.5 hover:bg-red-700 transition-colors min-h-[40px]"
+                            onClick={() => addToast("Dataset delete is not yet available in the backend.", "info")}
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold bg-red-600 text-white rounded-lg px-4 py-2.5 hover:bg-red-700 transition-colors min-h-[40px]"
                           >
-                            Reject
+                            Delete
                           </button>
                         </div>
                       </td>
@@ -205,19 +194,8 @@ export default function AdminDashboardPage() {
         </section>
       ) : tab === "users" ? (
         <section className="bg-white rounded-xl border border-border shadow-sm overflow-hidden animate-fade-in-up">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-5 py-4 border-b border-border">
-            <div className="flex items-center gap-2">
-              <Search className="w-4 h-4 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search by name, email, or ID"
-                className="rounded-lg border border-slate-200 text-sm py-2 pl-9 pr-3 bg-white"
-                readOnly
-              />
-            </div>
-            <button type="button" className="bg-gold hover:bg-gold-dark text-white text-sm font-semibold rounded-lg px-4 py-2.5 transition-colors min-h-[40px]" disabled title="Backend endpoint not yet available">
-              + Create User
-            </button>
+          <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+            <p className="text-sm text-gray-500">User management requires backend endpoints that are not yet exposed.</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -232,7 +210,7 @@ export default function AdminDashboardPage() {
               <tbody>
                 <tr>
                   <td colSpan={4} className="px-5 py-10 text-center text-sm text-gray-500">
-                    User management endpoints are not yet exposed by the backend. Flagged for implementation.
+                    The backend does not currently expose user list/create/delete endpoints under /admin-panel/. Flagged for backend implementation.
                   </td>
                 </tr>
               </tbody>

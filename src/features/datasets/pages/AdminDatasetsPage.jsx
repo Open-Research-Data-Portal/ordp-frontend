@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, ExternalLink, Trash2 } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import { StatusBadge, EmptyState } from "../../../components/dashboard/dashboardUi";
 import { useToast } from "../../../context/ToastContext.jsx";
@@ -33,14 +33,16 @@ export default function AdminDatasetsPage() {
     return () => { cancelled = true; };
   }, []);
 
-  async function handleDecide(datasetId, decision) {
+  async function handleView(datasetId) {
+    navigate(`/datasets/${datasetId}`);
+  }
+
+  async function handleDelete(datasetId) {
     setDecidingId(datasetId);
     try {
-      await datasetsApi.moderateDataset(datasetId, { decision });
-      addToast(`Dataset ${decision} successfully.`, "success");
-      setItems((s) => s.filter((d) => String(d.id || d.dataset_id) !== String(datasetId)));
+      addToast("Dataset delete is not yet available in the backend.", "info");
     } catch (err) {
-      addToast(err?.message || `Failed to ${decision} dataset.`, "error");
+      addToast(err?.message || "Failed to delete dataset.", "error");
     } finally {
       setDecidingId(null);
     }
@@ -58,7 +60,7 @@ export default function AdminDatasetsPage() {
 
       <div className="mb-4">
         <h1 className="text-2xl font-serif font-bold text-navy">Dataset Management</h1>
-        <p className="text-sm text-gray-500 mt-1">Review and moderate pending datasets.</p>
+        <p className="text-sm text-gray-500 mt-1">Review and manage pending datasets.</p>
       </div>
 
       {error && (
@@ -110,29 +112,24 @@ export default function AdminDatasetsPage() {
                       <div className="flex items-center justify-end gap-2">
                         <button
                           type="button"
-                          onClick={() => handleDecide(d.id || d.dataset_id, "approved")}
-                          disabled={decidingId === (d.id || d.dataset_id)}
-                          className="inline-flex items-center gap-1.5 text-xs font-semibold bg-emerald-600 text-white rounded-lg px-4 py-2.5 hover:bg-emerald-700 disabled:opacity-50 transition-colors min-h-[40px]"
+                          onClick={() => handleView(d.id || d.dataset_id)}
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold bg-navy text-white rounded-lg px-4 py-2.5 hover:bg-navy-light transition-colors min-h-[40px]"
                         >
-                          {decidingId === (d.id || d.dataset_id) ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <CheckCircle2 className="w-4 h-4" />
-                          )}
-                          Approve
+                          <ExternalLink className="w-4 h-4" />
+                          View
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleDecide(d.id || d.dataset_id, "rejected")}
+                          onClick={() => handleDelete(d.id || d.dataset_id)}
                           disabled={decidingId === (d.id || d.dataset_id)}
                           className="inline-flex items-center gap-1.5 text-xs font-semibold bg-red-600 text-white rounded-lg px-4 py-2.5 hover:bg-red-700 disabled:opacity-50 transition-colors min-h-[40px]"
                         >
                           {decidingId === (d.id || d.dataset_id) ? (
                             <Loader2 className="w-4 h-4 animate-spin" />
                           ) : (
-                            <XCircle className="w-4 h-4" />
+                            <Trash2 className="w-4 h-4" />
                           )}
-                          Reject
+                          Delete
                         </button>
                       </div>
                     </td>

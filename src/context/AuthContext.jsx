@@ -57,30 +57,50 @@ export function AuthProvider({ children }) {
   const login = useCallback(async (identifier, password, stayLoggedIn) => {
     const data = await authApi.login(identifier, password, stayLoggedIn); // throws AuthApiError on failure
 
-    // "Stay logged in" — persist to localStorage before setTokens so token rotation updates it.
     if (stayLoggedIn) {
       localStorage.setItem(REFRESH_KEY, data.refresh);
     } else {
       localStorage.removeItem(REFRESH_KEY);
     }
 
-    // Write tokens to the in-memory store and sessionStorage so the axios
-    // interceptor can use them immediately for any subsequent request.
     setTokens(data.access, data.refresh);
-
     client.defaults.headers.common.Authorization = `Bearer ${data.access}`;
     setAccessToken(data.access);
 
     let profile;
     try {
       profile = await authApi.getProfile();
-      setUser(profile);
     } catch {
       profile = data.user;
-      setUser(profile);
+    }
+    let completeProfile;
+    try {
+      completeProfile = await authApi.getCompleteProfile();
+    } catch {
+      // complete profile may not be available for all account states
     }
 
-    return { ...data, profile };
+    const mergedProfile = { ...(profile || {}), ...(completeProfile || {}) };
+    setUser(mergedProfile);
+
+    return { ...data, profile: mergedProfile };
+  }, []);
+
+  const setSession = useCallback(async (access, refresh, stayLoggedIn = false) => {
+    if (stayLoggedIn) {
+      localStorage.setItem(REFRESH_KEY, refresh);
+    } else {
+      localStorage.removeItem(REFRESH_KEY);
+    }
+    setTokens(access, refresh);
+    client.defaults.headers.common.Authorization = `Bearer ${access}`;
+    setAccessToken(access);
+    try {
+      const profile = await authApi.getProfile();
+      setUser(profile);
+    } catch {
+      // keep user null if profile fetch fails
+    }
   }, []);
 
   const updateProfile = useCallback(async (patch) => {
@@ -110,8 +130,9 @@ export function AuthProvider({ children }) {
       login,
       logout,
       updateProfile,
+      setSession,
     }),
-    [user, accessToken, loading, login, logout, updateProfile]
+    [user, accessToken, loading, login, logout, updateProfile, setSession]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

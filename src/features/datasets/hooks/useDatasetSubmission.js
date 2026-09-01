@@ -110,8 +110,13 @@ export default function useDatasetSubmission(draftId = null) {
   useEffect(() => {
     if (draftId === "__new__") {
       localStorage.removeItem(draftKey);
-      setStep(1); setFormData({ details: {}, metadata: {}, upload: {}, policy: {} });
-      setDatasetId(null); setUploadSessionId(null);
+      queueMicrotask(() => {
+        setStep(1);
+        setFormData({ details: {}, metadata: {}, upload: {}, policy: {} });
+        setDatasetId(null);
+        setUploadSessionId(null);
+      });
+      return;
     }
   }, [draftId]);
 
@@ -137,6 +142,20 @@ export default function useDatasetSubmission(draftId = null) {
   const goToPreviousStep = () => {
     setSubmitError(null);
     setStep((s) => Math.max(s - 1, 1));
+  };
+
+  const resumeDraftUpload = async () => {
+    if (!draftId || draftId === "__new__" || !datasetId) return;
+    setIsSubmitting(true);
+    setSubmitError(null);
+    try {
+      const r = await datasetsApi.initExistingDraftUpload(datasetId);
+      setUploadSessionId(r.upload_session_id);
+    } catch (err) {
+      setSubmitError(extractError(err));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Step 1: create dataset shell (or update title if revisiting).
@@ -178,9 +197,17 @@ export default function useDatasetSubmission(draftId = null) {
         recommended_splits: metadataData.recommendedSplits || "",
       };
       await datasetsApi.attachMetadata(did, metadataPayload);
-      await datasetsApi.setDatasetLanguages(did, {
-        other_languages: [details.language || "English"],
-      });
+
+      const languageId = details.languageId || details.language_id;
+      if (languageId) {
+        await datasetsApi.setDatasetLanguages(did, {
+          language_ids: [languageId],
+        });
+      } else if (details.language) {
+        await datasetsApi.setDatasetLanguages(did, {
+          other_languages: [details.language],
+        });
+      }
 
       // Integrate Co-Authors and Contributors API
       const coAuthors = details.coAuthors || [];
@@ -309,13 +336,24 @@ export default function useDatasetSubmission(draftId = null) {
       const metadata = formData.metadata || {};
       const upload = formData.upload || {};
       const files = (upload.files || []).filter((e) => e.file);
-      const totalSize = files.reduce((sum, f) => sum + (f.file?.size || 0), 0);
 
-      let status = "draft";
       if (!policyData.isDraft) {
+        const missing = [];
+        if (!files.length) missing.push("at least one file");
+        if (!metadata.category_id && !metadata.other_category) missing.push("a category");
+        const hasLanguage = details.languageId || details.language_id || details.language;
+        if (!hasLanguage) missing.push("a language");
+        if (missing.length > 0) {
+          throw new Error(`Please add ${missing.join(", ")} before submitting.`);
+        }
+        if (!policyData.termsAccepted) {
+          throw new Error("You must accept the Terms & Conditions to submit a dataset.");
+        }
         await datasetsApi.submitDataset(datasetId, true);
-        status = "pending";
       }
+
+      const status = policyData.isDraft ? "draft" : "pending";
+      const totalSize = files.reduce((sum, f) => sum + (f.file?.size || 0), 0);
 
       localStorage.removeItem(draftKey);
 
@@ -344,6 +382,7 @@ export default function useDatasetSubmission(draftId = null) {
     submitMetadata,
     submitUpload,
     submitFinal,
+    resumeDraftUpload,
     isSubmitting, submitError,
   };
 }

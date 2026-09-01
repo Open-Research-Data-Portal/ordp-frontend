@@ -27,22 +27,39 @@ import BrowseDatasetsPage from "../pages/BrowseDatasetsPage.jsx";
 import DatasetViewPage from "../pages/DatasetViewPage";
 import BookmarksPage from "../features/datasets/pages/BookmarksPage";
 
+import { useAuth } from "../context/useAuth";
+
+function ProtectedRoute({ children }) {
+  const { isAuthenticated, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#F5F5F3] text-sm text-slate-500">
+        Loading…
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return children;
+}
+
 function VerifyEmailRoute() {
   const [searchParams] = useSearchParams();
-  const uid = searchParams.get("uid");
   const token = searchParams.get("token");
 
-  if (uid && token) return <EmailVerifyConfirmPage />;
+  if (token) return <EmailVerifyConfirmPage />;
   return <VerifyEmailPage />;
 }
 
 export default function AppRoutes() {
   return (
     <Routes>
-      {/* Root */}
+      {/* Public */}
       <Route path="/" element={<LandingPage />} />
-
-      {/* Auth */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/verify-email" element={<VerifyEmailRoute />} />
@@ -51,35 +68,59 @@ export default function AppRoutes() {
       <Route path="/check-email" element={<CheckEmailPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-      {/* Onboarding */}
-      <Route path="/research-interests-onboarding" element={<ResearchInterestsOnboardingPage />} />
-
-      {/* Dashboards — role-specific */}
-      <Route path="/dashboard" element={<DashboardRouter />} />
-      <Route path="/user-dashboard" element={<UserDashboardPage />} />
-      <Route path="/researcher-dashboard" element={<ResearcherDashboardPage />} />
-      <Route path="/reviewer-dashboard" element={<ReviewerDashboardPage />} />
-      <Route path="/admin-dashboard" element={<AdminDashboardPage />} />
-
-      {/* Profile */}
-      <Route path="/profile" element={<ProfilePage />} />
-
-      {/* Data upload request (researcher/uploader access) */}
-      <Route path="/data-upload" element={<DataUploadPage />} />
-
-      {/* Datasets — public browsing */}
+      {/* Public dataset browsing */}
       <Route path="/datasets" element={<BrowseDatasetsPage />} />
       <Route path="/datasets/:id" element={<DatasetViewPage />} />
 
-      {/* Datasets — the researcher's own (upload/draft/manage) */}
-      <Route path="/my-datasets" element={<DatasetListPage />} />
-      <Route path="/my-datasets/:id" element={<DatasetDetailPage />} />
-      <Route path="/projects" element={<DatasetManagementPage />} />
-      <Route path="/submissions" element={<DatasetManagementPage />} />
-      <Route path="/submissions/new" element={<DatasetManagementPage />} />
-      <Route path="/datasets/contribute" element={<ContributeDatasetPage />} />
-      <Route path="/datasets/contribute/success" element={<SubmissionSuccessPage />} />
-      <Route path="/bookmarks" element={<BookmarksPage />} />
+      {/* Protected */}
+      <Route path="/research-interests-onboarding" element={
+        <ProtectedRoute><ResearchInterestsOnboardingPage /></ProtectedRoute>
+      } />
+      <Route path="/dashboard" element={
+        <ProtectedRoute><DashboardRouter /></ProtectedRoute>
+      } />
+      <Route path="/user-dashboard" element={
+        <ProtectedRoute><UserDashboardPage /></ProtectedRoute>
+      } />
+      <Route path="/researcher-dashboard" element={
+        <ProtectedRoute><ResearcherDashboardPage /></ProtectedRoute>
+      } />
+      <Route path="/reviewer-dashboard" element={
+        <ProtectedRoute><ReviewerDashboardPage /></ProtectedRoute>
+      } />
+      <Route path="/admin-dashboard" element={
+        <ProtectedRoute><AdminDashboardPage /></ProtectedRoute>
+      } />
+      <Route path="/profile" element={
+        <ProtectedRoute><ProfilePage /></ProtectedRoute>
+      } />
+      <Route path="/data-upload" element={
+        <ProtectedRoute><DataUploadPage /></ProtectedRoute>
+      } />
+      <Route path="/my-datasets" element={
+        <ProtectedRoute><DatasetListPage /></ProtectedRoute>
+      } />
+      <Route path="/my-datasets/:id" element={
+        <ProtectedRoute><DatasetDetailPage /></ProtectedRoute>
+      } />
+      <Route path="/projects" element={
+        <ProtectedRoute><DatasetManagementPage /></ProtectedRoute>
+      } />
+      <Route path="/submissions" element={
+        <ProtectedRoute><DatasetManagementPage /></ProtectedRoute>
+      } />
+      <Route path="/submissions/new" element={
+        <ProtectedRoute><DatasetManagementPage /></ProtectedRoute>
+      } />
+      <Route path="/datasets/contribute" element={
+        <ProtectedRoute><ContributeDatasetPage /></ProtectedRoute>
+      } />
+      <Route path="/datasets/contribute/success" element={
+        <ProtectedRoute><SubmissionSuccessPage /></ProtectedRoute>
+      } />
+      <Route path="/bookmarks" element={
+        <ProtectedRoute><BookmarksPage /></ProtectedRoute>
+      } />
 
       {/* Catch-all — kept last on purpose */}
       <Route path="*" element={<Navigate to="/login" replace />} />

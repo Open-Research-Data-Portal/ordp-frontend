@@ -1,19 +1,20 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, CheckCircle2 } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import TopBar from "../../../layouts/TopBar";
 import Button from "../../../components/ui/Button";
 import ResearchInterests from "../../../components/ui/ResearchInterests";
 import { useAuth } from "../../../context/useAuth";
 import * as authApi from "../api/authApi";
-import { RESEARCH_INTEREST_CATEGORIES } from "./constants";
 
 export default function ResearchInterestsOnboardingPage() {
   const navigate = useNavigate();
   const { user, updateProfile } = useAuth();
-  const [selectedInterests, setSelectedInterests] = useState(user?.researchInterests || user?.research_interests || []);
+  const [selectedInterests, setSelectedInterests] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [categories, setCategories] = useState([]);
+  const [loadingCategories, setLoadingCategories] = useState(true);
 
   const canContinue = selectedInterests.length >= 1;
 
@@ -29,17 +30,31 @@ export default function ResearchInterestsOnboardingPage() {
     }
   }, [user, navigate]);
 
+  useEffect(() => {
+    let cancelled = false;
+    authApi.getCategories()
+      .then((list) => {
+        if (cancelled) return;
+        const items = Array.isArray(list) ? list : (list?.results || []);
+        setCategories(items);
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoadingCategories(false); });
+    return () => { cancelled = true; };
+  }, []);
+
   async function handleContinue() {
     if (!canContinue) return;
     setError("");
     setSubmitting(true);
 
     try {
-      await authApi.updateProfile({
-        research_interests: selectedInterests,
-        researchInterestsCompleted: true,
-        onboardingCompleted: true,
-      });
+      const interestIds = selectedInterests
+        .map((item) => (typeof item === "object" && item?.id ? item.id : null))
+        .filter(Boolean);
+
+      const payload = { interests: interestIds };
+      await authApi.updateCompleteProfile(payload);
       await updateProfile({
         researchInterests: selectedInterests,
         researchInterestsCompleted: true,
@@ -53,16 +68,25 @@ export default function ResearchInterestsOnboardingPage() {
     }
   }
 
+  async function handleAddOtherInterest(name) {
+    setError("");
+    try {
+      const created = await authApi.addOtherInterest(name);
+      const newId = created?.id || created?.category?.id;
+      if (!newId) throw new Error("Missing id from create-category response.");
+      const newObj = { id: newId, name, pending: true };
+      setSelectedInterests((prev) => [...prev, newObj]);
+    } catch (err) {
+      setError(err?.message || "Failed to add custom interest.");
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#F5F5F3]">
       <TopBar title="Onboarding" user={{ name: user?.full_name || user?.username || user?.email || "User" }} />
       <main className="mx-auto max-w-5xl px-6 py-10 lg:px-10">
         <div className="rounded-3xl bg-white p-8 shadow-lg border border-slate-200">
-          <div className="mb-8 flex flex-col gap-4">
-            <div className="flex items-center gap-3 text-sm text-slate-500 uppercase tracking-[0.25em]">
-              <div className="h-1.5 w-16 rounded-full bg-[#B8860B]" />
-              <span>Step 1 of 3</span>
-            </div>
+          <div className="mb-8">
             <div>
               <h1 className="text-3xl font-bold text-[#0B1526] mb-3">Tell us about your Research Interests</h1>
               <p className="text-sm text-slate-500 max-w-2xl">
@@ -72,18 +96,25 @@ export default function ResearchInterestsOnboardingPage() {
             </div>
           </div>
 
-          <div className="grid gap-8 lg:grid-cols-[1fr_320px]">
+          <div className="grid gap-8 lg:grid-cols-[1fr]">
             <section className="space-y-6">
               <div className="rounded-3xl border border-slate-200 bg-[#F8F7F4] p-6">
                 <h2 className="text-lg font-semibold text-[#0B1526] mb-3">Research Interests</h2>
-                <ResearchInterests
-                  id="onboardingResearchInterests"
-                  label="Select your research interests"
-                  required
-                  value={selectedInterests}
-                  onChange={setSelectedInterests}
-                  categories={RESEARCH_INTEREST_CATEGORIES}
-                />
+                {loadingCategories ? (
+                  <p className="text-sm text-slate-500">Loading interests...</p>
+                ) : categories.length === 0 ? (
+                  <p className="text-sm text-slate-500">No interests available yet.</p>
+                ) : (
+                  <ResearchInterests
+                    id="onboardingResearchInterests"
+                    label="Select your research interests"
+                    required
+                    value={selectedInterests}
+                    onChange={setSelectedInterests}
+                    categories={categories}
+                    onAddOtherInterest={handleAddOtherInterest}
+                  />
+                )}
               </div>
 
               {error && (
@@ -92,29 +123,6 @@ export default function ResearchInterestsOnboardingPage() {
                 </div>
               )}
             </section>
-
-            <aside className="space-y-6 rounded-3xl border border-slate-200 bg-[#FDF7E6] p-6">
-              <div className="rounded-3xl bg-white p-5 shadow-sm">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="rounded-full bg-[#B8860B] p-2 text-white">
-                    <CheckCircle2 className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-semibold text-[#0B1526]">Why this matters</h3>
-                    <p className="text-xs text-slate-500">Personalized content, better collaboration matches, and curated dataset recommendations.</p>
-                  </div>
-                </div>
-                <ul className="space-y-3 text-sm text-slate-600">
-                  <li>• Customize your research profile</li>
-                  <li>• Receive relevant research opportunities</li>
-                  <li>• Make collaboration suggestions more accurate</li>
-                </ul>
-              </div>
-              <div className="rounded-3xl bg-white p-5 shadow-sm">
-                <h3 className="text-sm font-semibold text-[#0B1526] mb-3">Need help?</h3>
-                <p className="text-sm text-slate-500">If you don’t find your exact field, request a custom category and we’ll review it.</p>
-              </div>
-            </aside>
           </div>
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

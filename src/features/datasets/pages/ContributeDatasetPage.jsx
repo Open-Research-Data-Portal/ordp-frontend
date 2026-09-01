@@ -1,4 +1,5 @@
 import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
+import { useEffect } from "react";
 import ContributeLayout from "../../../layouts/ContributeLayout";
 import DetailsForm from "../components/DetailsForm";
 import MetadataForm from "../../metadata/components/MetadataForm";
@@ -21,8 +22,17 @@ export default function ContributeDatasetPage() {
     submitMetadata,
     submitUpload,
     submitFinal,
+    resumeDraftUpload,
     isSubmitting, submitError,
   } = useDatasetSubmission(searchParams.get("new") ? "__new__" : searchParams.get("draft"));
+
+  useEffect(() => {
+    const draftId = searchParams.get("draft");
+    if (draftId && draftId !== "__new__") {
+      resumeDraftUpload();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   if (loading) {
     return null;

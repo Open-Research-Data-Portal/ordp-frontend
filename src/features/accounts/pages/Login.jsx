@@ -45,7 +45,8 @@ export default function LoginPage() {
         result.profile?.researchInterestsCompleted ||
         result.profile?.onboardingCompleted ||
         result.profile?.research_interests_completed ||
-        result.profile?.onboarding_completed
+        result.profile?.onboarding_completed ||
+        result.profile?.interests?.length
       );
       if (!completed) {
         navigate("/research-interests-onboarding");

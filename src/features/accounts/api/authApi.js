@@ -115,14 +115,13 @@ export async function updateCompleteProfile(patch) {
 }
 
 /**
- * @param {string} uid
  * @param {string} token
- * @returns {Promise<{detail: string}>}
+ * @returns {Promise<{detail: string, access?: string, refresh?: string, user?: {id: number, email: string}}>}
  * @throws {AuthApiError}
  */
-export async function verifyEmail(uid, token) {
+export async function verifyEmail(token) {
   try {
-    const { data } = await client.post(`${BASE}/verify-email/`, { uid, token });
+    const { data } = await client.post(`${BASE}/verify-email/`, { token });
     return data;
   } catch (err) {
     throw normalizeError(err);
@@ -250,7 +249,35 @@ export async function getCategories() {
   return Array.isArray(data) ? data : (data?.results || []);
 }
 
-export async function getDepartments() {
-  const { data } = await client.get(`${BASE}/departments/`);
+export async function getColleges() {
+  const { data } = await client.get(`${BASE}/colleges/`);
   return data?.results || [];
+}
+
+export async function getCentersOfExcellence() {
+  const { data } = await client.get(`${BASE}/centers-of-excellence/`);
+  return data?.results || [];
+}
+
+export async function getDepartments(parentType, parentId) {
+  const params = {};
+  if (parentType) params.parent_type = parentType;
+  if (parentId) params.parent_id = parentId;
+  const { data } = await client.get(`${BASE}/departments/`, { params });
+  return data?.results || [];
+}
+
+export async function getProfileOptions() {
+  const { data } = await client.get(`${BASE}/profile/options/`);
+  return data;
+}
+
+export async function addOtherInterest(name) {
+  const { data } = await client.post(`${BASE}/profile/interests/other/`, { name });
+  return data;
+}
+
+export async function getUserProfile(userId) {
+  const { data } = await client.get(`${BASE}/users/${userId}/profile/`);
+  return data;
 }

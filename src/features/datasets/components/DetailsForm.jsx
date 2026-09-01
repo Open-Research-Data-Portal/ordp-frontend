@@ -1,14 +1,17 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import FormField from "../../../components/FormField";
 import TagInput from "../../../components/TagInput";
 import { useAuth } from "../../../context/useAuth";
+import * as metadataApi from "../../../api/metadata";
 
 export default function DetailsForm({ initialValues = {}, onNext, isSubmitting, submitError }) {
   const { user } = useAuth();
 
   const [title, setTitle] = useState(initialValues.title || "");
   const [description, setDescription] = useState(initialValues.description || "");
-  const [language, setLanguage] = useState(initialValues.language || "English");
+  const [languageId, setLanguageId] = useState(initialValues.languageId || initialValues.language_id || "");
+  const [languageName, setLanguageName] = useState(initialValues.language || "English");
+  const [languages, setLanguages] = useState([]);
   const [coAuthors, setCoAuthors] = useState(initialValues.coAuthors || []);
   const [contributors, setContributors] = useState(initialValues.contributors || []);
   const [relatedResources, setRelatedResources] = useState(initialValues.relatedResources || []);
@@ -16,13 +19,25 @@ export default function DetailsForm({ initialValues = {}, onNext, isSubmitting, 
   const [temporalCoverage, setTemporalCoverage] = useState(initialValues.temporalCoverage || "");
   const [localError, setLocalError] = useState("");
 
+  useEffect(() => {
+    metadataApi.getLanguages().then((items) => {
+      const list = Array.isArray(items) ? items : (items?.results || []);
+      setLanguages(list);
+      if (!languageId && list.length) {
+        const match = list.find((l) => l.name === languageName);
+        if (match) setLanguageId(match.id);
+        else setLanguageId(list[0]?.id || "");
+      }
+    }).catch(() => {});
+  }, [languageId, languageName]);
+
   const handleContinue = async (e) => {
     e.preventDefault();
     if (!title.trim()) {
       setLocalError("Dataset title is required.");
       return;
     }
-    if (!language) {
+    if (!languageId && !languageName) {
       setLocalError("Language is required.");
       return;
     }
@@ -30,7 +45,9 @@ export default function DetailsForm({ initialValues = {}, onNext, isSubmitting, 
     await onNext({
       title,
       description,
-      language,
+      language: languageName,
+      languageId,
+      language_id: languageId,
       authorId: user?.id,
       coAuthors,
       contributors,
@@ -61,9 +78,11 @@ export default function DetailsForm({ initialValues = {}, onNext, isSubmitting, 
       </FormField>
 
       <FormField label="Language" required>
-        <select value={language} onChange={(e) => setLanguage(e.target.value)} className={inputClass}>
-          <option>English</option>
-          <option>Amharic</option>
+        <select value={languageId} onChange={(e) => { const id = e.target.value; setLanguageId(id); const found = languages.find((l) => String(l.id) === String(id)); if (found) setLanguageName(found.name); }} className={inputClass}>
+          {languages.length === 0 && <option value="">Loading...</option>}
+          {languages.map((l) => (
+            <option key={l.id} value={l.id}>{l.name}</option>
+          ))}
         </select>
       </FormField>
 

@@ -82,7 +82,11 @@ export default function DatasetListPage() {
       setLoading(true);
       setError(null);
       try {
-        const data = await datasetsApi.getMyDatasets();
+        const params = {};
+        if (statusFilter !== "all") {
+          params.status = statusFilter;
+        }
+        const data = await datasetsApi.getMyDatasets(params);
         if (isMounted) {
           const list = Array.isArray(data) ? data : data?.results || [];
           setDatasets(list);
@@ -98,7 +102,7 @@ export default function DatasetListPage() {
 
     loadDatasets();
     return () => { isMounted = false; };
-  }, []);
+  }, [statusFilter]);
 
   const displayName =
     (user?.full_name ??
@@ -110,13 +114,12 @@ export default function DatasetListPage() {
   const filtered = useMemo(() => {
     const active = datasets.filter((d) => d.is_active !== false);
     return active
-      .filter((d) => (statusFilter === "all" ? true : (d.status || "draft") === statusFilter))
       .filter((d) => (search.trim() ? d.title?.toLowerCase().includes(search.trim().toLowerCase()) : true))
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  }, [datasets, statusFilter, search]);
+  }, [datasets, search]);
 
   // Reset to first page whenever filters change
-  useEffect(() => { setPage(0); }, [statusFilter, search, rowsPerPage]);
+  useEffect(() => { queueMicrotask(() => setPage(0)); }, [statusFilter, search, rowsPerPage]);
 
   const totalRows = filtered.length;
   const pageStart = page * rowsPerPage;

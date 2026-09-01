@@ -13,17 +13,9 @@ import {
   ACADEMIC_TITLE_OPTIONS,
   ACADEMIC_RANK_OPTIONS,
   HIGHEST_DEGREE_OPTIONS,
-  STUDENT_TYPE_OPTIONS,
-  RESEARCH_INTEREST_CATEGORIES,
   DEFAULT_AFFILIATION,
   BIO_MAX_LENGTH,
 } from "./constants";
-
-const PROFILE_VISIBILITY_OPTIONS = [
-  { value: "public", label: "Everyone (Public)" },
-  { value: "trusted", label: "Trusted Parties" },
-  { value: "private", label: "Only Me (Private)" },
-];
 
 function getNameParts(source) {
   const full =
@@ -67,15 +59,18 @@ export default function ProfilePage() {
   const [username, setUsername] = useState("");
 
   const [affiliation, setAffiliation] = useState(DEFAULT_AFFILIATION);
+  const [college, setCollege] = useState("");
+  const [centerOfExcellence, setCenterOfExcellence] = useState("");
   const [department, setDepartment] = useState("");
   const [departments, setDepartments] = useState([]);
   const [academicRole, setAcademicRole] = useState("researcher");
-  const [studentType, setStudentType] = useState("");
+  const [academiaOther, setAcademiaOther] = useState("");
   const [academicTitle, setAcademicTitle] = useState("");
   const [academicRank, setAcademicRank] = useState("");
   const [highestDegree, setHighestDegree] = useState("");
+  const [highestDegreeOther, setHighestDegreeOther] = useState("");
 
-  const [researchInterests, setResearchInterests] = useState(user?.researchInterests || []);
+  const [researchInterests, setResearchInterests] = useState([]);
   const [bio, setBio] = useState("");
   const [orcidId, setOrcidId] = useState("");
   const [projectWork, setProjectWork] = useState("");
@@ -86,6 +81,19 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+
+  const [colleges, setColleges] = useState([]);
+  const [centers, setCenters] = useState([]);
+  const [profileCategories, setProfileCategories] = useState([]);
+  const [academiaOptions, setAcademiaOptions] = useState(OCCUPATION_OPTIONS);
+  const [academicTitleOptions, setAcademicTitleOptions] = useState(ACADEMIC_TITLE_OPTIONS);
+  const [academicRankOptions, setAcademicRankOptions] = useState(ACADEMIC_RANK_OPTIONS);
+  const [highestDegreeOptions, setHighestDegreeOptions] = useState(HIGHEST_DEGREE_OPTIONS);
+  const [visibilityOptions, setVisibilityOptions] = useState([
+    { value: "public", label: "Everyone (Public)" },
+    { value: "trusted", label: "Trusted Parties" },
+    { value: "private", label: "Only Me (Private)" },
+  ]);
 
   useEffect(() => {
     const parts = getNameParts(user);
@@ -112,8 +120,12 @@ export default function ProfilePage() {
     Promise.all([
       authApi.getProfile().catch(() => null),
       authApi.getCompleteProfile().catch(() => null),
+      authApi.getProfileOptions().catch(() => null),
+      authApi.getColleges().catch(() => null),
+      authApi.getCentersOfExcellence().catch(() => null),
+      authApi.getCategories().catch(() => []),
     ])
-      .then(([profile, completeProfile]) => {
+      .then(([profile, completeProfile, options, collegesData, centersData, categoriesList]) => {
         if (cancelled) return;
         const data = { ...(profile || {}), ...(completeProfile || {}) };
         const parts = getNameParts(data);
@@ -123,19 +135,36 @@ export default function ProfilePage() {
         setEmail(data?.email ?? "");
         setUsername(data?.username ?? "");
         setAffiliation(data?.affiliation ?? DEFAULT_AFFILIATION);
+        setCollege(data?.college ?? "");
+        setCenterOfExcellence(data?.center_of_excellence ?? "");
         setDepartment(data?.department ?? data?.department_id ?? "");
         setAcademicRole(data?.academia ?? data?.occupation ?? data?.academicRole ?? "researcher");
-        setStudentType(data?.studentType ?? data?.student_type ?? "");
+        setAcademiaOther(data?.academia_other ?? "");
         setAcademicTitle(data?.academicTitle ?? data?.academic_title ?? "");
         setAcademicRank(data?.academicRank ?? data?.academic_rank ?? "");
         setHighestDegree(data?.highestDegree ?? data?.highest_degree ?? "");
-        setResearchInterests(data?.researchInterests ?? data?.research_interests ?? data?.interests ?? []);
+        setHighestDegreeOther(data?.highest_degree_other ?? "");
+        setResearchInterests((data?.interests || []).map((item) => {
+          if (typeof item === "string") return item;
+          return { id: item?.id, name: item?.name || String(item) };
+        }));
         setBio(data?.bio ?? "");
         setOrcidId(data?.orcidId ?? data?.orcid_id ?? "");
         setProjectWork(data?.projectWork ?? data?.project_work ?? "");
         setAdditionalLink(data?.additionalLink ?? data?.additional_link ?? "");
         setProfileVisibility(data?.profileVisibility ?? data?.profile_visibility ?? "");
         setTermsAccepted(Boolean(data?.termsAccepted ?? data?.terms_accepted ?? false));
+
+        if (options) {
+          if (options.academia) setAcademiaOptions(options.academia);
+          if (options.academic_title) setAcademicTitleOptions(options.academic_title);
+          if (options.academic_rank) setAcademicRankOptions(options.academic_rank);
+          if (options.highest_degree) setHighestDegreeOptions(options.highest_degree);
+          if (options.profile_visibility) setVisibilityOptions(options.profile_visibility);
+        }
+        if (collegesData?.results) setColleges(collegesData.results);
+        if (centersData?.results) setCenters(centersData.results);
+        if (Array.isArray(categoriesList)) setProfileCategories(categoriesList);
       })
       .catch(() => {});
 
@@ -145,12 +174,31 @@ export default function ProfilePage() {
   }, [isAuthenticated]);
 
   useEffect(() => {
-    if (isAuthenticated) authApi.getDepartments().then(setDepartments).catch(() => {});
-  }, [isAuthenticated]);
+    if (!isAuthenticated) return;
+    if (college && !centerOfExcellence) {
+      authApi.getDepartments("college", college).then(setDepartments).catch(() => {});
+    } else if (centerOfExcellence && !college) {
+      authApi.getDepartments("center_of_excellence", centerOfExcellence).then(setDepartments).catch(() => {});
+    } else {
+      queueMicrotask(() => setDepartments([]));
+    }
+  }, [isAuthenticated, college, centerOfExcellence]);
 
   function handleAvatarChange(e) {
     const file = e.target.files?.[0];
     if (file) setAvatarUrl(URL.createObjectURL(file));
+  }
+
+  async function handleAddOtherInterest(name) {
+    setError("");
+    try {
+      const created = await authApi.addOtherInterest(name);
+      const newId = created?.id || created?.category?.id;
+      if (!newId) throw new Error("Missing id from create-category response.");
+      setResearchInterests((prev) => [...prev, { id: newId, name, pending: true }]);
+    } catch (err) {
+      setError(err?.message || "Failed to add custom interest.");
+    }
   }
 
   async function handleSave() {
@@ -159,27 +207,51 @@ export default function ProfilePage() {
     setError("");
     try {
       const fullName = [firstName, fatherName, grandFatherName].filter(Boolean).join(" ").trim();
-      let interestIds = researchInterests;
-      try {
-        const categories = await authApi.getCategories();
-        const byName = new Map(categories.map((c) => [String(c.name).toLowerCase(), c.id]));
-        interestIds = researchInterests.map((interest) => {
-          if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(interest)) return interest;
-          return byName.get(String(interest).toLowerCase()) || byName.get(String(interest).split(" — ")[0].toLowerCase());
-        }).filter(Boolean);
-      } catch { /* preserve profile save if category lookup is unavailable */ }
+
+      const byName = new Map((profileCategories || []).map((c) => [String(c.name).toLowerCase(), c.id]));
+      const validCollegeIds = new Set((colleges || []).map((c) => c.id));
+      const validCenterIds = new Set((centers || []).map((c) => c.id));
+      const validDeptIds = new Set((departments || []).map((d) => d.id));
+      const validCategoryIds = new Set((profileCategories || []).map((c) => c.id));
+
+      const interestIds = (Array.isArray(researchInterests) ? researchInterests : [])
+        .map((item) => {
+          if (typeof item === "object" && item?.id) {
+            if (!validCategoryIds.has(item.id)) return null;
+            return item.id;
+          }
+          if (typeof item === "string") {
+            const normalized = item.toLowerCase();
+            const matchedId = byName.get(normalized) || byName.get(normalized.split(" — ")[0]);
+            if (!matchedId || !validCategoryIds.has(matchedId)) return null;
+            return matchedId;
+          }
+          return null;
+        })
+        .filter(Boolean);
+
+      const resolvedCollege = college && validCollegeIds.has(college) ? college : undefined;
+      const resolvedCenter = centerOfExcellence && validCenterIds.has(centerOfExcellence) ? centerOfExcellence : undefined;
+      const resolvedDepartment = department && validDeptIds.has(department) ? department : undefined;
+
+      const academiaOther = academicRole === "other" ? (academiaOther || "") : "";
+      const highestDegreeOther = highestDegree === "other" ? (highestDegreeOther || "") : "";
+
       const payload = {
         first_name: firstName,
         last_name: fatherName,
         grand_father_name: grandFatherName,
         full_name: fullName,
         affiliation,
-        department,
+        college: resolvedCollege,
+        center_of_excellence: resolvedCenter,
+        department: resolvedDepartment,
         academia: academicRole,
-        student_type: studentType,
+        academia_other: academiaOther,
         academic_title: academicTitle,
         academic_rank: academicRank,
         highest_degree: highestDegree,
+        highest_degree_other: highestDegreeOther,
         interests: interestIds,
         bio,
         orcid_id: orcidId,
@@ -188,6 +260,7 @@ export default function ProfilePage() {
         profile_visibility: profileVisibility,
         terms_accepted: termsAccepted,
       };
+
       await Promise.all([
         authApi.updateProfile({ first_name: firstName, last_name: fatherName, full_name: fullName }),
         authApi.updateCompleteProfile(payload),
@@ -333,7 +406,42 @@ export default function ProfilePage() {
                     onChange={(e) => setAffiliation(e.target.value)}
                   />
                 </div>
-                <Select id="department" label="Department" required value={department} onChange={(e) => setDepartment(e.target.value)} options={departments.map((d) => ({ value: d.id, label: d.name }))} placeholder="Choose your department..." />
+                <Select
+                  id="college"
+                  label="College"
+                  optional
+                  value={college}
+                  onChange={(e) => {
+                    setCollege(e.target.value);
+                    setCenterOfExcellence("");
+                    setDepartment("");
+                  }}
+                  options={colleges.map((c) => ({ value: c.id, label: c.name }))}
+                  placeholder="Choose a college..."
+                />
+                <Select
+                  id="centerOfExcellence"
+                  label="Center of Excellence"
+                  optional
+                  value={centerOfExcellence}
+                  onChange={(e) => {
+                    setCenterOfExcellence(e.target.value);
+                    setCollege("");
+                    setDepartment("");
+                  }}
+                  options={centers.map((c) => ({ value: c.id, label: c.name }))}
+                  placeholder="Choose a center of excellence..."
+                />
+                <Select
+                  id="department"
+                  label="Department"
+                  required
+                  value={department}
+                  onChange={(e) => setDepartment(e.target.value)}
+                  options={departments.map((d) => ({ value: d.id, label: d.name }))}
+                  placeholder={college || centerOfExcellence ? "Choose your department..." : "Select a college or center first"}
+                  disabled={!college && !centerOfExcellence}
+                />
                 <Select
                   id="academicRole"
                   label="Occupation"
@@ -342,18 +450,18 @@ export default function ProfilePage() {
                   onChange={(e) => {
                     const next = e.target.value;
                     setAcademicRole(next);
-                    if (next !== "student") setStudentType("");
+                    if (next !== "other") setAcademiaOther("");
                   }}
-                  options={OCCUPATION_OPTIONS}
+                  options={academiaOptions}
                 />
-                {academicRole === "student" && (
-                  <Select
-                    id="studentType"
-                    label="Student Type"
+                {academicRole === "other" && (
+                  <TextInput
+                    id="academiaOther"
+                    label="Please specify your occupation"
                     required
-                    value={studentType}
-                    onChange={(e) => setStudentType(e.target.value)}
-                    options={STUDENT_TYPE_OPTIONS}
+                    value={academiaOther}
+                    onChange={(e) => setAcademiaOther(e.target.value)}
+                    placeholder="e.g., Research Assistant, Independent Researcher..."
                   />
                 )}
                 <Select
@@ -362,7 +470,7 @@ export default function ProfilePage() {
                   optional
                   value={academicTitle}
                   onChange={(e) => setAcademicTitle(e.target.value)}
-                  options={ACADEMIC_TITLE_OPTIONS}
+                  options={academicTitleOptions}
                 />
                 <Select
                   id="academicRank"
@@ -370,16 +478,29 @@ export default function ProfilePage() {
                   optional
                   value={academicRank}
                   onChange={(e) => setAcademicRank(e.target.value)}
-                  options={ACADEMIC_RANK_OPTIONS}
+                  options={academicRankOptions}
                 />
                 <Select
                   id="highestDegree"
                   label="Highest Degree"
                   optional
                   value={highestDegree}
-                  onChange={(e) => setHighestDegree(e.target.value)}
-                  options={HIGHEST_DEGREE_OPTIONS}
+                  onChange={(e) => {
+                    setHighestDegree(e.target.value);
+                    if (e.target.value !== "other") setHighestDegreeOther("");
+                  }}
+                  options={highestDegreeOptions}
                 />
+                {highestDegree === "other" && (
+                  <TextInput
+                    id="highestDegreeOther"
+                    label="Please specify your highest degree"
+                    required
+                    value={highestDegreeOther}
+                    onChange={(e) => setHighestDegreeOther(e.target.value)}
+                    placeholder="e.g., Professional Certificate, Other qualification..."
+                  />
+                )}
               </div>
             </SectionCard>
 
@@ -421,7 +542,8 @@ export default function ProfilePage() {
                 required
                 value={researchInterests}
                 onChange={setResearchInterests}
-                categories={RESEARCH_INTEREST_CATEGORIES}
+                categories={profileCategories}
+                onAddOtherInterest={handleAddOtherInterest}
               />
 
               <TextArea
@@ -442,7 +564,7 @@ export default function ProfilePage() {
                 required
                 value={profileVisibility}
                 onChange={(e) => setProfileVisibility(e.target.value)}
-                options={PROFILE_VISIBILITY_OPTIONS}
+                options={visibilityOptions}
                 placeholder="Choose who can see your profile..."
               />
 

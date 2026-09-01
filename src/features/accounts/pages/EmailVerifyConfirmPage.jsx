@@ -3,30 +3,38 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { Loader2, CheckCircle2 } from "lucide-react";
 import AuthSplitCard from "../components/AuthSplitCard";
 import * as authApi from "../api/authApi";
+import { useAuth } from "../../../context/useAuth";
 
 export default function EmailVerifyConfirmPage() {
   const navigate = useNavigate();
+  const { setSession } = useAuth();
   const [searchParams] = useSearchParams();
-  const uid = searchParams.get("uid");
   const token = searchParams.get("token");
 
-  const [status, setStatus] = useState(() => (uid && token ? "verifying" : "error")); // verifying | success | error
+  const [status, setStatus] = useState(() => (token ? "verifying" : "error"));
   const [message, setMessage] = useState("");
   const [error, setError] = useState(() =>
-    uid && token ? null : "Invalid verification link. Please register again or request a new link."
+    token ? null : "Invalid verification link. Please register again or request a new link."
   );
 
   useEffect(() => {
-    if (!uid || !token) return;
+    if (!token) return;
 
     let cancelled = false;
 
     async function verify() {
       try {
-        const data = await authApi.verifyEmail(uid, token);
+        const data = await authApi.verifyEmail(token);
         if (cancelled) return;
         const nextMessage = data?.detail || "Email verified. You can now log in.";
         setMessage(nextMessage);
+
+        if (data?.access && data?.refresh) {
+          await setSession(data.access, data.refresh, false);
+          setTimeout(() => navigate("/dashboard", { replace: true }), 800);
+          return;
+        }
+
         setStatus("success");
         setTimeout(() => navigate("/login", { replace: true, state: { message: nextMessage } }), 1500);
       } catch (err) {
@@ -44,7 +52,7 @@ export default function EmailVerifyConfirmPage() {
     return () => {
       cancelled = true;
     };
-  }, [uid, token, navigate]);
+  }, [token, navigate, setSession]);
 
   return (
     <AuthSplitCard logoSize="xlarge">

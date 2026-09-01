@@ -252,15 +252,25 @@ export default function BrowseDatasetsPage() {
   const [query, setQuery] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState("All datasets");
-  const [tagQuery, setTagQuery] = useState("");
-  const [sizeMin, setSizeMin] = useState("");
-  const [sizeMax, setSizeMax] = useState("");
-  const [sizeMinUnit, setSizeMinUnit] = useState("MB");
-  const [sizeMaxUnit, setSizeMaxUnit] = useState("MB");
+  
+  // Backend filter states
+  const [orderBy, setOrderBy] = useState("");
+  const [visibility, setVisibility] = useState("");
+  const [fileSize, setFileSize] = useState("");
+  const [keywordFilter, setKeywordFilter] = useState("");
+  const [languageFilter, setLanguageFilter] = useState("");
+  const [sponsorFilter, setSponsorFilter] = useState("");
+  const [coverageFilter, setCoverageFilter] = useState("");
+  const [doiFilter, setDoiFilter] = useState("");
+  const [ownerFilter, setOwnerFilter] = useState("");
+  const [minFileCount, setMinFileCount] = useState("");
+  const [maxFileCount, setMaxFileCount] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [hasContributors, setHasContributors] = useState(false);
+  const [bookmarkedOnly, setBookmarkedOnly] = useState(false);
+  const [hasMultipleVersions, setHasMultipleVersions] = useState(false);
   const [selectedFileTypes, setSelectedFileTypes] = useState([]);
-  const [selectedLicenses, setSelectedLicenses] = useState([]);
-  const [selectedUsability, setSelectedUsability] = useState([]);
-  const [selectedVotedFor, setSelectedVotedFor] = useState([]);
   const [expandedId, setExpandedId] = useState(null);
 
   // API-backed state
@@ -354,33 +364,49 @@ export default function BrowseDatasetsPage() {
   };
 
   const clearFilters = () => {
-    setTagQuery("");
-    setSizeMin("");
-    setSizeMax("");
-    setSizeMinUnit("MB");
-    setSizeMaxUnit("MB");
+    setOrderBy("");
+    setVisibility("");
+    setFileSize("");
+    setKeywordFilter("");
+    setLanguageFilter("");
+    setSponsorFilter("");
+    setCoverageFilter("");
+    setDoiFilter("");
+    setOwnerFilter("");
+    setMinFileCount("");
+    setMaxFileCount("");
+    setDateFrom("");
+    setDateTo("");
+    setHasContributors(false);
+    setBookmarkedOnly(false);
+    setHasMultipleVersions(false);
     setSelectedFileTypes([]);
-    setSelectedLicenses([]);
-    setSelectedUsability([]);
-    setSelectedVotedFor([]);
   };
 
   const applyFilters = () => {
     setFiltersOpen(false);
-    // filters are already live via state; this just closes the popup
   };
 
   const activeFilterCount =
-    selectedFileTypes.length +
-    selectedLicenses.length +
-    selectedUsability.length +
-    selectedVotedFor.length +
-    (tagQuery ? 1 : 0) +
-    (sizeMin || sizeMax ? 1 : 0);
+    (orderBy ? 1 : 0) +
+    (visibility ? 1 : 0) +
+    (fileSize ? 1 : 0) +
+    (keywordFilter ? 1 : 0) +
+    (languageFilter ? 1 : 0) +
+    (sponsorFilter ? 1 : 0) +
+    (coverageFilter ? 1 : 0) +
+    (doiFilter ? 1 : 0) +
+    (ownerFilter ? 1 : 0) +
+    (minFileCount || maxFileCount ? 1 : 0) +
+    (dateFrom || dateTo ? 1 : 0) +
+    (hasContributors ? 1 : 0) +
+    (bookmarkedOnly ? 1 : 0) +
+    (hasMultipleVersions ? 1 : 0) +
+    selectedFileTypes.length;
 
   const isSearching = query.trim().length > 0 || activeFilterCount > 0 || activeCategory !== "All datasets";
 
-  // Debounced search — fires 400 ms after the user stops typing
+  // Debounced search — fires 400 ms after the user stops typing or changes filters
   useEffect(() => {
     if (!isSearching) {
       setResults([]);
@@ -391,14 +417,26 @@ export default function BrowseDatasetsPage() {
       try {
         const params = {};
         if (query.trim()) params.q = query.trim();
+        if (orderBy) params.order_by = orderBy;
+        if (visibility) params.visibility = visibility;
+        if (fileSize) params.file_size = fileSize;
+        if (keywordFilter.trim()) params.keyword = keywordFilter.trim();
+        if (languageFilter.trim()) params.language = languageFilter.trim();
+        if (sponsorFilter.trim()) params.sponsor = sponsorFilter.trim();
+        if (coverageFilter.trim()) params.coverage = coverageFilter.trim();
+        if (doiFilter.trim()) params.doi = doiFilter.trim();
+        if (ownerFilter.trim()) params.owner = ownerFilter.trim();
+        if (minFileCount) params.min_file_count = minFileCount;
+        if (maxFileCount) params.max_file_count = maxFileCount;
+        if (dateFrom) params.date_from = dateFrom;
+        if (dateTo) params.date_to = dateTo;
+        if (selectedFileTypes.length > 0) params.file_type = selectedFileTypes[0];
+        if (hasContributors) params.has_contributors = "true";
+        if (bookmarkedOnly) params.bookmarked = "true";
+        if (hasMultipleVersions) params.has_multiple_versions = "true";
+
         const data = await searchDatasets(params);
-        let filtered = data;
-        if (selectedFileTypes.length > 0) {
-          filtered = data.filter((d) =>
-            d.files?.some((f) => selectedFileTypes.includes(f.file_type?.toUpperCase()))
-          );
-        }
-        setResults(filtered);
+        setResults(data);
       } catch (e) {
         console.error("Search failed", e);
       } finally {
@@ -406,7 +444,28 @@ export default function BrowseDatasetsPage() {
       }
     }, 400);
     return () => clearTimeout(timer);
-  }, [query, activeCategory, selectedFileTypes, activeFilterCount]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [
+    query,
+    activeCategory,
+    orderBy,
+    visibility,
+    fileSize,
+    keywordFilter,
+    languageFilter,
+    sponsorFilter,
+    coverageFilter,
+    doiFilter,
+    ownerFilter,
+    minFileCount,
+    maxFileCount,
+    dateFrom,
+    dateTo,
+    hasContributors,
+    bookmarkedOnly,
+    hasMultipleVersions,
+    selectedFileTypes,
+    activeFilterCount,
+  ]);
 
   return (
     <div className="min-h-screen bg-[#F5F5F3] flex flex-col">
@@ -485,57 +544,75 @@ export default function BrowseDatasetsPage() {
                 <X className="w-4 h-4" />
               </button>
 
-              <p className="text-xs font-semibold tracking-wide text-gray-500 mb-2">TAGS</p>
-              <div className="relative mb-6">
-                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={tagQuery}
-                  onChange={(e) => setTagQuery(e.target.value)}
-                  placeholder="Search"
-                  className="w-full bg-white border border-[#E3E1DA] rounded-full pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:border-navy"
-                />
+              <p className="text-xs font-semibold tracking-wide text-gray-500 mb-2">SORT BY</p>
+              <div className="flex flex-wrap gap-2 mb-4">
+                {[
+                  { label: "Newest", value: "newest" },
+                  { label: "Title", value: "title" },
+                  { label: "Popular", value: "popular" },
+                  { label: "Downloads", value: "downloads" },
+                ].map((item) => (
+                  <button
+                    key={item.value}
+                    type="button"
+                    onClick={() => setOrderBy(orderBy === item.value ? "" : item.value)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+                      orderBy === item.value
+                        ? "bg-navy text-white"
+                        : "bg-[#F7F6F2] text-gray-700 hover:bg-gray-200"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
               </div>
 
-              <p className="text-xs font-semibold tracking-wide text-gray-500 mb-2">FILE SIZE</p>
-              <div className="flex items-center gap-2 mb-6">
-                <div className="flex items-center border border-[#E3E1DA] rounded-md overflow-hidden">
-                  <input
-                    type="number"
-                    value={sizeMin}
-                    onChange={(e) => setSizeMin(e.target.value)}
-                    placeholder="Min"
-                    className="w-20 px-3 py-2 text-sm focus:outline-none"
-                  />
-                  <select
-                    value={sizeMinUnit}
-                    onChange={(e) => setSizeMinUnit(e.target.value)}
-                    className="border-l border-[#E3E1DA] bg-[#F7F6F2] text-sm px-2 py-2 focus:outline-none"
+              <p className="text-xs font-semibold tracking-wide text-gray-500 mb-2">VISIBILITY</p>
+              <div className="flex flex-wrap gap-2 mb-4">
+                {[
+                  { label: "Public", value: "public" },
+                  { label: "Institutional", value: "institutional" },
+                  { label: "Restricted", value: "restricted" },
+                ].map((item) => (
+                  <button
+                    key={item.value}
+                    type="button"
+                    onClick={() => setVisibility(visibility === item.value ? "" : item.value)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+                      visibility === item.value
+                        ? "bg-navy text-white"
+                        : "bg-[#F7F6F2] text-gray-700 hover:bg-gray-200"
+                    }`}
                   >
-                    {SIZE_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
-                  </select>
-                </div>
-                <span className="text-sm text-gray-400">to</span>
-                <div className="flex items-center border border-[#E3E1DA] rounded-md overflow-hidden">
-                  <input
-                    type="number"
-                    value={sizeMax}
-                    onChange={(e) => setSizeMax(e.target.value)}
-                    placeholder="Max"
-                    className="w-20 px-3 py-2 text-sm focus:outline-none"
-                  />
-                  <select
-                    value={sizeMaxUnit}
-                    onChange={(e) => setSizeMaxUnit(e.target.value)}
-                    className="border-l border-[#E3E1DA] bg-[#F7F6F2] text-sm px-2 py-2 focus:outline-none"
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+
+              <p className="text-xs font-semibold tracking-wide text-gray-500 mb-2">FILE SIZE TIER</p>
+              <div className="flex flex-wrap gap-2 mb-4">
+                {[
+                  { label: "Small (<1 MB)", value: "small" },
+                  { label: "Medium (1-50 MB)", value: "medium" },
+                  { label: "Large (>50 MB)", value: "large" },
+                ].map((item) => (
+                  <button
+                    key={item.value}
+                    type="button"
+                    onClick={() => setFileSize(fileSize === item.value ? "" : item.value)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+                      fileSize === item.value
+                        ? "bg-navy text-white"
+                        : "bg-[#F7F6F2] text-gray-700 hover:bg-gray-200"
+                    }`}
                   >
-                    {SIZE_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
-                  </select>
-                </div>
+                    {item.label}
+                  </button>
+                ))}
               </div>
 
               <p className="text-xs font-semibold tracking-wide text-gray-500 mb-2">FILE TYPES</p>
-              <div className="flex flex-wrap gap-2 mb-6">
+              <div className="flex flex-wrap gap-2 mb-4">
                 {FILE_TYPES.map((type) => (
                   <PillCheckbox
                     key={type}
@@ -546,40 +623,147 @@ export default function BrowseDatasetsPage() {
                 ))}
               </div>
 
-              <p className="text-xs font-semibold tracking-wide text-gray-500 mb-2">LICENSES</p>
-              <div className="flex flex-wrap gap-2 mb-6">
-                {LICENSES.map((license) => (
-                  <PillCheckbox
-                    key={license}
-                    label={license}
-                    checked={selectedLicenses.includes(license)}
-                    onToggle={() => toggleInSet(license, selectedLicenses, setSelectedLicenses)}
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div>
+                  <label className="block text-xs font-semibold tracking-wide text-gray-500 mb-1">KEYWORD</label>
+                  <input
+                    type="text"
+                    value={keywordFilter}
+                    onChange={(e) => setKeywordFilter(e.target.value)}
+                    placeholder="Keyword"
+                    className="w-full bg-white border border-[#E3E1DA] rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-navy"
                   />
-                ))}
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold tracking-wide text-gray-500 mb-1">LANGUAGE</label>
+                  <input
+                    type="text"
+                    value={languageFilter}
+                    onChange={(e) => setLanguageFilter(e.target.value)}
+                    placeholder="Language"
+                    className="w-full bg-white border border-[#E3E1DA] rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-navy"
+                  />
+                </div>
               </div>
 
-              <p className="text-xs font-semibold tracking-wide text-gray-500 mb-2">USABILITY RATING</p>
-              <div className="flex flex-wrap gap-2 mb-6">
-                {USABILITY_OPTIONS.map((option) => (
-                  <PillCheckbox
-                    key={option}
-                    label={option}
-                    checked={selectedUsability.includes(option)}
-                    onToggle={() => toggleInSet(option, selectedUsability, setSelectedUsability)}
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div>
+                  <label className="block text-xs font-semibold tracking-wide text-gray-500 mb-1">SPONSOR / GRANT</label>
+                  <input
+                    type="text"
+                    value={sponsorFilter}
+                    onChange={(e) => setSponsorFilter(e.target.value)}
+                    placeholder="Sponsor"
+                    className="w-full bg-white border border-[#E3E1DA] rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-navy"
                   />
-                ))}
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold tracking-wide text-gray-500 mb-1">COVERAGE</label>
+                  <input
+                    type="text"
+                    value={coverageFilter}
+                    onChange={(e) => setCoverageFilter(e.target.value)}
+                    placeholder="Coverage"
+                    className="w-full bg-white border border-[#E3E1DA] rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-navy"
+                  />
+                </div>
               </div>
 
-              <p className="text-xs font-semibold tracking-wide text-gray-500 mb-2">HIGHLY VOTED FOR</p>
-              <div className="flex flex-wrap gap-2 mb-2">
-                {HIGHLY_VOTED_FOR.map((tag) => (
-                  <PillCheckbox
-                    key={tag}
-                    label={tag}
-                    checked={selectedVotedFor.includes(tag)}
-                    onToggle={() => toggleInSet(tag, selectedVotedFor, setSelectedVotedFor)}
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div>
+                  <label className="block text-xs font-semibold tracking-wide text-gray-500 mb-1">DOI</label>
+                  <input
+                    type="text"
+                    value={doiFilter}
+                    onChange={(e) => setDoiFilter(e.target.value)}
+                    placeholder="DOI"
+                    className="w-full bg-white border border-[#E3E1DA] rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-navy"
                   />
-                ))}
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold tracking-wide text-gray-500 mb-1">OWNER / RESEARCHER</label>
+                  <input
+                    type="text"
+                    value={ownerFilter}
+                    onChange={(e) => setOwnerFilter(e.target.value)}
+                    placeholder="Owner"
+                    className="w-full bg-white border border-[#E3E1DA] rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-navy"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div>
+                  <label className="block text-xs font-semibold tracking-wide text-gray-500 mb-1">MIN FILES</label>
+                  <input
+                    type="number"
+                    value={minFileCount}
+                    onChange={(e) => setMinFileCount(e.target.value)}
+                    placeholder="Min files"
+                    className="w-full bg-white border border-[#E3E1DA] rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-navy"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold tracking-wide text-gray-500 mb-1">MAX FILES</label>
+                  <input
+                    type="number"
+                    value={maxFileCount}
+                    onChange={(e) => setMaxFileCount(e.target.value)}
+                    placeholder="Max files"
+                    className="w-full bg-white border border-[#E3E1DA] rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-navy"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div>
+                  <label className="block text-xs font-semibold tracking-wide text-gray-500 mb-1">DATE FROM</label>
+                  <input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                    className="w-full bg-white border border-[#E3E1DA] rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-navy"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold tracking-wide text-gray-500 mb-1">DATE TO</label>
+                  <input
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                    className="w-full bg-white border border-[#E3E1DA] rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-navy"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2 mb-4 pt-2 border-t border-[#E3E1DA]">
+                <label className="flex items-center gap-2 text-xs font-medium text-gray-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={hasContributors}
+                    onChange={(e) => setHasContributors(e.target.checked)}
+                    className="rounded border-gray-300 text-navy focus:ring-navy"
+                  />
+                  Has Contributors
+                </label>
+                <label className="flex items-center gap-2 text-xs font-medium text-gray-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={bookmarkedOnly}
+                    onChange={(e) => setBookmarkedOnly(e.target.checked)}
+                    className="rounded border-gray-300 text-navy focus:ring-navy"
+                  />
+                  Bookmarked Only
+                </label>
+                <label className="flex items-center gap-2 text-xs font-medium text-gray-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={hasMultipleVersions}
+                    onChange={(e) => setHasMultipleVersions(e.target.checked)}
+                    className="rounded border-gray-300 text-navy focus:ring-navy"
+                  />
+                  Has Multiple Versions
+                </label>
               </div>
 
               <div className="flex items-center justify-end gap-5 mt-4 pt-4 border-t border-[#E3E1DA]">

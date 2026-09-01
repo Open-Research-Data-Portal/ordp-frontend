@@ -9,6 +9,21 @@ import logo from "../../../assets/aastulogo.png";
 import { register, AuthApiError } from "../api/authApi";
 
 const INSTITUTIONAL_DOMAINS = ["@aastu.edu.et", "@aastustudent.edu.et"];
+const USERNAME_PATTERN = /^[a-z0-9_]+$/;
+const PASSWORD_MIN_LENGTH = 8;
+
+function getPasswordStrength(password) {
+  if (!password) return { level: "none", label: "" };
+  let score = 0;
+  if (password.length >= PASSWORD_MIN_LENGTH) score++;
+  if (/[A-Z]/.test(password)) score++;
+  if (/[0-9]/.test(password)) score++;
+  if (/[^A-Za-z0-9]/.test(password)) score++;
+  if (score <= 1) return { level: "weak", label: "Weak", color: "text-red-600" };
+  if (score <= 2) return { level: "fair", label: "Fair", color: "text-amber-600" };
+  if (score <= 3) return { level: "good", label: "Good", color: "text-blue-600" };
+  return { level: "strong", label: "Strong", color: "text-green-600" };
+}
 
 export default function RegisterPage() {
   const navigate = useNavigate();
@@ -19,17 +34,28 @@ export default function RegisterPage() {
   const [usernameStatus, setUsernameStatus] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [apiError, setApiError] = useState(null);
+  const [fieldErrors, setFieldErrors] = useState({});
 
   const emailIsValid = /^\S+@\S+\.\S+$/.test(email);
   const emailIsInstitutional = INSTITUTIONAL_DOMAINS.some((domain) =>
     email.toLowerCase().endsWith(domain)
   );
+  const passwordStrength = getPasswordStrength(password);
+  const usernameIsValid = USERNAME_PATTERN.test(username);
 
   useEffect(() => {
-    if (!username.trim()) return;
+    if (!username.trim() || !USERNAME_PATTERN.test(username)) {
+      queueMicrotask(() => {
+        setUsernameStatus(!username.trim() ? null : "invalid");
+        setFieldErrors((prev) => ({ ...prev, username: !username.trim() ? undefined : "Username may only contain lowercase letters, numbers, and underscores." }));
+      });
+      return;
+    }
+    queueMicrotask(() => setFieldErrors((prev) => ({ ...prev, username: undefined })));
 
     let cancelled = false;
     const timeoutId = setTimeout(async () => {
+      setUsernameStatus("checking");
       try {
         const available = !["admin", "test", "researcher"].includes(username.toLowerCase());
         if (cancelled) return;
@@ -46,22 +72,29 @@ export default function RegisterPage() {
     };
   }, [username]);
 
+  function validate() {
+    const errors = {};
+    if (!fullName.trim()) errors.full_name = "Full name is required.";
+    if (!emailIsValid) errors.email = "Enter a valid email address.";
+    else if (!emailIsInstitutional) errors.email = "Only AASTU institutional emails are allowed.";
+    if (!username.trim()) errors.username = "Username is required.";
+    else if (!usernameIsValid) errors.username = "Username may only contain lowercase letters, numbers, and underscores.";
+    if (!password) errors.password = "Password is required.";
+    else if (password.length < PASSWORD_MIN_LENGTH) errors.password = `Password must be at least ${PASSWORD_MIN_LENGTH} characters.`;
+    return errors;
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     setApiError(null);
+    setFieldErrors({});
 
-    if (!fullName.trim() || !emailIsValid || !username.trim() || !password) {
-      setApiError("Please fill in all required fields with valid values.");
+    const errors = validate();
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
       return;
     }
-    if (!emailIsInstitutional) {
-      setApiError("Please use your AASTU institutional email address.");
-      return;
-    }
-    if (usernameStatus === "taken") {
-      setApiError("That username is already taken.");
-      return;
-    }
+
     setSubmitting(true);
     try {
       await register({
@@ -113,78 +146,92 @@ export default function RegisterPage() {
         Complete the form below to register your profile.
       </p>
 
-      {apiError && (
-        <div role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          {apiError}
-        </div>
-      )}
+       {apiError && (
+         <div role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+           {apiError}
+         </div>
+       )}
 
-      <form onSubmit={handleSubmit} noValidate>
-        <TextInput
-          id="fullName"
-          label="Full Name"
-          required
-          value={fullName}
-          onChange={(e) => setFullName(e.target.value)}
-          placeholder="Dr. Abebe Bekele"
-        />
+       <form onSubmit={handleSubmit} noValidate>
+         <TextInput
+           id="fullName"
+           label="Full Name"
+           required
+           value={fullName}
+           onChange={(e) => setFullName(e.target.value)}
+           placeholder="Dr. Abebe Bekele"
+           error={fieldErrors.full_name}
+         />
 
-        <TextInput
-          id="email"
-          label="Email Address"
-          required
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="researcher@aastu.edu.et"
-          status={emailIsValid && emailIsInstitutional ? "valid" : null}
-          statusText={
-            emailIsValid && emailIsInstitutional ? "Valid university email" : ""
-          }
-        />
+         <TextInput
+           id="email"
+           label="Email Address"
+           required
+           type="email"
+           value={email}
+           onChange={(e) => setEmail(e.target.value)}
+           placeholder="researcher@aastu.edu.et"
+           status={emailIsValid && emailIsInstitutional ? "valid" : null}
+           statusText={
+             emailIsValid && emailIsInstitutional ? "Valid university email" : ""
+           }
+           error={fieldErrors.email}
+         />
 
-        <TextInput
-          id="username"
-          label="Username"
-          required
-          value={username}
-          onChange={(e) => {
-            const next = e.target.value;
-            setUsername(next);
-            setUsernameStatus(next.trim() ? "checking" : null);
-          }}
-          placeholder="abekk_2024"
-          status={
-            usernameStatus === "checking" || usernameStatus === "valid"
-              ? usernameStatus
-              : null
-          }
-          statusText={
-            usernameStatus === "checking"
-              ? "Checking availability..."
-              : usernameStatus === "taken"
-              ? "That username is taken."
-              : ""
-          }
-        />
+         <TextInput
+           id="username"
+           label="Username"
+           required
+           value={username}
+           onChange={(e) => {
+             const next = e.target.value.toLowerCase();
+             setUsername(next);
+           }}
+           placeholder="abekk_2024"
+           status={
+             usernameStatus === "checking" || usernameStatus === "valid"
+               ? usernameStatus
+               : usernameStatus === "invalid" || usernameStatus === "taken"
+               ? "error"
+               : null
+           }
+           statusText={
+             usernameStatus === "checking"
+               ? "Checking availability..."
+               : usernameStatus === "taken"
+               ? "That username is taken."
+               : usernameStatus === "invalid"
+               ? "Only lowercase letters, numbers, and underscores allowed."
+               : ""
+           }
+           error={fieldErrors.username}
+         />
 
-        <TextInput
-          id="password"
-          label="Password"
-          required
-          type="password"
-          showToggle
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="••••••••"
-        />
+         <div className="mb-2">
+           <TextInput
+             id="password"
+             label="Password"
+             required
+             type="password"
+             showToggle
+             value={password}
+             onChange={(e) => setPassword(e.target.value)}
+             placeholder="••••••••"
+             error={fieldErrors.password}
+           />
+           {password && (
+             <p className={`text-xs mt-1 ${passwordStrength.color}`}>
+               Password strength: {passwordStrength.label}
+             </p>
+           )}
+         </div>
 
-        <div className="mt-2">
-          <Button type="submit" loading={submitting}>
-            Register
-          </Button>
-        </div>
-      </form>
+         <div className="mt-2">
+           <Button type="submit" loading={submitting}>
+             Register
+           </Button>
+         </div>
+       </form>
 
       <p className="text-center text-sm text-slate-500 mt-5">
         Already have an account?{" "}

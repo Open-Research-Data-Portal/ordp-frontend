@@ -7,6 +7,17 @@ import ProfilePage from "./ProfilePage";
 const authApi = vi.hoisted(() => ({
   getProfile: vi.fn(),
   updateProfile: vi.fn(),
+  updateCompleteProfile: vi.fn(),
+  getCompleteProfile: vi.fn(),
+  getCategories: vi.fn().mockResolvedValue([
+    { id: "cat-ai", name: "Artificial Intelligence" },
+    { id: "cat-ml", name: "Machine Learning" },
+    { id: "cat-eng", name: "Engineering" },
+  ]),
+  getDepartments: vi.fn().mockResolvedValue([]),
+  getColleges: vi.fn().mockResolvedValue([]),
+  getCentersOfExcellence: vi.fn().mockResolvedValue([]),
+  getProfileOptions: vi.fn().mockResolvedValue({}),
 }));
 
 const mockAuthUser = vi.hoisted(() => ({
@@ -19,7 +30,7 @@ vi.mock("../../../layouts/Sidebar", () => ({ default: () => <aside /> }));
 vi.mock("../../../layouts/TopBar", () => ({ default: ({ title }) => <header>{title}</header> }));
 vi.mock("../../../context/useAuth", () => ({
   useAuth: () => ({
-    isAuthenticated: false,
+    isAuthenticated: true,
     user: mockAuthUser,
   }),
 }));
@@ -37,6 +48,26 @@ describe("ProfilePage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     authApi.updateProfile.mockResolvedValue({});
+    authApi.updateCompleteProfile.mockResolvedValue({});
+    authApi.getCompleteProfile.mockResolvedValue({
+      full_name: "Researcher User",
+      affiliation: "Addis Ababa Science and Technology University (AASTU)",
+      academia: "researcher",
+      interests: [],
+    });
+    authApi.getProfile.mockResolvedValue({
+      email: "researcher@aastu.edu.et",
+      username: "researcher",
+    });
+    authApi.getCategories.mockResolvedValue([
+      { id: "cat-ai", name: "Artificial Intelligence" },
+      { id: "cat-ml", name: "Machine Learning" },
+      { id: "cat-eng", name: "Engineering" },
+    ]);
+    authApi.getDepartments.mockResolvedValue([]);
+    authApi.getColleges.mockResolvedValue([]);
+    authApi.getCentersOfExcellence.mockResolvedValue([]);
+    authApi.getProfileOptions.mockResolvedValue({});
   });
 
   it("renders Email Address and Username as read-only and does not allow editing", async () => {
@@ -73,10 +104,11 @@ describe("ProfilePage", () => {
   it("lets the user add and remove a research interest tag", async () => {
     renderProfilePage();
     await screen.findByDisplayValue("researcher@aastu.edu.et");
+    await screen.findByText("Artificial Intelligence");
     expect(screen.getAllByText("Artificial Intelligence").length).toBeGreaterThan(0);
 
     await userEvent.click(screen.getByRole("button", { name: "Machine Learning" }));
-    expect(screen.getByText("Machine Learning")).toBeInTheDocument();
+    expect(screen.getAllByText("Machine Learning").length).toBeGreaterThan(0);
 
     const removeButton = await screen.findByRole("button", {
       name: /remove .*machine learning/i,

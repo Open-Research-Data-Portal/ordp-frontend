@@ -62,7 +62,7 @@ const ROLE_CONFIG = {
     cta: { label: "System Audit", to: "/admin-dashboard?tab=audit", icon: Shield },
     nav: [
       { label: "Overview", icon: LayoutGrid, to: "/admin-dashboard" },
-      { label: "Audit Log", icon: ScrollText, to: "/admin-dashboard?tab=audit" },
+      { label: "Audit Log", icon: ScrollText, to: "/admin/audit-log" },
       { label: "Users", icon: Users, to: "/admin-dashboard?tab=users" },
       { label: "Deletion Requests", icon: Trash2, to: "/admin-dashboard?tab=deletions" },
     ],

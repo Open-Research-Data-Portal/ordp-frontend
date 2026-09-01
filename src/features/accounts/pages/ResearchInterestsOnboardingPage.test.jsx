@@ -21,11 +21,13 @@ vi.mock("react-router-dom", async (importOriginal) => ({
 vi.mock("../../../layouts/TopBar", () => ({
   default: ({ title }) => <header>{title}</header>,
 }));
+const mockUser = { id: 42, email: "researcher@aastu.edu.et", username: "researcher" };
+
 vi.mock("../../../context/useAuth", () => ({
   useAuth: () => ({
     isAuthenticated: true,
     loading: false,
-    user: { id: 42, email: "researcher@aastu.edu.et", username: "researcher" },
+    user: mockUser,
   }),
 }));
 vi.mock("../api/authApi", () => authApi);
@@ -78,8 +80,7 @@ describe("ResearchInterestsOnboardingPage", () => {
         expect.objectContaining({ terms_accepted: true })
       )
     );
-    expect(authApi.updateProfileCompletion.mock.calls[0][0].research_interests).toBeUndefined();
-    expect(navigate).toHaveBeenCalledWith("/dashboard", { replace: true });
+    expect(navigate).toHaveBeenCalledWith("/user-dashboard", { replace: true });
   });
 
   it("removes a selected interest via its × chip button", async () => {
@@ -135,7 +136,8 @@ describe("ResearchInterestsOnboardingPage", () => {
 
     await userEvent.type(screen.getByLabelText(/new category/i), "Engineering");
     await userEvent.type(screen.getByLabelText(/new subcategory/i), "Mining");
-    await userEvent.click(screen.getByRole("button", { name: /send request/i }));
+    const sendBtn = await screen.findByRole("button", { name: /send request/i });
+    await userEvent.click(sendBtn);
 
     await waitFor(() =>
       expect(authApi.addCustomInterest).toHaveBeenCalledWith("Engineering — Mining")

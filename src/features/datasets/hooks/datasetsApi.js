@@ -198,6 +198,31 @@ export async function getAdminDeletionQueue() {
   return data;
 }
 
+export async function getAdminUsers() {
+  const { data } = await client.get("/admin-panel/users/");
+  return data;
+}
+
+export async function createAdminUser(payload) {
+  const { data } = await client.post("/admin-panel/users/create/", payload);
+  return data;
+}
+
+export async function deleteAdminUser(userId) {
+  const { data } = await client.delete(`/admin-panel/users/${userId}/`);
+  return data;
+}
+
+export async function getAdminQueue() {
+  const { data } = await client.get("/admin-panel/queue/");
+  return data;
+}
+
+export async function getMyReviews() {
+  const { data } = await client.get("/admin-panel/my-reviews/");
+  return data;
+}
+
 export async function getDiscoverFeed() {
   const { data } = await client.get("/search/discover/");
   return data;

@@ -19,6 +19,7 @@ import SubmissionSuccessPage from "../features/datasets/pages/SubmissionSuccessP
 import DatasetListPage from "../features/datasets/pages/DatasetListPage.jsx";
 import ResearcherDashboardPage from "../features/datasets/pages/ResearcherDashboardPage.jsx";
 import AdminDashboardPage from "../features/datasets/pages/AdminDashboardPage.jsx";
+import AdminAuditLogPage from "../features/datasets/pages/AdminAuditLogPage.jsx";
 import ReviewerDashboardPage from "../features/datasets/pages/ReviewerDashboardPage.jsx";
 import UserDashboardPage from "../features/datasets/pages/UserDashboardPage.jsx";
 import DatasetDetailPage from "../features/datasets/pages/Datasetdetailpage.jsx";
@@ -65,6 +66,7 @@ export default function AppRoutes() {
       <Route path="/researcher-dashboard" element={<ResearcherDashboardPage />} />
       <Route path="/reviewer-dashboard" element={<ReviewerDashboardPage />} />
       <Route path="/admin-dashboard" element={<AdminDashboardPage />} />
+      <Route path="/admin/audit-log" element={<AdminAuditLogPage />} />
 
       {/* Profile */}
       <Route path="/profile" element={<ProfilePage />} />

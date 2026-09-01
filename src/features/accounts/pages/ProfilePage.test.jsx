@@ -11,6 +11,7 @@ const authApi = vi.hoisted(() => ({
   updateProfile: vi.fn(),
   updateProfileCompletion: vi.fn(),
   addCustomInterest: vi.fn(),
+  getDepartments: vi.fn(),
 }));
 
 const mockAuthUser = vi.hoisted(() => ({
@@ -60,6 +61,7 @@ describe("ProfilePage", () => {
     authApi.updateProfile.mockResolvedValue({});
     authApi.updateProfileCompletion.mockResolvedValue({});
     authApi.addCustomInterest.mockResolvedValue({ name: "Engineering — Mining" });
+    authApi.getDepartments.mockResolvedValue([]);
   });
 
   it("renders Email Address and Username as read-only and does not allow editing", async () => {

@@ -63,6 +63,8 @@ const ROLE_CONFIG = {
     nav: [
       { label: "Overview", icon: LayoutGrid, to: "/admin-dashboard" },
       { label: "Audit Log", icon: ScrollText, to: "/admin/audit-log" },
+      { label: "Datasets", icon: Database, to: "/admin/datasets" },
+      { label: "Settings", icon: Settings, to: "/admin/settings" },
       { label: "Users", icon: Users, to: "/admin-dashboard?tab=users" },
       { label: "Deletion Requests", icon: Trash2, to: "/admin-dashboard?tab=deletions" },
     ],

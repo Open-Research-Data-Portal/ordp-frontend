@@ -56,7 +56,7 @@ export default function AdminDashboardPage() {
   const [queue, setQueue] = useState([]);
   const [contentUpdates, setContentUpdates] = useState([]);
   const [users, setUsers] = useState(MOCK_USERS);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   const [userSearch, setUserSearch] = useState("");
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -338,7 +338,6 @@ export default function AdminDashboardPage() {
                   >
                     <option value="user">Normal User</option>
                     <option value="checker">Reviewer (Checker)</option>
-                    <option value="admin">Admin</option>
                     <option value="researcher">Researcher</option>
                   </select>
                 </div>

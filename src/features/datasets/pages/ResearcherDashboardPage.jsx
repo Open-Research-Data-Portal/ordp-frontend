@@ -5,7 +5,6 @@ import {
   Download,
   FolderOpen,
   Plus,
-  MoreVertical,
   Bookmark,
   User,
   X,
@@ -13,7 +12,6 @@ import {
 } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import StatCard from "../../../components/dashboard/StatCard";
-import { StatusBadge, EmptyState } from "../../../components/dashboard/dashboardUi";
 import { useAuth } from "../../../context/useAuth";
 import { getDisplayName } from "../../../utils/userRoles";
 import * as datasetsApi from "../hooks/datasetsApi";
@@ -26,29 +24,24 @@ function normalizeList(data) {
   return data?.results || [];
 }
 
-function formatDate(dateString) {
-  if (!dateString) return "—";
-  return new Date(dateString).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
 
 
 export default function ResearcherDashboardPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  const [datasets, setDatasets] = useState([]);
   const [feed, setFeed] = useState([]);
   const [bookmarks, setBookmarks] = useState([]);
   const [stats, setStats] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [totalDatasets, setTotalDatasets] = useState(0);
+  const [pendingDatasets, setPendingDatasets] = useState(0);
+  const [loadingStats, setLoadingStats] = useState(true);
+  const [loadingDatasets, setLoadingDatasets] = useState(true);
+  const [loadingFeed, setLoadingFeed] = useState(true);
+  const [loadingBookmarks, setLoadingBookmarks] = useState(true);
+  const [statsError, setStatsError] = useState(null);
+  const [datasetsError, setDatasetsError] = useState(null);
 
-  // Profile completion banner: reappears every time the dashboard loads
-  // until the user's profile is actually marked complete.
   const isProfileComplete = Boolean(
     user?.can_upload_datasets ||
     user?.profile?.can_upload_datasets ||
@@ -67,30 +60,57 @@ export default function ResearcherDashboardPage() {
   }, []);
 
   useEffect(() => {
-    setShowProfileBanner(!isProfileComplete);
+    queueMicrotask(() => setShowProfileBanner(!isProfileComplete));
   }, [isProfileComplete]);
 
   useEffect(() => {
     let active = true;
     async function load() {
-      setLoading(true);
-      const results = await Promise.allSettled([
-        datasetsApi.getMyDatasets(),
+      setLoadingStats(true);
+      setLoadingDatasets(true);
+      setLoadingFeed(true);
+      setLoadingBookmarks(true);
+      setStatsError(null);
+      setDatasetsError(null);
+
+      const [statsResult, datasetsResult, pendingResult, feedResult, bookmarksResult] = await Promise.allSettled([
         datasetsApi.getDashboardStats(),
+        datasetsApi.getMyDatasets(),
+        datasetsApi.getMyDatasets({ status: "pending" }),
         datasetsApi.getDashboardFeed(),
         datasetsApi.getMyBookmarks?.() ?? Promise.resolve([]),
       ]);
+
       if (!active) return;
-      if (results[0].status === "fulfilled") setDatasets(normalizeList(results[0].value));
-      if (results[1].status === "fulfilled") setStats(results[1].value);
-      if (results[2].status === "fulfilled") setFeed(normalizeList(results[2].value));
-      if (results[3].status === "fulfilled") setBookmarks(normalizeList(results[3].value));
-      setLoading(false);
+
+      if (statsResult.status === "fulfilled") {
+        setStats(statsResult.value);
+      } else {
+        setStatsError("Failed to load dashboard stats.");
+      }
+
+      if (datasetsResult.status === "fulfilled") {
+        const list = normalizeList(datasetsResult.value);
+        setTotalDatasets(list.length);
+      } else {
+        setDatasetsError("Failed to load your datasets.");
+      }
+
+      if (pendingResult.status === "fulfilled") {
+        const pendingList = normalizeList(pendingResult.value);
+        setPendingDatasets(pendingList.length);
+      }
+
+      if (feedResult.status === "fulfilled") setFeed(normalizeList(feedResult.value));
+      if (bookmarksResult.status === "fulfilled") setBookmarks(normalizeList(bookmarksResult.value));
+
+      setLoadingStats(false);
+      setLoadingDatasets(false);
+      setLoadingFeed(false);
+      setLoadingBookmarks(false);
     }
     load();
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, []);
 
   return (
@@ -148,11 +168,44 @@ export default function ResearcherDashboardPage() {
 
       {/* Stats row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
-        <StatCard label="VIEWS RECEIVED" value={loading ? "…" : (stats?.total_views_received ?? 0).toLocaleString()} icon={Eye} trend="+12% this month" delay={50} />
-        <StatCard label="DOWNLOADS RECEIVED" value={loading ? "…" : (stats?.total_downloads_received ?? 0).toLocaleString()} icon={Download} trend="+5% this month" delay={100} />
-        <StatCard label="DOWNLOADS I MADE" value={loading ? "…" : (stats?.downloads_i_made ?? 0)} icon={FolderOpen} hint="Across all datasets" delay={150} />
-        <StatCard label="MOST VIEWED" value={loading ? "…" : (stats?.most_viewed_dataset?.title ?? "None")} icon={Eye} hint={stats?.most_viewed_dataset ? `${stats.most_viewed_dataset.view_count} views` : ""} delay={200} />
+        <StatCard
+          label="TOTAL DATASETS"
+          value={loadingDatasets ? "…" : totalDatasets.toLocaleString()}
+          icon={FolderOpen}
+          delay={50}
+        />
+        <StatCard
+          label="PENDING DATASETS"
+          value={loadingDatasets ? "…" : pendingDatasets.toLocaleString()}
+          icon={Eye}
+          delay={100}
+        />
+        <StatCard
+          label="DOWNLOADS RECEIVED"
+          value={loadingStats ? "…" : (stats?.total_downloads_received ?? 0).toLocaleString()}
+          icon={Download}
+          trend="+5% this month"
+          delay={150}
+        />
+        <StatCard
+          label="DOWNLOADS MADE"
+          value={loadingStats ? "…" : (stats?.downloads_i_made ?? 0)}
+          icon={FolderOpen}
+          hint="Across all datasets"
+          delay={200}
+        />
       </div>
+
+      {statsError && (
+        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {statsError}
+        </div>
+      )}
+      {datasetsError && (
+        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {datasetsError}
+        </div>
+      )}
 
       {/* Recommendations */}
       <section className="mb-8 animate-fade-in-up" style={{ animationDelay: "250ms" }}>
@@ -171,11 +224,11 @@ export default function ResearcherDashboardPage() {
           </button>
         </div>
 
-        {loading ? (
-          <p className="text-sm text-gray-500">Loading…</p>
-        ) : feed.length === 0 ? (
-          <p className="text-sm text-gray-500">No recommendations available at the moment.</p>
-        ) : (
+      {loadingFeed ? (
+        <p className="text-sm text-gray-500">Loading…</p>
+      ) : feed.length === 0 ? (
+        <p className="text-sm text-gray-500">No recommendations available at the moment.</p>
+      ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {feed.slice(0, 3).map((item) => (
               <div
@@ -217,7 +270,9 @@ export default function ResearcherDashboardPage() {
       <section className="mb-8 animate-fade-in-up" style={{ animationDelay: "300ms" }}>
         <h2 className="text-lg font-serif font-bold text-navy mb-4">My Bookmarks</h2>
 
-        {bookmarks.length === 0 ? (
+        {loadingBookmarks ? (
+          <p className="text-sm text-gray-500">Loading bookmarks…</p>
+        ) : bookmarks.length === 0 ? (
           <div className="bg-white rounded-xl border border-border shadow-sm py-14 flex flex-col items-center text-center px-6">
             <span className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-4">
               <Bookmark className="w-5 h-5 text-gray-400" />

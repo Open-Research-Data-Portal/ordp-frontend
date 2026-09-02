@@ -94,8 +94,8 @@ describe("ProfilePage", () => {
 
   it("marks Academic Role and Research Interests as required", () => {
     renderProfilePage();
-    const roleLabel = screen.getByText("Occupation");
-    expect(roleLabel.parentElement).toHaveTextContent("Occupation*");
+    const roleLabel = screen.getByText("Academia");
+    expect(roleLabel.parentElement).toHaveTextContent("Academia*");
 
     const interestsLabel = screen.getByText("Research Interests");
     expect(interestsLabel.parentElement).toHaveTextContent("Research Interests*");

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Camera, User as UserIcon, GraduationCap, Database, Save, RotateCcw } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import TextInput from "../../../components/ui/TextInput";
@@ -50,6 +51,7 @@ function SectionCard({ icon: Icon, title, children }) {
 }
 
 export default function ProfilePage() {
+  const navigate = useNavigate();
   const { user, isAuthenticated, updateProfile } = useAuth();
   const [avatarUrl, setAvatarUrl] = useState(null);
   const [firstName, setFirstName] = useState("");
@@ -57,8 +59,6 @@ export default function ProfilePage() {
   const [grandFatherName, setGrandFatherName] = useState("");
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
-
-  const [affiliation, setAffiliation] = useState(DEFAULT_AFFILIATION);
   const [college, setCollege] = useState("");
   const [centerOfExcellence, setCenterOfExcellence] = useState("");
   const [department, setDepartment] = useState("");
@@ -104,7 +104,6 @@ export default function ProfilePage() {
 
       setEmail(user?.email ?? "");
       setUsername(user?.username ?? "");
-      setAffiliation(user?.affiliation ?? DEFAULT_AFFILIATION);
       setAcademicRole(user?.academia ?? user?.occupation ?? user?.academicRole ?? "researcher");
       setResearchInterests(user?.researchInterests ?? user?.research_interests ?? []);
       setBio(user?.bio ?? "");
@@ -134,7 +133,6 @@ export default function ProfilePage() {
         setGrandFatherName(parts.grandFatherName);
         setEmail(data?.email ?? "");
         setUsername(data?.username ?? "");
-        setAffiliation(data?.affiliation ?? DEFAULT_AFFILIATION);
         setCollege(data?.college ?? "");
         setCenterOfExcellence(data?.center_of_excellence ?? "");
         setDepartment(data?.department ?? data?.department_id ?? "");
@@ -242,7 +240,7 @@ export default function ProfilePage() {
         last_name: fatherName,
         grand_father_name: grandFatherName,
         full_name: fullName,
-        affiliation,
+        affiliation: DEFAULT_AFFILIATION,
         college: resolvedCollege,
         center_of_excellence: resolvedCenter,
         department: resolvedDepartment,
@@ -267,15 +265,52 @@ export default function ProfilePage() {
       ]);
       try {
         const freshProfile = await authApi.getCompleteProfile();
+        const isNowComplete = Boolean(
+          freshProfile?.full_name &&
+          freshProfile?.affiliation &&
+          freshProfile?.department &&
+          freshProfile?.academia &&
+          freshProfile?.profile_visibility &&
+          freshProfile?.terms_accepted
+        );
+        const merged = {
+          ...user,
+          ...freshProfile,
+          profile_complete: true,
+          is_profile_complete: true,
+          ...(isNowComplete ? { can_upload_datasets: true } : {}),
+        };
         if (updateProfile) {
-          await updateProfile({ ...user, ...freshProfile, profile_complete: true, is_profile_complete: true });
+          await updateProfile(merged);
+        }
+        setSaved(true);
+        if (isNowComplete) {
+          setTimeout(() => navigate("/dashboard", { replace: true }), 600);
         }
       } catch {
+        const isNowComplete = Boolean(
+          fullName &&
+          affiliation &&
+          department &&
+          academia &&
+          profileVisibility &&
+          termsAccepted
+        );
+        const merged = {
+          ...user,
+          ...payload,
+          profile_complete: true,
+          is_profile_complete: true,
+          ...(isNowComplete ? { can_upload_datasets: true } : {}),
+        };
         if (updateProfile) {
-          await updateProfile({ ...user, ...payload, profile_complete: true, is_profile_complete: true });
+          await updateProfile(merged);
+        }
+        setSaved(true);
+        if (isNowComplete) {
+          setTimeout(() => navigate("/dashboard", { replace: true }), 600);
         }
       }
-      setSaved(true);
     } catch (err) {
       console.error("Failed to save profile:", err);
       setError(err?.message || "Failed to save profile. Please check your inputs.");
@@ -402,8 +437,9 @@ export default function ProfilePage() {
                     id="affiliation"
                     label="Affiliation"
                     required
-                    value={affiliation}
-                    onChange={(e) => setAffiliation(e.target.value)}
+                    readOnly
+                    value={DEFAULT_AFFILIATION}
+                    helperText="This field is set to your institution by default."
                   />
                 </div>
                 <Select
@@ -444,7 +480,7 @@ export default function ProfilePage() {
                 />
                 <Select
                   id="academicRole"
-                  label="Occupation"
+                  label="Academia"
                   required
                   value={academicRole}
                   onChange={(e) => {

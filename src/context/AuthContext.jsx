@@ -43,9 +43,21 @@ export function AuthProvider({ children }) {
         setTokens(access, newRefresh);
         client.defaults.headers.common.Authorization = `Bearer ${access}`;
         setAccessToken(access);
-        return authApi.getProfile();
+        // Fetch both profile endpoints and merge them
+        return Promise.all([
+          authApi.getProfile().catch(() => null),
+          authApi.getCompleteProfile().catch(() => null),
+        ]);
       })
-      .then(setUser)
+      .then(([profile, completeProfile]) => {
+        console.log("🔍 AuthContext session restore — profile endpoints:");
+        console.log("  - getProfile():", profile);
+        console.log("  - getCompleteProfile():", completeProfile);
+        const mergedProfile = { ...(profile || {}), ...(completeProfile || {}) };
+        console.log("  - merged:", mergedProfile);
+        console.log("  - can_upload_datasets:", mergedProfile?.can_upload_datasets);
+        setUser(mergedProfile);
+      })
       .catch(() => {
         // Stored refresh token is invalid or revoked — wipe everything.
         clearTokens();
@@ -80,7 +92,12 @@ export function AuthProvider({ children }) {
       // complete profile may not be available for all account states
     }
 
+    console.log("🔍 AuthContext login — profile endpoints:");
+    console.log("  - getProfile():", profile);
+    console.log("  - getCompleteProfile():", completeProfile);
     const mergedProfile = { ...(profile || {}), ...(completeProfile || {}) };
+    console.log("  - merged:", mergedProfile);
+    console.log("  - can_upload_datasets:", mergedProfile?.can_upload_datasets);
     setUser(mergedProfile);
 
     return { ...data, profile: mergedProfile };
@@ -96,8 +113,13 @@ export function AuthProvider({ children }) {
     client.defaults.headers.common.Authorization = `Bearer ${access}`;
     setAccessToken(access);
     try {
-      const profile = await authApi.getProfile();
-      setUser(profile);
+      // Fetch both profile endpoints and merge them
+      const [profile, completeProfile] = await Promise.all([
+        authApi.getProfile().catch(() => null),
+        authApi.getCompleteProfile().catch(() => null),
+      ]);
+      const mergedProfile = { ...(profile || {}), ...(completeProfile || {}) };
+      setUser(mergedProfile);
     } catch {
       // keep user null if profile fetch fails
     }
@@ -107,6 +129,32 @@ export function AuthProvider({ children }) {
     const updated = await authApi.updateProfile(patch);
     setUser((current) => ({ ...current, ...(updated || patch) }));
     return updated;
+  }, []);
+
+  const refreshProfile = useCallback(async () => {
+    try {
+      let profile;
+      try {
+        profile = await authApi.getProfile();
+      } catch {
+        profile = null;
+      }
+      
+      let completeProfile;
+      try {
+        completeProfile = await authApi.getCompleteProfile();
+      } catch {
+        // complete profile may not be available for all account states
+        completeProfile = null;
+      }
+      
+      const mergedProfile = { ...(profile || {}), ...(completeProfile || {}) };
+      setUser(mergedProfile);
+      return mergedProfile;
+    } catch (err) {
+      console.error("Failed to refresh profile:", err);
+      throw err;
+    }
   }, []);
 
   const logout = useCallback(async () => {
@@ -130,9 +178,10 @@ export function AuthProvider({ children }) {
       login,
       logout,
       updateProfile,
+      refreshProfile,
       setSession,
     }),
-    [user, accessToken, loading, login, logout, updateProfile, setSession]
+    [user, accessToken, loading, login, logout, updateProfile, refreshProfile, setSession]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

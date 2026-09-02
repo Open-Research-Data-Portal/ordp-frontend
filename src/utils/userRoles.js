@@ -20,13 +20,24 @@ export function isReviewer(user) {
 }
 
 export function isResearcher(user) {
-  return getUserRole(user) === "researcher";
+  return Boolean(
+    user?.profile?.can_upload_datasets ||
+    user?.can_upload_datasets
+  );
 }
 
 export function getDashboardPath(user) {
   if (isAdmin(user)) return "/admin-dashboard";
   if (isReviewer(user)) return "/reviewer-dashboard";
-  if (isResearcher(user)) return "/researcher-dashboard";
+  const isRes = isResearcher(user);
+  console.log("🔍 getDashboardPath():", {
+    user: user?.email || "no-user",
+    isResearcher: isRes,
+    can_upload_datasets: user?.can_upload_datasets,
+    profile_can_upload: user?.profile?.can_upload_datasets,
+    returning: isRes ? "/researcher-dashboard" : "/user-dashboard"
+  });
+  if (isRes) return "/researcher-dashboard";
   return "/user-dashboard";
 }
 

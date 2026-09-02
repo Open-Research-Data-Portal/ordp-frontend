@@ -15,7 +15,7 @@ import {
   History,
   Bookmark,
 } from "lucide-react";
-import TopBar from "../layouts/TopBar";
+import DashboardAwareLayout from "../layouts/DashboardAwareLayout";
 import { searchDatasets } from "../api/search";
 import * as bookmarksApi from "../api/bookmarks";
 import { getDatasetImage } from "../utils/datasetImage";
@@ -468,25 +468,22 @@ export default function BrowseDatasetsPage() {
   ]);
 
   return (
-    <div className="min-h-screen bg-[#F5F5F3] flex flex-col">
-      <TopBar />
-
-      <div className="w-full px-6 lg:px-10 py-10 flex-1">
-        {/* Header */}
-        <div className="flex items-start justify-between gap-6 mb-8 animate-fade-in-up">
-          <div>
-            <h1 className="text-4xl font-serif font-bold text-navy">Datasets</h1>
-            <p className="text-gray-500 mt-2 text-sm max-w-2xl">
-              Explore, analyze, and donate quality research data.{" "}
-              <button onClick={() => navigate("/about")} className="underline hover:text-navy transition-colors">
-                Learn more
-              </button>{" "}
-              about accessioning, citing, and collaborating.
-            </p>
-          </div>
-          <button
-            onClick={() => navigate("/datasets/contribute?new=1")}
-            className="flex items-center gap-2 bg-[#A67A0D] hover:bg-[#8f690b] text-white rounded-full px-5 py-2.5 text-sm font-semibold transition-all duration-200 hover:shadow-md hover:scale-[1.03] active:scale-[0.98] shrink-0"
+    <DashboardAwareLayout>
+      {/* Header */}
+      <div className="flex items-start justify-between gap-6 mb-8 animate-fade-in-up">
+        <div>
+          <h1 className="text-4xl font-serif font-bold text-navy">Datasets</h1>
+          <p className="text-gray-500 mt-2 text-sm max-w-2xl">
+            Explore, analyze, and donate quality research data.{" "}
+            <button onClick={() => navigate("/about")} className="underline hover:text-navy transition-colors">
+              Learn more
+            </button>{" "}
+            about accessioning, citing, and collaborating.
+          </p>
+        </div>
+        <button
+          onClick={() => navigate("/datasets/contribute?new=1")}
+          className="flex items-center gap-2 bg-[#A67A0D] hover:bg-[#8f690b] text-white rounded-full px-5 py-2.5 text-sm font-semibold transition-all duration-200 hover:shadow-md hover:scale-[1.03] active:scale-[0.98] shrink-0"
           >
             <Plus className="w-4 h-4" /> New Dataset
           </button>
@@ -921,7 +918,6 @@ export default function BrowseDatasetsPage() {
             />
           </>
         )}
-      </div>
-    </div>
+      </DashboardAwareLayout>
   );
 }

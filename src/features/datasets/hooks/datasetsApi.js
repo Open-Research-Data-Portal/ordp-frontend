@@ -230,10 +230,6 @@ export async function getMySuggestions() {
   return data;
 }
 
-export async function getMyDownloads() {
-  const { data } = await client.get(`${DATASETS_BASE}/dashboard/my-downloads/`);
-  return data;
-}
 export async function addContributor(datasetId, payload) {
   const { data } = await client.post(`${DATASETS_BASE}/${datasetId}/contributors/`, payload);
   return data;

@@ -28,6 +28,7 @@ import DatasetViewPage from "../pages/DatasetViewPage";
 import BookmarksPage from "../features/datasets/pages/BookmarksPage";
 
 import { useAuth } from "../context/useAuth";
+import DashboardGuard from "./DashboardGuard.jsx";
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth();
@@ -80,10 +81,18 @@ export default function AppRoutes() {
         <ProtectedRoute><DashboardRouter /></ProtectedRoute>
       } />
       <Route path="/user-dashboard" element={
-        <ProtectedRoute><UserDashboardPage /></ProtectedRoute>
+        <ProtectedRoute>
+          <DashboardGuard expectedDashboard="/user-dashboard">
+            <UserDashboardPage />
+          </DashboardGuard>
+        </ProtectedRoute>
       } />
       <Route path="/researcher-dashboard" element={
-        <ProtectedRoute><ResearcherDashboardPage /></ProtectedRoute>
+        <ProtectedRoute>
+          <DashboardGuard expectedDashboard="/researcher-dashboard">
+            <ResearcherDashboardPage />
+          </DashboardGuard>
+        </ProtectedRoute>
       } />
       <Route path="/reviewer-dashboard" element={
         <ProtectedRoute><ReviewerDashboardPage /></ProtectedRoute>

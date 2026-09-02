@@ -753,20 +753,6 @@ export default function DatasetViewPage() {
             </p>
             <StatDelta pct={dataset.activity.downloadsDeltaPct} />
           </div>
-          <div>
-            <p className="text-xs text-gray-400">Top Contributors</p>
-            <div className="mt-2 flex -space-x-2">
-              {dataset.activity.topContributors.map((c) => (
-                <div
-                  key={c.id}
-                  className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white text-[10px] font-bold text-white"
-                  style={{ backgroundColor: c.color }}
-                >
-                  {c.initials}
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
 
         {/* Detail View — collapsible Views + Downloads charts */}

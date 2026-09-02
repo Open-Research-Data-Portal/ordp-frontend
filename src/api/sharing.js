@@ -21,3 +21,8 @@ export async function requestShareAccess(datasetId, payload) {
   const { data } = await client.post(`/sharing/${datasetId}/request-share/`, payload);
   return data;
 }
+
+export async function inviteCoauthor(datasetId, email) {
+  const { data } = await client.post(`/sharing/${datasetId}/invite-coauthor/`, { email });
+  return data;
+}

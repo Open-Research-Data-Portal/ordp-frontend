@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import * as datasetsApi from "./datasetsApi";
+import { inviteCoauthor as sendCoauthorInvitation } from "../../../api/sharing";
 
 const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB per chunk
 
@@ -172,6 +173,27 @@ export default function useDatasetSubmission(draftId = null) {
     }
   };
 
+  const inviteCoauthor = async ({ email, title }) => {
+    setIsSubmitting(true);
+    setSubmitError(null);
+    try {
+      let did = datasetId;
+      if (!did) {
+        const result = await datasetsApi.initUpload({ title: title.trim(), visibility: "restricted" });
+        did = result.dataset_id;
+        setDatasetId(did);
+        setUploadSessionId(result.upload_session_id);
+      }
+      await sendCoauthorInvitation(did, email);
+    } catch (err) {
+      const message = extractError(err);
+      setSubmitError(message);
+      throw new Error(message, { cause: err });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   // Step 2: attach metadata + set languages.
   const submitMetadata = async (metadataData) => {
     setIsSubmitting(true);
@@ -209,7 +231,7 @@ export default function useDatasetSubmission(draftId = null) {
         });
       }
 
-      // Integrate Co-Authors and Contributors API
+      // Persist named co-authors entered in the form.
       const coAuthors = details.coAuthors || [];
       for (const name of coAuthors) {
         if (name.trim()) {
@@ -217,16 +239,6 @@ export default function useDatasetSubmission(draftId = null) {
             await datasetsApi.addContributor(did, { name: name.trim(), contributor_type: "co_author" });
           } catch (e) {
             console.warn("Failed to add co-author", e);
-          }
-        }
-      }
-      const contributors = details.contributors || [];
-      for (const name of contributors) {
-        if (name.trim()) {
-          try {
-            await datasetsApi.addContributor(did, { name: name.trim(), contributor_type: "contributor" });
-          } catch (e) {
-            console.warn("Failed to add contributor", e);
           }
         }
       }
@@ -263,12 +275,12 @@ export default function useDatasetSubmission(draftId = null) {
       }
 
       const files = (uploadData.files || []).filter((e) => e.file);
-      if (files.length > 1) {
-        throw new Error("Only a single file can be uploaded per submission. Please remove extra files.");
-      }
+      for (const [index, entry] of files.entries()) {
+        if (index > 0) {
+          const nextSession = await datasetsApi.initExistingDraftUpload(activeDatasetId);
+          activeSessionId = nextSession.upload_session_id;
+        }
 
-      if (files.length === 1) {
-        const entry = files[0];
         const fileType = entry.fileType || deriveFileType(entry.file);
         const isStructuredFileType = STRUCTURED_FILE_TYPES.has(fileType);
         const metadata = formData.metadata || {};
@@ -297,10 +309,9 @@ export default function useDatasetSubmission(draftId = null) {
         } catch (uploadError) {
           const detail = uploadError?.response?.data?.detail || uploadError?.message || "";
           if (!/unknown upload session/i.test(detail)) throw uploadError;
-          const fresh = await datasetsApi.initUpload({ title: details.title, visibility: "restricted" });
+          const fresh = await datasetsApi.initExistingDraftUpload(activeDatasetId);
           activeSessionId = fresh.upload_session_id;
-          activeDatasetId = fresh.dataset_id;
-          setDatasetId(fresh.dataset_id); setUploadSessionId(activeSessionId);
+          setUploadSessionId(activeSessionId);
           await uploadFileInChunks(entry.file, activeSessionId, (progress) => {
             setFormData((prev) => ({ ...prev, upload: { ...uploadData, files: files.map((f) => f.id === entry.id ? { ...f, status: progress === 100 ? "complete" : "uploading", progress } : f) } }));
           });
@@ -379,6 +390,7 @@ export default function useDatasetSubmission(draftId = null) {
     step, formData, datasetId,
     goToPreviousStep,
     submitDetails,
+    inviteCoauthor,
     submitMetadata,
     submitUpload,
     submitFinal,

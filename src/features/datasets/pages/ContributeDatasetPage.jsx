@@ -19,6 +19,7 @@ export default function ContributeDatasetPage() {
     step, formData,
     goToPreviousStep,
     submitDetails,
+    inviteCoauthor,
     submitMetadata,
     submitUpload,
     submitFinal,
@@ -54,6 +55,7 @@ export default function ContributeDatasetPage() {
           <DetailsForm
             initialValues={formData.details}
             onNext={submitDetails}
+            onInvite={inviteCoauthor}
             isSubmitting={isSubmitting}
             submitError={submitError}
           />

@@ -71,7 +71,9 @@ export default function AppRoutes() {
 
       {/* Public dataset browsing */}
       <Route path="/datasets" element={<BrowseDatasetsPage />} />
-      <Route path="/datasets/:id" element={<DatasetViewPage />} />
+      <Route path="/datasets/:id" element={
+        <ProtectedRoute><DatasetViewPage /></ProtectedRoute>
+      } />
 
       {/* Protected */}
       <Route path="/research-interests-onboarding" element={

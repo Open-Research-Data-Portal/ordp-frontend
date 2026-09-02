@@ -19,10 +19,24 @@ export function isReviewer(user) {
   return getUserRole(user) === "reviewer";
 }
 
+export function isProfileComplete(user) {
+  const profile = user?.profile || user;
+
+  return Boolean(
+    profile?.full_name?.trim?.() &&
+    profile?.affiliation?.trim?.() &&
+    profile?.department &&
+    profile?.academia &&
+    profile?.profile_visibility &&
+    profile?.terms_accepted
+  );
+}
+
 export function isResearcher(user) {
   return Boolean(
     user?.profile?.can_upload_datasets ||
-    user?.can_upload_datasets
+    user?.can_upload_datasets ||
+    isProfileComplete(user)
   );
 }
 

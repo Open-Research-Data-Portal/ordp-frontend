@@ -4,7 +4,7 @@ import TagInput from "../../../components/TagInput";
 import { useAuth } from "../../../context/useAuth";
 import * as metadataApi from "../../../api/metadata";
 
-export default function DetailsForm({ initialValues = {}, onNext, isSubmitting, submitError }) {
+export default function DetailsForm({ initialValues = {}, onNext, onInvite, isSubmitting, submitError }) {
   const { user } = useAuth();
 
   const [title, setTitle] = useState(initialValues.title || "");
@@ -13,7 +13,8 @@ export default function DetailsForm({ initialValues = {}, onNext, isSubmitting, 
   const [languageName, setLanguageName] = useState(initialValues.language || "English");
   const [languages, setLanguages] = useState([]);
   const [coAuthors, setCoAuthors] = useState(initialValues.coAuthors || []);
-  const [contributors, setContributors] = useState(initialValues.contributors || []);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteStatus, setInviteStatus] = useState("");
   const [relatedResources, setRelatedResources] = useState(initialValues.relatedResources || []);
   const [geographicCoverage, setGeographicCoverage] = useState(initialValues.geographicCoverage || "");
   const [temporalCoverage, setTemporalCoverage] = useState(initialValues.temporalCoverage || "");
@@ -50,11 +51,26 @@ export default function DetailsForm({ initialValues = {}, onNext, isSubmitting, 
       language_id: languageId,
       authorId: user?.id,
       coAuthors,
-      contributors,
       relatedResources,
       geographicCoverage,
       temporalCoverage,
     });
+  };
+
+  const handleInvite = async () => {
+    const email = inviteEmail.trim();
+    if (!email || !email.includes("@")) {
+      setInviteStatus("Enter a valid co-author email address.");
+      return;
+    }
+    setInviteStatus("");
+    try {
+      await onInvite({ email, title, description });
+      setInviteEmail("");
+      setInviteStatus("Invitation sent.");
+    } catch (err) {
+      setInviteStatus(err?.message || "Could not send the invitation.");
+    }
   };
 
   const inputClass = "w-full px-4 py-3 border border-[#E3E1DA] rounded-md text-sm bg-[#F7F6F2] focus:outline-none focus:border-navy";
@@ -87,15 +103,33 @@ export default function DetailsForm({ initialValues = {}, onNext, isSubmitting, 
       </FormField>
 
       {/* Primary author is auto-filled from the logged-in user */}
-      <TagInput label="Co-Author(s)" tags={coAuthors} onChange={setCoAuthors} placeholder="+ Add Co-Author" />
+      <div className="flex items-end gap-3">
+        <div className="flex-1">
+          <TagInput label="Co-Author(s)" tags={coAuthors} onChange={setCoAuthors} placeholder="+ Add Co-Author" />
+        </div>
+        <div className="mb-6 flex gap-2">
+          <input
+            type="email"
+            value={inviteEmail}
+            onChange={(e) => setInviteEmail(e.target.value)}
+            placeholder="coauthor@example.com"
+            aria-label="Co-author email"
+            className={`${inputClass} min-w-52`}
+          />
+          <button
+            type="button"
+            onClick={handleInvite}
+            disabled={isSubmitting}
+            className="rounded-md bg-[#A67A0D] px-4 py-3 text-sm font-semibold text-white hover:bg-[#8f690b] disabled:opacity-60"
+          >
+            Invite
+          </button>
+        </div>
+      </div>
       <p className="-mt-4 mb-6 text-sm text-gray-500">
         Researchers who contributed significantly to the intellectual work and co-author credit.
       </p>
-
-      <TagInput label="Contributor(s)" tags={contributors} onChange={setContributors} placeholder="+ Add Contributor" />
-      <p className="-mt-4 mb-6 text-sm text-gray-500">
-        Individuals who assisted with data collection, preparation, or technical support.
-      </p>
+      {inviteStatus && <p className="-mt-4 mb-6 text-sm text-gray-500">{inviteStatus}</p>}
 
       <TagInput
         label="Related Resources (Optional)"

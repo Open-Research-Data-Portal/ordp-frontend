@@ -194,13 +194,27 @@ export default function AdminDashboardPage() {
     }
   }
 
+  async function handleDeleteDataset(dataset) {
+    const id = dataset.id || dataset.dataset_id;
+    if (!id || deletingId) return;
+    setDeletingId(id);
+    try {
+      await datasetsApi.deleteDataset(id);
+      setQueue((items) => items.filter((item) => (item.id || item.dataset_id) !== id));
+    } catch (err) {
+      alert(err?.message || "Failed to delete dataset.");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   return (
     <DashboardShell title="ORDP Admin Console" subtitle="System status and key metrics">
       <ProfileSavedNotice />
       <div className="flex justify-between items-start mb-6 animate-fade-in-up">
         <div>
           <h1 className="text-2xl font-serif font-bold text-navy">
-            {tab === "users" ? "User Management" : tab === "audit" ? "System Audit Log" : "Overview"}
+            {tab === "users" ? "User Management" : tab === "datasets" ? "Dataset Management" : tab === "audit" ? "System Audit Log" : "Overview"}
           </h1>
           <p className="text-sm text-gray-500 mt-1">
             {tab === "users"
@@ -382,6 +396,43 @@ export default function AdminDashboardPage() {
                     </tr>
                   ))
                 )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : tab === "datasets" ? (
+        <section className="bg-white rounded-xl border border-border shadow-sm overflow-hidden animate-fade-in-up">
+          <div className="px-5 py-4 border-b border-border">
+            <h2 className="text-base font-semibold text-navy">Datasets</h2>
+            <p className="text-xs text-gray-500 mt-1">Review pending submissions or remove datasets.</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-xs uppercase text-gray-500 bg-gray-50">
+                <tr>
+                  <th className="px-5 py-3 text-left font-semibold">Dataset</th>
+                  <th className="px-5 py-3 text-left font-semibold">Status</th>
+                  <th className="px-5 py-3 text-right font-semibold">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {queue.length === 0 ? (
+                  <tr><td colSpan={3} className="px-5 py-8 text-center text-sm text-gray-500">No datasets require review.</td></tr>
+                ) : queue.map((dataset) => {
+                  const id = dataset.id || dataset.dataset_id;
+                  return (
+                    <tr key={id} className="border-t border-gray-100">
+                      <td className="px-5 py-3 font-medium text-navy">{dataset.title || dataset.name || `Dataset ${id}`}</td>
+                      <td className="px-5 py-3"><StatusBadge status={dataset.status || "pending"} /></td>
+                      <td className="px-5 py-3">
+                        <div className="flex justify-end gap-2">
+                          <button type="button" onClick={() => navigate(`/datasets/${id}`)} className="border border-gold text-gold-dark rounded-md px-3 py-1.5 text-xs font-semibold hover:bg-gold-light">Review</button>
+                          <button type="button" onClick={() => handleDeleteDataset(dataset)} disabled={deletingId === id} className="border border-red-200 text-red-700 rounded-md px-3 py-1.5 text-xs font-semibold hover:bg-red-50 disabled:opacity-60">{deletingId === id ? "Deleting..." : "Delete"}</button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

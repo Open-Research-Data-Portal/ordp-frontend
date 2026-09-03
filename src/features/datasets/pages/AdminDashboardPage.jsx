@@ -7,13 +7,14 @@ import {
   Trash2,
   Activity,
   ShieldCheck,
-  Search,
 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis } from "recharts";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import StatCard from "../../../components/dashboard/StatCard";
 import { SectionHeader, StatusBadge, ProfileSavedNotice, EmptyState } from "../../../components/dashboard/dashboardUi";
-import * as datasetsApi from "../hooks/datasetsApi";
+import { useToast } from "../../../context/ToastContext.jsx";
+import AdminSettingsPage from "./AdminSettingsPage.jsx";
+import * as datasetsApi from "../hooks/datasetsApi.js";
 
 function normalizeList(data) {
   if (Array.isArray(data)) return data;
@@ -22,9 +23,18 @@ function normalizeList(data) {
 
 const CHART_COLORS = ["#B8860B", "#0B1526", "#ef4444", "#10b981", "#6366f1", "#f59e0b"];
 
-const ROLE_OPTIONS = [
-  { value: "user", label: "Normal User" },
-  { value: "checker", label: "Reviewer (Checker)" },
+const MOCK_USERS = [
+  { id: "u1", email: "admin@aastu.edu.et", full_name: "Admin User", role: "admin", status: "active", initials: "AU" },
+  { id: "u2", email: "reviewer@aastu.edu.et", full_name: "Reviewer One", role: "checker", status: "active", initials: "RO" },
+  { id: "u3", email: "researcher@aastu.edu.et", full_name: "Researcher Abebe", role: "researcher", status: "active", initials: "RA" },
+  { id: "u4", email: "student1@aastustudent.edu.et", full_name: "Student Alem", role: "user", status: "pending", initials: "SA" },
+  { id: "u5", email: "lecturer@aastu.edu.et", full_name: "Lecturer Tadesse", role: "user", status: "active", initials: "LT" },
+];
+
+const MOCK_DELETIONS = [
+  { id: "d1", code: "DS-2015-112", reason: "Expired retention policy", requested_by: "admin@aastu.edu.et", requested_at: "2024-10-25" },
+  { id: "d2", code: "DS-2018-044", reason: "Owner request approved", requested_by: "researcher@aastu.edu.et", requested_at: "2024-10-26" },
+  { id: "d3", code: "DS-2019-087", reason: "Duplicate dataset", requested_by: "reviewer@aastu.edu.et", requested_at: "2024-10-27" },
 ];
 
 const roleBadge = {
@@ -38,14 +48,15 @@ export default function AdminDashboardPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const tab = searchParams.get("tab") || "overview";
+  const { addToast } = useToast();
 
   const [cards, setCards] = useState(null);
   const [auditLog, setAuditLog] = useState([]);
-  const [deletions, setDeletions] = useState([]);
-  const [users, setUsers] = useState([]);
+  const [deletions, setDeletions] = useState(MOCK_DELETIONS);
   const [queue, setQueue] = useState([]);
-  const [reviews, setReviews] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [contentUpdates, setContentUpdates] = useState([]);
+  const [users, setUsers] = useState(MOCK_USERS);
+  const [loading, setLoading] = useState(false);
 
   const [userSearch, setUserSearch] = useState("");
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -55,28 +66,23 @@ export default function AdminDashboardPage() {
   const [creatingUser, setCreatingUser] = useState(false);
   const [createError, setCreateError] = useState("");
 
-  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
-  const [deletingId, setDeletingId] = useState(null);
-
   useEffect(() => {
     let active = true;
     async function load() {
       setLoading(true);
-      const [cardsRes, auditRes, delRes, usersRes, queueRes, reviewsRes] = await Promise.allSettled([
+      const [cardsRes, auditRes, delRes, queueRes, cuRes] = await Promise.allSettled([
         datasetsApi.getAdminCards?.() ?? Promise.resolve(null),
         datasetsApi.getAdminAuditLog?.() ?? Promise.resolve([]),
         datasetsApi.getAdminDeletionQueue?.() ?? Promise.resolve([]),
-        datasetsApi.getAdminUsers?.() ?? Promise.resolve([]),
         datasetsApi.getAdminQueue?.() ?? Promise.resolve([]),
-        datasetsApi.getMyReviews?.() ?? Promise.resolve([]),
+        datasetsApi.getContentUpdateQueue?.() ?? Promise.resolve([]),
       ]);
       if (!active) return;
       if (cardsRes.status === "fulfilled") setCards(cardsRes.value);
       if (auditRes.status === "fulfilled") setAuditLog(normalizeList(auditRes.value));
       if (delRes.status === "fulfilled") setDeletions(normalizeList(delRes.value));
-      if (usersRes.status === "fulfilled") setUsers(normalizeList(usersRes.value));
       if (queueRes.status === "fulfilled") setQueue(normalizeList(queueRes.value));
-      if (reviewsRes.status === "fulfilled") setReviews(normalizeList(reviewsRes.value));
+      if (cuRes.status === "fulfilled") setContentUpdates(normalizeList(cuRes.value));
       setLoading(false);
     }
     load();
@@ -92,7 +98,47 @@ export default function AdminDashboardPage() {
     "Record Deletion": "bg-red-50 text-red-700",
     "User Created": "bg-emerald-50 text-emerald-700",
     "User Deleted": "bg-red-50 text-red-700",
+    approved: "bg-emerald-50 text-emerald-700",
+    rejected: "bg-red-50 text-red-700",
+    pending: "bg-amber-50 text-amber-700",
   }), []);
+
+  const reviewStats = useMemo(() => {
+    const pending = queue.length;
+    const approved = queue.filter((d) => String(d.status || "").toLowerCase() === "approved").length;
+    const rejected = queue.filter((d) => String(d.status || "").toLowerCase() === "rejected").length;
+    const total = queue.length || 1;
+    return {
+      total: queue.length,
+      pending,
+      approved,
+      rejected,
+      approvedPct: queue.length ? Math.round((approved / total) * 100) : 0,
+      rejectedPct: queue.length ? Math.round((rejected / total) * 100) : 0,
+      pendingPct: queue.length ? Math.round((pending / total) * 100) : 0,
+    };
+  }, [queue]);
+
+  const pieData = useMemo(() => {
+    if (!reviewStats.total) return [];
+    return [
+      { name: "Pending", value: reviewStats.pending },
+      { name: "Approved", value: reviewStats.approved },
+      { name: "Rejected", value: reviewStats.rejected },
+    ].filter((d) => d.value > 0);
+  }, [reviewStats]);
+
+  const barData = useMemo(() => {
+    const map = new Map();
+    const list = [...queue, ...contentUpdates];
+    list.forEach((r) => {
+      const day = new Date(r.created_at || r.submitted_at || r.timestamp || 0).toLocaleDateString();
+      map.set(day, (map.get(day) || 0) + 1);
+    });
+    return Array.from(map.entries())
+      .map(([name, count]) => ({ name, count }))
+      .slice(-14);
+  }, [queue, contentUpdates]);
 
   const filteredUsers = useMemo(() => {
     if (!userSearch.trim()) return users;
@@ -105,71 +151,26 @@ export default function AdminDashboardPage() {
     );
   }, [users, userSearch]);
 
-  const reviewStats = useMemo(() => {
-    const list = normalizeList(reviews);
-    const pending = list.filter((r) => String(r.status || "").toLowerCase() === "pending").length;
-    const approved = list.filter((r) => String(r.status || "").toLowerCase() === "approved").length;
-    const rejected = list.filter((r) => String(r.status || "").toLowerCase() === "rejected").length;
-    const total = list.length || pending + approved + rejected || 1;
-    return {
-      total: list.length || pending + approved + rejected,
-      pending,
-      approved,
-      rejected,
-      approvedPct: Math.round((approved / total) * 100),
-      rejectedPct: Math.round((rejected / total) * 100),
-      pendingPct: Math.round((pending / total) * 100),
-    };
-  }, [reviews]);
-
-  const pieData = useMemo(() => {
-    const queueItems = normalizeList(queue);
-    const pendingCount = queueItems.length || reviewStats.pending || 0;
-    return [
-      { name: "Pending", value: pendingCount },
-      { name: "Approved", value: reviewStats.approved },
-      { name: "Rejected", value: reviewStats.rejected },
-    ].filter((d) => d.value > 0);
-  }, [queue, reviewStats]);
-
-  const barData = useMemo(() => {
-    const map = new Map();
-    const list = normalizeList(reviews);
-    list.forEach((r) => {
-      const day = new Date(r.decided_at || r.created_at || r.timestamp || 0).toLocaleDateString();
-      map.set(day, (map.get(day) || 0) + 1);
-    });
-    return Array.from(map.entries())
-      .map(([name, count]) => ({ name, count }))
-      .slice(-14);
-  }, [reviews]);
-
   async function handleCreateUser(e) {
     e.preventDefault();
     setCreateError("");
     setCreatingUser(true);
     try {
-      const created = await datasetsApi.createAdminUser({
+      await new Promise((r) => setTimeout(r, 600));
+      const created = {
+        id: `new-${Date.now()}`,
         email: newUserEmail.trim(),
         full_name: newUserFullName.trim(),
         role: newUserRole,
-      });
-      setUsers((s) => [
-        {
-          id: created.id || created.user_id || `new-${Date.now()}`,
-          email: newUserEmail.trim(),
-          full_name: newUserFullName.trim(),
-          role: newUserRole,
-          status: "Active",
-          initials: (newUserFullName.trim() || newUserEmail.trim()).slice(0, 2).toUpperCase(),
-          ...created,
-        },
-        ...s,
-      ]);
+        status: "active",
+        initials: (newUserFullName.trim() || newUserEmail.trim()).slice(0, 2).toUpperCase(),
+      };
+      setUsers((s) => [created, ...s]);
       setNewUserEmail("");
       setNewUserFullName("");
       setNewUserRole("user");
       setShowCreateForm(false);
+      addToast("User created successfully (mock).", "success");
     } catch (err) {
       setCreateError(err?.message || "Failed to create user.");
     } finally {
@@ -179,19 +180,9 @@ export default function AdminDashboardPage() {
 
   async function handleDeleteUser(user) {
     const id = user.id || user.user_id;
-    if (!id || deletingId) return;
-    const previous = users;
-    setDeletingId(id);
+    if (!id) return;
     setUsers((s) => s.filter((u) => (u.id || u.user_id) !== id));
-    setDeleteConfirmId(null);
-    try {
-      await datasetsApi.deleteAdminUser(id);
-    } catch (err) {
-      setUsers(previous);
-      alert(err?.message || "Failed to delete user.");
-    } finally {
-      setDeletingId(null);
-    }
+    addToast("User deleted successfully (mock).", "success");
   }
 
   return (
@@ -200,12 +191,16 @@ export default function AdminDashboardPage() {
       <div className="flex justify-between items-start mb-6 animate-fade-in-up">
         <div>
           <h1 className="text-2xl font-serif font-bold text-navy">
-            {tab === "users" ? "User Management" : tab === "audit" ? "System Audit Log" : "Overview"}
+            {tab === "datasets" ? "Dataset Management" : tab === "users" ? "User Management" : tab === "settings" ? "Settings" : tab === "audit" ? "System Audit Log" : "Overview"}
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            {tab === "users"
-              ? "Manage institutional access and role delegations."
-              : "System status and key metrics for the Open Research Data Portal."}
+            {tab === "datasets"
+              ? "Review and moderate pending datasets."
+              : tab === "users"
+                ? "Manage institutional access and role delegations."
+                : tab === "settings"
+                  ? "Manage categories, colleges, centers, departments, and languages."
+                  : "System status and key metrics for the Open Research Data Portal."}
           </p>
         </div>
         <div className="text-right text-xs text-gray-400">
@@ -214,23 +209,80 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
-      {tab === "users" ? (
+      {tab === "datasets" ? (
+        <section className="bg-white rounded-xl border border-border shadow-sm overflow-hidden animate-fade-in-up">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+            <p className="text-sm text-gray-500">{queue.length} pending dataset{queue.length === 1 ? "" : "s"}</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-xs uppercase text-gray-500 bg-gray-50">
+                <tr>
+                  <th className="px-5 py-3 text-left font-semibold">Dataset</th>
+                  <th className="px-5 py-3 text-left font-semibold">Owner</th>
+                  <th className="px-5 py-3 text-left font-semibold">Status</th>
+                  <th className="px-5 py-3 text-right font-semibold">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {queue.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-5 py-10 text-center text-sm text-gray-500">
+                      No pending datasets.
+                    </td>
+                  </tr>
+                ) : (
+                  queue.map((d) => (
+                    <tr key={d.id || d.dataset_id} className="border-t border-gray-100 hover:bg-bg/50">
+                      <td className="px-5 py-4">
+                        <p className="font-medium text-navy">{d.title || "Untitled"}</p>
+                        <p className="text-xs text-gray-500 font-mono">{d.id || d.dataset_id}</p>
+                      </td>
+                      <td className="px-5 py-4 text-sm text-gray-600">{d.owner?.email || d.owner_name || "—"}</td>
+                      <td className="px-5 py-4">
+                        <StatusBadge status={String(d.status || "pending").toLowerCase()} />
+                      </td>
+                      <td className="px-5 py-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/datasets/${d.id || d.dataset_id}`)}
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold bg-navy text-white rounded-lg px-4 py-2.5 hover:bg-navy-light transition-colors min-h-[40px]"
+                          >
+                            View
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => addToast("Dataset delete is not yet available in the backend.", "info")}
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold bg-red-600 text-white rounded-lg px-4 py-2.5 hover:bg-red-700 transition-colors min-h-[40px]"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : tab === "users" ? (
         <section className="bg-white rounded-xl border border-border shadow-sm overflow-hidden animate-fade-in-up">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-5 py-4 border-b border-border">
             <div className="flex items-center gap-2">
-              <Search className="w-4 h-4 text-gray-400" />
               <input
                 type="text"
                 value={userSearch}
                 onChange={(e) => setUserSearch(e.target.value)}
                 placeholder="Search by name, email, or ID"
-                className="rounded-lg border border-slate-200 text-sm py-2 pl-9 pr-3 bg-white"
+                className="rounded-lg border border-slate-200 text-sm py-2 pl-3 pr-3 bg-white"
               />
             </div>
             <button
               type="button"
               onClick={() => setShowCreateForm((s) => !s)}
-              className="bg-gold hover:bg-gold-dark text-white text-sm font-semibold rounded-lg px-4 py-2 transition-colors"
+              className="bg-gold hover:bg-gold-dark text-white text-sm font-semibold rounded-lg px-4 py-2.5 transition-colors min-h-[40px]"
             >
               {showCreateForm ? "Cancel" : "+ Create User"}
             </button>
@@ -284,11 +336,9 @@ export default function AdminDashboardPage() {
                     onChange={(e) => setNewUserRole(e.target.value)}
                     className="w-full rounded-lg border border-slate-200 text-sm py-2 px-3 bg-[#F7F6F2]"
                   >
-                    {ROLE_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
+                    <option value="user">Normal User</option>
+                    <option value="checker">Reviewer (Checker)</option>
+                    <option value="researcher">Researcher</option>
                   </select>
                 </div>
               </div>
@@ -303,7 +353,7 @@ export default function AdminDashboardPage() {
                 <button
                   type="submit"
                   disabled={creatingUser}
-                  className="bg-navy hover:bg-navy-light text-white text-sm font-semibold rounded-lg px-4 py-2 disabled:opacity-50 transition-colors"
+                  className="bg-navy hover:bg-navy-light text-white text-sm font-semibold rounded-lg px-4 py-2 disabled:opacity-50 transition-colors min-h-[40px]"
                 >
                   {creatingUser ? "Creating…" : "Create User"}
                 </button>
@@ -349,35 +399,14 @@ export default function AdminDashboardPage() {
                         <StatusBadge status={u.is_active === false ? "inactive" : "active"} />
                       </td>
                       <td className="px-5 py-4 text-right">
-                        {deleteConfirmId === (u.id || u.user_id) ? (
-                          <div className="flex items-center justify-end gap-2">
-                            <span className="text-xs text-gray-600">Delete?</span>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteUser(u)}
-                              disabled={deletingId === (u.id || u.user_id)}
-                              className="text-xs font-semibold bg-red-600 text-white rounded-md px-2.5 py-1.5 disabled:opacity-50"
-                            >
-                              {deletingId === (u.id || u.user_id) ? "…" : "Yes"}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setDeleteConfirmId(null)}
-                              className="text-xs font-semibold text-gray-600 hover:text-navy px-2 py-1.5"
-                            >
-                              No
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setDeleteConfirmId(u.id || u.user_id)}
-                            className="text-gray-400 hover:text-red-600 transition-colors"
-                            aria-label={`Delete ${u.email}`}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteUser(u)}
+                          className="text-gray-400 hover:text-red-600 transition-colors min-h-[40px] px-2"
+                          aria-label={`Delete ${u.email}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </td>
                     </tr>
                   ))
@@ -386,13 +415,37 @@ export default function AdminDashboardPage() {
             </table>
           </div>
         </section>
+      ) : tab === "settings" ? (
+        <section className="bg-white rounded-xl border border-border shadow-sm overflow-hidden animate-fade-in-up">
+          <div className="flex items-center gap-4 px-5 py-4 border-b border-border overflow-x-auto">
+            {[
+              { key: "categories", label: "Categories" },
+              { key: "colleges", label: "Colleges" },
+              { key: "coe", label: "Centers of Excellence" },
+              { key: "departments", label: "Departments" },
+              { key: "languages", label: "Languages" },
+            ].map((tabKey) => (
+              <button
+                key={tabKey}
+                type="button"
+                onClick={() => navigate(`/admin-dashboard?tab=settings-${tabKey}`)}
+                className={`text-sm font-semibold rounded-lg px-4 py-2.5 transition-colors min-h-[40px] ${searchParams.get("tab") === `settings-${tabKey}` ? "bg-navy text-white" : "text-gray-600 hover:bg-gray-50"}`}
+              >
+                {tabKey.label}
+              </button>
+            ))}
+          </div>
+          <div className="p-6">
+            <AdminSettingsPage />
+          </div>
+        </section>
       ) : (
         <>
           {/* Summary cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
             <StatCard
               label="TOTAL USERS"
-              value={loading ? "…" : ((cards?.total_users ?? users.length) || 0).toLocaleString()}
+              value={loading ? "…" : ((cards?.total_users ?? 0)).toLocaleString()}
               icon={Users}
               trend="+12% this month"
               delay={50}
@@ -406,7 +459,7 @@ export default function AdminDashboardPage() {
             />
             <StatCard
               label="PENDING REVIEWS"
-              value={loading ? "…" : (queue.length || cards?.pending_reviews || reviewStats.pending || 0)}
+              value={loading ? "…" : (queue.length || cards?.pending_reviews || 0)}
               icon={ClipboardList}
               hint="Requires attention"
               delay={150}
@@ -478,7 +531,7 @@ export default function AdminDashboardPage() {
                   ))
                 )}
               </ul>
-              <button type="button" className="w-full bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-lg py-2.5 transition-colors">
+              <button type="button" className="w-full bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-lg py-2.5 transition-colors min-h-[40px]">
                 Execute Deletions
               </button>
             </section>
@@ -492,7 +545,7 @@ export default function AdminDashboardPage() {
                 <button
                   type="button"
                   onClick={() => navigate("/admin/audit-log")}
-                  className="text-xs font-semibold text-gold border border-gold rounded-md px-3 py-1.5 hover:bg-gold-light transition-colors"
+                  className="text-xs font-semibold text-gold border border-gold rounded-md px-3 py-2 hover:bg-gold-light transition-colors min-h-[32px]"
                 >
                   View all
                 </button>
@@ -561,3 +614,4 @@ export default function AdminDashboardPage() {
     </DashboardShell>
   );
 }
+

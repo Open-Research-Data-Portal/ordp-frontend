@@ -169,17 +169,7 @@ export async function getAdminUploadRequests() {
 }
 
 export async function getReviewerQueue() {
-  const { data } = await client.get(`${DATASETS_BASE}/reviewer/queue/`);
-  return data;
-}
-
-export async function getReviewerOverview() {
-  const { data } = await client.get("/admin-panel/dashboard/reviewer/overview/");
-  return data;
-}
-
-export async function getReviewerMetrics() {
-  const { data } = await client.get("/admin-panel/dashboard/reviewer/metrics/");
+  const { data } = await client.get("/admin-panel/queue/");
   return data;
 }
 
@@ -198,28 +188,33 @@ export async function getAdminDeletionQueue() {
   return data;
 }
 
-export async function getAdminUsers() {
-  const { data } = await client.get("/admin-panel/users/");
-  return data;
-}
-
-export async function createAdminUser(payload) {
-  const { data } = await client.post("/admin-panel/users/create/", payload);
-  return data;
-}
-
-export async function deleteAdminUser(userId) {
-  const { data } = await client.delete(`/admin-panel/users/${userId}/`);
-  return data;
-}
-
 export async function getAdminQueue() {
   const { data } = await client.get("/admin-panel/queue/");
   return data;
 }
 
-export async function getMyReviews() {
-  const { data } = await client.get("/admin-panel/my-reviews/");
+export async function moderateDataset(datasetId, payload) {
+  const { data } = await client.post(`/admin-panel/${datasetId}/decide/`, payload);
+  return data;
+}
+
+export async function getContentUpdateQueue() {
+  const { data } = await client.get("/admin-panel/content-updates/queue/");
+  return data;
+}
+
+export async function decideContentUpdate(updateId, payload) {
+  const { data } = await client.post(`/admin-panel/content-updates/${updateId}/decide/`, payload);
+  return data;
+}
+
+export async function getResearcherRequestQueue() {
+  const { data } = await client.get("/admin-panel/researcher-requests/queue/");
+  return data;
+}
+
+export async function decideResearcherRequest(requestId, payload) {
+  const { data } = await client.post(`/admin-panel/researcher-requests/${requestId}/decide/`, payload);
   return data;
 }
 

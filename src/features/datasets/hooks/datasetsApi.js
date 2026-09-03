@@ -156,17 +156,7 @@ export async function getAdminUploadRequests() {
 }
 
 export async function getReviewerQueue() {
-  const { data } = await client.get(`${DATASETS_BASE}/reviewer/queue/`);
-  return data;
-}
-
-export async function getReviewerOverview() {
-  const { data } = await client.get("/admin-panel/dashboard/reviewer/overview/");
-  return data;
-}
-
-export async function getReviewerMetrics() {
-  const { data } = await client.get("/admin-panel/dashboard/reviewer/metrics/");
+  const { data } = await client.get("/admin-panel/queue/");
   return data;
 }
 

@@ -181,7 +181,9 @@ export default function ProfilePage() {
         setEmail(merged?.email ?? "");
         setUsername(merged?.username ?? "");
         setAffiliation(merged?.affiliation ?? DEFAULT_AFFILIATION);
-        setDepartment(merged?.department ?? merged?.department_id ?? "");
+        setDepartment(
+          asEntityId(merged?.department ?? merged?.department_id) || ""
+        );
         setAcademicRole(
           toOptionValue(
             OCCUPATION_OPTIONS,
@@ -234,7 +236,12 @@ export default function ProfilePage() {
   }, [isAuthenticated, user]);
 
   useEffect(() => {
-    if (isAuthenticated) authApi.getDepartments().then(setDepartments).catch(() => {});
+    if (isAuthenticated) {
+      authApi
+        .getDepartments()
+        .then((items) => setDepartments(Array.isArray(items) ? items : []))
+        .catch(() => setDepartments([]));
+    }
   }, [isAuthenticated]);
 
   function handleAvatarChange(e) {
@@ -273,7 +280,7 @@ export default function ProfilePage() {
       const fullName = [firstName, fatherName, grandFatherName].filter(Boolean).join(" ").trim();
       const occupation =
         toOptionValue(OCCUPATION_OPTIONS, academicRole) || academicRole;
-      const deptId = department ? Number(department) : undefined;
+      const deptId = asEntityId(department);
       const payload = buildProfileCompletionPatch({
         labels: researchInterests,
         catalog: interestCatalog,

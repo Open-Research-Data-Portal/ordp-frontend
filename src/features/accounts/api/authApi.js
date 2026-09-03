@@ -308,7 +308,7 @@ export async function getDepartments(parentType, parentId) {
   if (parentType) params.parent_type = parentType;
   if (parentId) params.parent_id = parentId;
   const { data } = await client.get(`${BASE}/departments/`, { params });
-  return data?.results || [];
+  return Array.isArray(data) ? data : (data?.results || data?.departments || []);
 }
 
 export async function getProfileOptions() {

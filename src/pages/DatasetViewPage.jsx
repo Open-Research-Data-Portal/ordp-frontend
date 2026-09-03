@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Navigate } from "react-router-dom";
 import {
   Download,
   Share2,
@@ -439,7 +439,7 @@ function ShareAccessModal({ datasetId, onClose }) {
 export default function DatasetViewPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, loading: authLoading } = useAuth();
 
   const [dataset, setDataset] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -472,6 +472,27 @@ export default function DatasetViewPage() {
     fetchDataset();
     return () => { isMounted = false; };
   }, [id]);
+
+  if (authLoading && !isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-[#F5F5F3] flex flex-col">
+        <TopBar />
+        <div className="w-full px-6 lg:px-10 py-16 text-center flex-1">
+          <p className="text-sm text-gray-500">Loading…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <Navigate
+        to="/login"
+        replace
+        state={{ message: "Please log in or register to view dataset details." }}
+      />
+    );
+  }
 
   if (loading) {
     return (

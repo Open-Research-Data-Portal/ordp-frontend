@@ -22,6 +22,29 @@ import TopBar from "../layouts/TopBar";
 import logo from "../assets/aastulogo.png";
 import campusImg from "../assets/1.jfif";
 import { searchDatasets } from "../api/search";
+import { useAuth } from "../context/useAuth";
+
+function formatRelativeDate(dateStr) {
+  if (!dateStr) return "";
+  try {
+    const date = new Date(dateStr);
+if (Number.isNaN(date.getTime())) return "";
+    const diffMs = Date.now() - date.getTime();
+    const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    if (days < 1) {
+      const hours = Math.floor(diffMs / (1000 * 60 * 60));
+      if (hours < 1) return "Added just now";
+      return hours === 1 ? "Added 1 hour ago" : `Added ${hours} hours ago`;
+    }
+    if (days === 1) return "Added 1 day ago";
+    if (days < 30) return `Added ${days} days ago`;
+    const months = Math.floor(days / 30);
+    if (months < 12) return `Added ${months} mo ago`;
+    return `Added ${Math.floor(months / 12)}y ago`;
+  } catch {
+    return "";
+  }
+}
 
 const CATEGORIES = [
   { label: "Machine Learning", icon: Bot, slug: "machine-learning" },
@@ -63,6 +86,11 @@ function DatasetCard({ dataset, onClick }) {
   const sizeBytes = dataset.files ? dataset.files.reduce((acc, f) => acc + f.file_size, 0) : 0;
   const sizeStr = dataset.size || (sizeBytes > 0 ? (sizeBytes / 1024 / 1024).toFixed(1) + " MB" : "0 MB");
   const views = dataset.view_count ?? dataset.views ?? 0;
+  const timeRef =
+    formatRelativeDate(dataset.created_at || dataset.date_published || dataset.published_at) ||
+    (dataset.updated_at && dataset.updated_at !== dataset.created_at
+      ? `Updated ${formatRelativeDate(dataset.updated_at).replace(/^Added/, "").toLowerCase()}`
+      : "");
   // FIX: the backend field is `thumbnail_key` (see Dataset model /
   // DatasetSerializer), not `thumbnail_url` or `thumbnailUrl` — neither
   // of which exist on the API response. This was why images rendered
@@ -93,6 +121,9 @@ function DatasetCard({ dataset, onClick }) {
       <div className="p-4 pt-3 flex-1 flex flex-col">
         <h3 className="text-sm font-serif font-bold text-navy leading-snug">{dataset.title}</h3>
         <p className="text-xs text-gray-500 mt-1.5 line-clamp-2 flex-1">{desc}</p>
+        {timeRef && (
+          <p className="text-[11px] font-medium text-gold-dark mb-2">{timeRef}</p>
+        )}
         <div className="flex items-center justify-between mt-4 pt-3 border-t border-border">
           <div className="flex items-center gap-2 text-[11px] text-gray-400">
             <span>{views} views</span><span>·</span><span>{sizeStr}</span><span>·</span><span>{fileCount} file{fileCount === 1 ? "" : "s"}</span>
@@ -106,6 +137,16 @@ function DatasetCard({ dataset, onClick }) {
 
 export default function LandingPage() {
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
+  const openDataset = (dataset) => {
+    if (!isAuthenticated) {
+      navigate("/login", {
+        state: { message: "Please log in or register to view dataset details." },
+      });
+      return;
+    }
+    navigate(`/datasets/${dataset.id}`);
+  };
   const [popularDatasets, setPopularDatasets] = useState([]);
   const [newestDatasets, setNewestDatasets] = useState([]);
   const [datasetsLoading, setDatasetsLoading] = useState(true);
@@ -221,7 +262,7 @@ export default function LandingPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {popularDatasets.map((d) => <DatasetCard key={d.id} dataset={d} onClick={() => navigate(`/datasets/${d.id}`)} />)}
+              {popularDatasets.map((d) => <DatasetCard key={d.id} dataset={d} onClick={() => openDataset(d)} />)}
             </div>
           )}
         </section>
@@ -248,7 +289,7 @@ export default function LandingPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {newestDatasets.map((d) => <DatasetCard key={d.id} dataset={d} onClick={() => navigate(`/datasets/${d.id}`)} />)}
+              {newestDatasets.map((d) => <DatasetCard key={d.id} dataset={d} onClick={() => openDataset(d)} />)}
             </div>
           )}
         </section>

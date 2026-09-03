@@ -8,6 +8,8 @@ import EmailVerifyConfirmPage from "../features/accounts/pages/EmailVerifyConfir
 import ForgotPasswordPage from "../features/accounts/pages/ForgotPassword.jsx";
 import CheckEmailPage from "../features/accounts/pages/CheckEmail.jsx";
 import ResetPasswordPage from "../features/accounts/pages/ResetPassword.jsx";
+import CreatePasswordPage from "../features/accounts/pages/CreatePasswordPage.jsx";
+import InviteSentPage from "../features/accounts/pages/InviteSentPage.jsx";
 import ProfilePage from "../features/accounts/pages/ProfilePage.jsx";
 import ResearchInterestsOnboardingPage from "../features/accounts/pages/ResearchInterestsOnboardingPage.jsx";
 
@@ -58,6 +60,8 @@ export default function AppRoutes() {
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/check-email" element={<CheckEmailPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/create-password" element={<CreatePasswordPage />} />
+      <Route path="/invite-sent" element={<InviteSentPage />} />
 
       {/* Onboarding */}
       <Route path="/research-interests-onboarding" element={<ResearchInterestsOnboardingPage />} />

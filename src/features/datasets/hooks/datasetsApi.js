@@ -229,3 +229,38 @@ export async function getMyDownloads() {
   const { data } = await client.get(`${DATASETS_BASE}/dashboard/my-downloads/`);
   return data;
 }
+
+// ── Admin panel — user management ─────────────────────────────────────────
+export async function getAdminUsers() {
+  const { data } = await client.get("/admin-panel/users/");
+  return data;
+}
+
+export async function createAdminUser(payload) {
+  let role = payload?.role;
+  if (role === "checker" || role === "reviewer") role = "reviewer";
+  else if (role === "user" || role === "public") role = "public";
+  else if (role === "admin") role = "admin";
+  else role = "reviewer";
+
+  const { data } = await client.post("/admin-panel/users/create/", {
+    ...payload,
+    role,
+  });
+  return data;
+}
+
+export async function deactivateUser(userId) {
+  const { data } = await client.post(`/admin-panel/users/${userId}/deactivate/`);
+  return data;
+}
+
+export async function reactivateUser(userId) {
+  const { data } = await client.post(`/admin-panel/users/${userId}/reactivate/`);
+  return data;
+}
+
+export async function grantRole(userId, role) {
+  const { data } = await client.post(`/admin-panel/users/${userId}/grant-role/`, { role });
+  return data;
+}

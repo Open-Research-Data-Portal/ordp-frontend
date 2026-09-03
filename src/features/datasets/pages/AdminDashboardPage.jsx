@@ -5,6 +5,8 @@ import {
   Database,
   ClipboardList,
   Trash2,
+  UserCheck,
+  UserX,
   Activity,
   ShieldCheck,
 } from "lucide-react";
@@ -19,6 +21,28 @@ import * as datasetsApi from "../hooks/datasetsApi.js";
 function normalizeList(data) {
   if (Array.isArray(data)) return data;
   return data?.results || [];
+}
+
+// Normalize one user row returned by /admin-panel/users/ (or users/create/) into
+// the shape the users table expects. Defensive against id/user_id, name/full_name,
+// role/user_role, is_active/status key variants.
+function normalizeUser(u) {
+  if (!u || typeof u !== "object") return null;
+  const rawStatus = String(u.status || "").toLowerCase();
+  const isActive =
+    u.is_active !== false && !["inactive", "deactivated", "disabled"].includes(rawStatus);
+  const fullName = u.full_name || u.name || [u.first_name, u.last_name].filter(Boolean).join(" ").trim();
+  const rawRole = u.role || u.user_role || (Array.isArray(u.roles) && u.roles[0]) || "user";
+  const role = rawRole === "checker" ? "reviewer" : rawRole;
+  return {
+    id: u.id ?? u.user_id ?? u.pk ?? u.email ?? u.username,
+    email: u.email || u.username || "",
+    full_name: fullName,
+    role,
+    status: isActive ? rawStatus || "active" : "inactive",
+    is_active: isActive,
+    initials: (fullName || u.email || u.username || "U").slice(0, 2).toUpperCase(),
+  };
 }
 
 const CHART_COLORS = ["#B8860B", "#0B1526", "#ef4444", "#10b981", "#6366f1", "#f59e0b"];
@@ -39,7 +63,9 @@ const MOCK_DELETIONS = [
 
 const roleBadge = {
   user: "bg-gray-100 text-gray-700 border-gray-200",
+  public: "bg-gray-100 text-gray-700 border-gray-200",
   checker: "bg-violet-50 text-violet-700 border-violet-200",
+  reviewer: "bg-violet-50 text-violet-700 border-violet-200",
   admin: "bg-gold-light text-gold border-gold/30",
   researcher: "bg-blue-50 text-blue-700 border-blue-200",
 };
@@ -62,7 +88,7 @@ export default function AdminDashboardPage() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newUserFullName, setNewUserFullName] = useState("");
-  const [newUserRole, setNewUserRole] = useState("user");
+  const [newUserRole, setNewUserRole] = useState("reviewer");
   const [creatingUser, setCreatingUser] = useState(false);
   const [createError, setCreateError] = useState("");
 
@@ -70,12 +96,13 @@ export default function AdminDashboardPage() {
     let active = true;
     async function load() {
       setLoading(true);
-      const [cardsRes, auditRes, delRes, queueRes, cuRes] = await Promise.allSettled([
+      const [cardsRes, auditRes, delRes, queueRes, cuRes, usersRes] = await Promise.allSettled([
         datasetsApi.getAdminCards?.() ?? Promise.resolve(null),
         datasetsApi.getAdminAuditLog?.() ?? Promise.resolve([]),
         datasetsApi.getAdminDeletionQueue?.() ?? Promise.resolve([]),
         datasetsApi.getAdminQueue?.() ?? Promise.resolve([]),
         datasetsApi.getContentUpdateQueue?.() ?? Promise.resolve([]),
+        datasetsApi.getAdminUsers?.() ?? Promise.resolve([]),
       ]);
       if (!active) return;
       if (cardsRes.status === "fulfilled") setCards(cardsRes.value);
@@ -83,6 +110,10 @@ export default function AdminDashboardPage() {
       if (delRes.status === "fulfilled") setDeletions(normalizeList(delRes.value));
       if (queueRes.status === "fulfilled") setQueue(normalizeList(queueRes.value));
       if (cuRes.status === "fulfilled") setContentUpdates(normalizeList(cuRes.value));
+      if (usersRes.status === "fulfilled") {
+        const list = normalizeList(usersRes.value).map(normalizeUser).filter(Boolean)
+        if (list.length) setUsers(list);
+      }
       setLoading(false);
     }
     load();
@@ -155,34 +186,72 @@ export default function AdminDashboardPage() {
     e.preventDefault();
     setCreateError("");
     setCreatingUser(true);
+    const email = newUserEmail.trim();
+    const fullName = newUserFullName.trim();
+    const isReviewer = newUserRole === "checker" || newUserRole === "reviewer";
+    const backendRole = isReviewer ? "reviewer" : "public";
+
     try {
-      await new Promise((r) => setTimeout(r, 600));
+      const createdRes = await datasetsApi.createAdminUser({
+        full_name: fullName,
+        email: email,
+        role: backendRole,
+      });
       const created = {
-        id: `new-${Date.now()}`,
-        email: newUserEmail.trim(),
-        full_name: newUserFullName.trim(),
-        role: newUserRole,
+        id: createdRes?.user_id || createdRes?.id || `new-${Date.now()}`,
+        email: email,
+        full_name: fullName,
+        role: isReviewer ? "reviewer" : "public",
         status: "active",
-        initials: (newUserFullName.trim() || newUserEmail.trim()).slice(0, 2).toUpperCase(),
+        is_active: true,
+        initials: (fullName || email).slice(0, 2).toUpperCase(),
       };
-      setUsers((s) => [created, ...s]);
+      setUsers((s) => [created, ...s.filter((u) => String(u.email || "").toLowerCase() !== created.email.toLowerCase())]);
       setNewUserEmail("");
       setNewUserFullName("");
-      setNewUserRole("user");
+      setNewUserRole("reviewer");
       setShowCreateForm(false);
-      addToast("User created successfully (mock).", "success");
+
+      if (isReviewer) {
+        addToast("Reviewer created. An email with a link to create their password was sent.", "success");
+        navigate(
+          `/invite-sent?email=${encodeURIComponent(created.email)}&full_name=${encodeURIComponent(created.full_name || "")}`
+        );
+      } else {
+        addToast(`${created.full_name || "User"} created successfully.`, "success");
+      }
     } catch (err) {
-      setCreateError(err?.message || "Failed to create user.");
+      const msg =
+        err?.response?.data?.detail ||
+        err?.response?.data?.message ||
+        err?.response?.data?.error?.message ||
+        (typeof err?.response?.data === "string" && !err.response.data.startsWith("<") ? err.response.data : null) ||
+        err?.message ||
+        "Failed to create user.";
+      setCreateError(msg);
     } finally {
       setCreatingUser(false);
     }
   }
 
-  async function handleDeleteUser(user) {
+  async function handleToggleUserActive(user) {
     const id = user.id || user.user_id;
     if (!id) return;
-    setUsers((s) => s.filter((u) => (u.id || u.user_id) !== id));
-    addToast("User deleted successfully (mock).", "success");
+    const currentlyActive = user.is_active !== false && String(user.status || "").toLowerCase() !== "inactive";
+    try {
+      if (currentlyActive) await datasetsApi.deactivateUser(id);
+      else await datasetsApi.reactivateUser(id);
+      setUsers((s) =>
+        s.map((u) => {
+          if ((u.id || u.user_id) !== id) return u;
+          const nextActive = !currentlyActive;
+          return { ...u, is_active: nextActive, status: nextActive ? "active" : "inactive" };
+        })
+      );
+      addToast(currentlyActive ? "User deactivated." : "User reactivated.", "success");
+    } catch (err) {
+      addToast(err?.message || "Failed to update user status.", "error");
+    }
   }
 
   return (
@@ -336,9 +405,8 @@ export default function AdminDashboardPage() {
                     onChange={(e) => setNewUserRole(e.target.value)}
                     className="w-full rounded-lg border border-slate-200 text-sm py-2 px-3 bg-[#F7F6F2]"
                   >
-                    <option value="user">Normal User</option>
-                    <option value="checker">Reviewer (Checker)</option>
-                    <option value="researcher">Researcher</option>
+                    <option value="reviewer">Reviewer (Checker)</option>
+                    <option value="public">Normal User</option>
                   </select>
                 </div>
               </div>
@@ -396,16 +464,25 @@ export default function AdminDashboardPage() {
                         <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${roleBadge[u.role] || "bg-gray-100 text-gray-700"}`}>{u.role || "user"}</span>
                       </td>
                       <td className="px-5 py-4">
-                        <StatusBadge status={u.is_active === false ? "inactive" : "active"} />
+                        <StatusBadge status={u.status || "active"} />
                       </td>
                       <td className="px-5 py-4 text-right">
                         <button
                           type="button"
-                          onClick={() => handleDeleteUser(u)}
-                          className="text-gray-400 hover:text-red-600 transition-colors min-h-[40px] px-2"
-                          aria-label={`Delete ${u.email}`}
+                          onClick={() => handleToggleUserActive(u)}
+                          title={u.is_active === false ? "Reactivate" : "Deactivate"}
+                          className={`transition-colors min-h-[40px] px-2 ${
+                            u.is_active === false
+                              ? "text-emerald-500 hover:text-emerald-700"
+                              : "text-gray-400 hover:text-red-600"
+                          }`}
+                          aria-label={`${u.is_active === false ? "Reactivate" : "Deactivate"} ${u.email}`}
                         >
-                          <Trash2 className="w-4 h-4" />
+                          {u.is_active === false ? (
+                            <UserCheck className="w-4 h-4" />
+                          ) : (
+                            <UserX className="w-4 h-4" />
+                          )}
                         </button>
                       </td>
                     </tr>

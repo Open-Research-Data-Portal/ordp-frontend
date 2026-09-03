@@ -1,8 +1,19 @@
 import axios from "axios";
 import { getAccessToken, getRefreshToken, setTokens, clearTokens } from "./tokenStore";
 
-const BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "https://ordp-backend.onrender.com/api";
+function resolveApiBaseUrl() {
+  const envUrl = import.meta.env.VITE_API_BASE_URL;
+  if (!envUrl || typeof envUrl !== "string" || !envUrl.trim()) {
+    return "https://ordp-backend.onrender.com/api";
+  }
+  const clean = envUrl.trim().replace(/\/+$/, "");
+  if (!clean.endsWith("/api")) {
+    return `${clean}/api`;
+  }
+  return clean;
+}
+
+const BASE_URL = resolveApiBaseUrl();
 
 const client = axios.create({
   baseURL: BASE_URL,

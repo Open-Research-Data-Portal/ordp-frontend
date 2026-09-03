@@ -3,6 +3,48 @@ import FormField from "../../../components/FormField";
 import TagInput from "../../../components/TagInput";
 import { useAuth } from "../../../context/useAuth";
 
+const LANGUAGE_OPTIONS = [
+  // Language is OPTIONAL — a dataset with no textual/linguistic content
+  // can select Not Applicable. Covers English, all major Ethiopian
+  // languages, and common international research languages.
+  { value: "English", label: "English" },
+  { value: "Amharic", label: "Amharic — አማርኛ" },
+  { value: "Afaan Oromo", label: "Afaan Oromo — Afaan Oromoo" },
+  { value: "Tigrinya", label: "Tigrinya — ትግርኛ" },
+  { value: "Somali", label: "Somali — Soomaali" },
+  { value: "Afar", label: "Afar — Qafár af" },
+  { value: "Sidama", label: "Sidama — Sidaamu Afoo" },
+  { value: "Wolaytta", label: "Wolaytta" },
+  { value: "Gurage", label: "Gurage — ጉራጌ" },
+  { value: "Hadiyya", label: "Hadiyya" },
+  { value: "Kembata", label: "Kembata" },
+  { value: "Gamo", label: "Gamo" },
+  { value: "Gofa", label: "Gofa" },
+  { value: "Silte", label: "Silte" },
+  { value: "Arsi Oromo", label: "Arsi Oromo" },
+  { value: "Boorana Oromo", label: "Boorana Oromo" },
+  { value: "Guragigna", label: "Guragigna" },
+  { value: "Harari", label: "Harari — ሐረሪ" },
+  { value: "Kafa", label: "Kafa" },
+  { value: "Shinasha", label: "Shinasha" },
+  { value: "Bench", label: "Bench — Bench Non" },
+  { value: "Sheko", label: "Sheko" },
+  { value: "Dawuro", label: "Dawuro" },
+  { value: "Konso", label: "Konso" },
+  { value: "Maji", label: "Maji" },
+  { value: "Surma", label: "Surma" },
+  { value: "Me'en", label: "Me'en" },
+  { value: "Not Applicable", label: "Not Applicable" },
+  { value: "Arabic", label: "Arabic — العربية" },
+  { value: "French", label: "French" },
+  { value: "German", label: "German" },
+  { value: "Chinese", label: "Chinese" },
+  { value: "Portuguese", label: "Portuguese" },
+  { value: "Italian", label: "Italian" },
+  { value: "Japanese", label: "Japanese" },
+  { value: "Korean", label: "Korean" },
+  { value: "Swahili", label: "Swahili — Kiswahili" },
+];
 export default function DetailsForm({ initialValues = {}, onNext, isSubmitting, submitError }) {
   const { user } = useAuth();
 

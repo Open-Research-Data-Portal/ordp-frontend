@@ -160,6 +160,7 @@ function BookmarkButton({ bookmarked, onToggle, className = "" }) {
 }
 
 function DatasetCard({ dataset, navigate, bookmarked, onToggleBookmark }) {
+  const { isAuthenticated } = useAuth();
   const Icon = dataset.icon || Database;
   const image = dataset.image ?? dataset.thumbnail_key ?? null;
   const author = dataset.author ?? dataset.owner_name ?? "Unknown";
@@ -175,7 +176,15 @@ function DatasetCard({ dataset, navigate, bookmarked, onToggleBookmark }) {
 
   return (
     <div
-      onClick={() => navigate(`/datasets/${dataset.id}`)}
+      onClick={() => {
+        if (!isAuthenticated) {
+          navigate("/login", {
+            state: { message: "Please log in or register to view dataset details." },
+          });
+          return;
+        }
+        navigate(`/datasets/${dataset.id}`);
+      }}
       className="group bg-white rounded-xl border border-[#E3E1DA] overflow-hidden cursor-pointer transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-lg hover:border-gold/40"
     >
       <div className="h-48 bg-[#F0EFEA] overflow-hidden">

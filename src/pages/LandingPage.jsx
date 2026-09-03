@@ -2,50 +2,59 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Bot,
-  Eye,
-  Languages,
   Landmark,
   ShieldPlus,
   Leaf,
   Building2,
   Globe,
-  UploadCloud,
-  Search,
   ArrowRight,
-  BookOpen,
-  Users,
-  Shield,
-  Quote,
   Image as ImageIcon,
 } from "lucide-react";
 import TopBar from "../layouts/TopBar";
 import logo from "../assets/aastulogo.png";
-import campusImg from "../assets/1.jfif";
+import center1Img from "../assets/center1.jfif";
+import center2Img from "../assets/center2.jpeg";
 import { searchDatasets } from "../api/search";
+import { useAuth } from "../context/useAuth";
+import { useToast } from "../context/ToastContext";
 import { getDatasetImage } from "../utils/datasetImage";
 
-const CATEGORIES = [
-  { label: "Machine Learning", icon: Bot, slug: "machine-learning" },
-  { label: "Computer Vision", icon: Eye, slug: "computer-vision" },
-  { label: "NLP", icon: Languages, slug: "nlp" },
-  { label: "Finance", icon: Landmark, slug: "finance" },
-  { label: "Healthcare", icon: ShieldPlus, slug: "healthcare" },
-  { label: "Climate & Env", icon: Leaf, slug: "climate-env" },
-  { label: "Business", icon: Building2, slug: "business" },
-  { label: "Geography", icon: Globe, slug: "geography" },
-];
+function formatRelativeDate(dateStr) {
+  if (!dateStr) return "";
+  try {
+    const date = new Date(dateStr);
+    if (Number.isNaN(date.getTime())) return "";
+    const diffMs = Date.now() - date.getTime();
+    const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    if (days < 1) {
+      const hours = Math.floor(diffMs / (1000 * 60 * 60));
+      if (hours < 1) return "Added just now";
+      return hours === 1 ? "Added 1 hour ago" : `Added ${hours} hours ago`;
+    }
+    if (days === 1) return "Added 1 day ago";
+    if (days < 30) return `Added ${days} days ago`;
+    const months = Math.floor(days / 30);
+    if (months < 12) return `Added ${months} mo ago`;
+    return `Added ${Math.floor(months / 12)}y ago`;
+  } catch {
+    return "";
+  }
+}
 
 const STATS = [
   { label: "Datasets archived", value: "1,240+" },
   { label: "Contributing researchers", value: "310+" },
-  { label: "Departments represented", value: "12" },
 ];
 
-const HOW_IT_WORKS = [
-  { step: "01", title: "Discover", description: "Search and filter datasets by subject, file type, license, and access level.", icon: Search },
-  { step: "02", title: "Access", description: "Download public datasets instantly or request access to restricted collections.", icon: BookOpen },
-  { step: "03", title: "Contribute", description: "Upload your research data with rich metadata and receive a citable DOI.", icon: UploadCloud },
-  { step: "04", title: "Collaborate", description: "Share datasets with co-authors, invite contributors, and track engagement.", icon: Users },
+const CENTERS_OF_EXCELLENCE = [
+  { name: "Artificial Intelligence & Robotics", description: "AI, automation & intelligent systems for smart services, robotics, and future-ready research.", icon: Bot },
+  { name: "Bioprocess & Biotechnology", description: "Biotechnology and sustainable bioprocessing for health, agriculture, industry, and the environment.", icon: ShieldPlus },
+  { name: "Construction Quality & Technology", description: "Construction innovation, resilient infrastructure, materials, and quality-focused engineering.", icon: Building2 },
+  { name: "HPC & Big Data Analytics", description: "Advanced computing, scalable data systems, machine learning, and reproducible analytics.", icon: Globe },
+  { name: "Mineral Exploration, Extraction & Processing", description: "Mineral technology and responsible resource management from exploration through processing.", icon: Landmark },
+  { name: "Nanotechnology", description: "Nanomaterials and nanoscale innovation for new devices, materials, and scientific applications.", icon: ImageIcon },
+  { name: "Nuclear Reactor Technology", description: "Nuclear science, technology, safety, and applications that support Ethiopia's technical capacity.", icon: ShieldPlus },
+  { name: "Sustainable Energy Technology", description: "Renewable energy, energy efficiency, storage, and sustainable power solutions for communities.", icon: Leaf },
 ];
 
 function SectionEyebrow({ children }) {
@@ -64,6 +73,11 @@ function DatasetCard({ dataset, onClick }) {
   const sizeBytes = dataset.files ? dataset.files.reduce((acc, f) => acc + f.file_size, 0) : 0;
   const sizeStr = dataset.size || (sizeBytes > 0 ? (sizeBytes / 1024 / 1024).toFixed(1) + " MB" : "0 MB");
   const views = dataset.view_count ?? dataset.views ?? 0;
+  const timeRef =
+    formatRelativeDate(dataset.created_at || dataset.date_published || dataset.published_at) ||
+    (dataset.updated_at && dataset.updated_at !== dataset.created_at
+      ? `Updated ${formatRelativeDate(dataset.updated_at).replace(/^Added/, "").toLowerCase()}`
+      : "");
   // FIX: the backend field is `thumbnail_key` (see Dataset model /
   // DatasetSerializer), not `thumbnail_url` or `thumbnailUrl` — neither
   // of which exist on the API response. This was why images rendered
@@ -94,6 +108,9 @@ function DatasetCard({ dataset, onClick }) {
       <div className="p-4 pt-3 flex-1 flex flex-col">
         <h3 className="text-sm font-serif font-bold text-navy leading-snug">{dataset.title}</h3>
         <p className="text-xs text-gray-500 mt-1.5 line-clamp-2 flex-1">{desc}</p>
+        {timeRef && (
+          <p className="text-[11px] font-medium text-gold-dark mb-2">{timeRef}</p>
+        )}
         <div className="flex items-center justify-between mt-4 pt-3 border-t border-border">
           <div className="flex items-center gap-2 text-[11px] text-gray-400">
             <span>{views} views</span><span>·</span><span>{sizeStr}</span><span>·</span><span>{fileCount} file{fileCount === 1 ? "" : "s"}</span>
@@ -107,6 +124,22 @@ function DatasetCard({ dataset, onClick }) {
 
 export default function LandingPage() {
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
+  const { addToast } = useToast();
+  const openDataset = (dataset) => {
+    if (!isAuthenticated) {
+      addToast("Please log in or register first to view dataset details.", "info");
+      return;
+    }
+    navigate(`/datasets/${dataset.id}`);
+  };
+  const openAnalyticsDatasets = () => {
+    if (!isAuthenticated) {
+      addToast("Please log in or register first to explore analytics datasets.", "info");
+      return;
+    }
+    navigate("/datasets?q=HPC%20Big%20Data%20Analytics");
+  };
   const [popularDatasets, setPopularDatasets] = useState([]);
   const [newestDatasets, setNewestDatasets] = useState([]);
   const [datasetsLoading, setDatasetsLoading] = useState(true);
@@ -138,68 +171,47 @@ export default function LandingPage() {
     <div className="min-h-screen bg-bg">
       <TopBar />
 
-      {/* Hero */}
-      <section className="relative bg-navy px-6 py-16 sm:py-24 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-navy via-navy to-navy-light opacity-90" />
-        <svg className="absolute inset-0 w-full h-full opacity-[0.08] pointer-events-none" preserveAspectRatio="none" viewBox="0 0 800 400">
-          <path d="M0,320 Q200,260 400,300 T800,280" stroke="#A87E0E" strokeWidth="1.5" fill="none" />
-          <path d="M0,350 Q200,300 400,335 T800,320" stroke="#A87E0E" strokeWidth="1.5" fill="none" />
-          <path d="M0,60 Q200,110 400,75 T800,95" stroke="#A87E0E" strokeWidth="1.5" fill="none" />
-        </svg>
-        <div className="absolute top-0 right-0 w-96 h-96 bg-gold/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none" />
-
-        <div className="relative max-w-4xl mx-auto text-center">
-          <div className="inline-flex items-center gap-3 mb-6">
-            <img src={logo} alt="AASTU" className="h-14 w-14 object-contain drop-shadow-md" />
-            <div className="text-left hidden sm:block">
-              <p className="text-[10px] font-semibold tracking-[0.2em] text-gold uppercase">AASTU</p>
-              <p className="text-sm font-serif font-bold text-white">Open Research Data Portal</p>
+      {/* Hero — campus image with copy beside it, no navy wash */}
+      <section className="border-b border-border bg-white px-6 py-10 sm:py-14 lg:py-16">
+        <div className="mx-auto grid max-w-7xl items-center gap-10 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] lg:gap-14">
+          <div className="order-2 flex flex-col justify-center lg:order-1">
+            <div className="mb-6 flex items-center gap-3">
+              <div>
+                <p className="text-xs font-semibold tracking-[0.2em] text-gold uppercase">AASTU</p>
+                <p className="font-serif text-base font-bold text-navy">Open Research Data Portal</p>
+              </div>
             </div>
-          </div>
 
-          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-serif font-bold text-white leading-tight tracking-tight">
-            A living archive of research,<br className="hidden sm:block" /> donated by its authors
-          </h1>
-          <p className="text-slate-300 mt-5 text-sm sm:text-base max-w-2xl mx-auto leading-relaxed">
-            Every dataset here was accessioned by the researcher who created it — searchable, citable, and open to the next person who needs it.
-          </p>
+            <SectionEyebrow>Research excellence at AASTU</SectionEyebrow>
+            <h1 className="mt-2 font-serif text-3xl font-bold leading-tight tracking-tight text-navy sm:text-4xl lg:text-[2.65rem]">
+              A living archive of research, donated by its authors
+            </h1>
+            <p className="mt-3 font-serif text-lg font-semibold text-navy/80">Where ideas become impact</p>
+            <p className="mt-4 max-w-xl text-sm leading-relaxed text-gray-600 sm:text-base">
+              Every dataset here was accessioned by the researcher who created it — searchable, citable, and open to the next person who needs it. AASTU&apos;s Centers of Excellence bring researchers, students, and industry partners together; this portal makes the data behind that work easier to discover, reuse, and build on.
+            </p>
 
-          <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-
-          </div>
-        </div>
-
-        <div className="relative max-w-3xl mx-auto mt-14 grid grid-cols-3 gap-6 border-t border-white/10 pt-8">
-          {STATS.map((stat) => (
-            <div key={stat.label} className="text-center px-2">
-              <p className="text-2xl sm:text-3xl font-serif font-bold text-white">{stat.value}</p>
-              <p className="text-[10px] sm:text-[11px] text-slate-400 mt-1.5 tracking-wide uppercase leading-snug">{stat.label}</p>
+            <div className="mt-8 grid max-w-md grid-cols-2 gap-6 border-t border-border pt-5">
+              {STATS.map((stat) => (
+                <div key={stat.label}>
+                  <p className="font-serif text-xl font-bold text-navy">{stat.value}</p>
+                  <p className="mt-1 text-[9px] uppercase leading-snug tracking-wide text-gray-500">{stat.label}</p>
+                </div>
+              ))}
             </div>
-          ))}
+
+          </div>
+          <div className="order-1 overflow-hidden lg:order-2">
+            <img
+              src={center1Img}
+              alt="AASTU Center of Excellence research facilities"
+              className="h-48 w-full rounded-2xl object-cover sm:h-60 lg:h-[22rem]"
+            />
+          </div>
         </div>
       </section>
 
       <div className="max-w-7xl mx-auto px-6 py-16">
-        {/* Categories */}
-        <section className="mb-16">
-          <div className="flex justify-between items-end mb-5">
-            <div>
-              <SectionEyebrow>Browse the collection</SectionEyebrow>
-              <h2 className="text-xl font-serif font-bold text-navy">Explore by Category</h2>
-            </div>
-            <button onClick={() => navigate("/datasets")} className="text-sm font-semibold text-gold hover:underline shrink-0">View All Categories →</button>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {CATEGORIES.map(({ label, icon: Icon, slug }) => (
-              <button key={slug} onClick={() => navigate(`/datasets?category=${slug}`)} className="flex flex-col items-center justify-center gap-2.5 bg-white rounded-xl py-7 border border-border hover:border-gold hover:shadow-sm transition">
-                <Icon className="w-5 h-5 text-navy" />
-                <span className="text-sm font-medium text-navy">{label}</span>
-              </button>
-            ))}
-          </div>
-        </section>
-
         {/* Popular */}
         <section className="mb-16">
           <div className="flex justify-between items-end mb-5">
@@ -222,7 +234,7 @@ export default function LandingPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {popularDatasets.map((d) => <DatasetCard key={d.id} dataset={d} onClick={() => navigate(`/datasets/${d.id}`)} />)}
+              {popularDatasets.map((d) => <DatasetCard key={d.id} dataset={d} onClick={() => openDataset(d)} />)}
             </div>
           )}
         </section>
@@ -249,107 +261,58 @@ export default function LandingPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {newestDatasets.map((d) => <DatasetCard key={d.id} dataset={d} onClick={() => navigate(`/datasets/${d.id}`)} />)}
+              {newestDatasets.map((d) => <DatasetCard key={d.id} dataset={d} onClick={() => openDataset(d)} />)}
             </div>
           )}
         </section>
 
-        {/* Research at AASTU — campus image (NOT hero, NOT feeds) */}
-        <section className="mb-16">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
-            <div className="relative rounded-2xl overflow-hidden shadow-lg border border-border">
-              <img src={campusImg} alt="AASTU campus and research facilities" className="w-full h-72 lg:h-96 object-cover" />
-              <div className="absolute inset-0 bg-gradient-to-t from-navy/60 to-transparent" />
-              <div className="absolute bottom-0 left-0 right-0 p-6">
-                <p className="text-white font-serif font-bold text-lg">Research at AASTU</p>
-                <p className="text-white/80 text-sm mt-1">Advancing science and technology for Ethiopia and beyond.</p>
-              </div>
-            </div>
-            <div>
-              <SectionEyebrow>Our mission</SectionEyebrow>
-              <h2 className="text-2xl font-serif font-bold text-navy mb-4">Building Ethiopia's open research infrastructure</h2>
-              <p className="text-sm text-gray-600 leading-relaxed mb-6">
-                The Open Research Data Portal at Addis Ababa Science and Technology University provides a trusted,
-                institutionally governed platform where researchers can publish, discover, and reuse datasets with
-                proper metadata, licensing, and long-term preservation.
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {[
-                  { icon: Shield, title: "Institutional governance", desc: "Peer review and admin oversight on every submission." },
-                  { icon: Quote, title: "Citable & persistent", desc: "DOI assignment and standardized citation formats." },
-                  { icon: Users, title: "Collaborative", desc: "Co-authors, contributors, and controlled sharing." },
-                  { icon: BookOpen, title: "Rich metadata", desc: "Categories, keywords, and variable specifications." },
-                ].map(({ icon: Icon, title, desc }) => (
-                  <div key={title} className="flex gap-3 p-3 rounded-xl bg-white border border-border">
-                    <span className="w-9 h-9 rounded-lg bg-gold-light flex items-center justify-center shrink-0"><Icon className="w-4 h-4 text-gold" /></span>
-                    <div><p className="text-sm font-semibold text-navy">{title}</p><p className="text-xs text-gray-500 mt-0.5">{desc}</p></div>
-                  </div>
-                ))}
-              </div>
-            </div>
+        <section className="mb-16 grid grid-cols-1 items-center gap-10 lg:grid-cols-2 lg:gap-14">
+          <div className="order-2 lg:order-1 overflow-hidden rounded-2xl border border-border bg-white p-2 shadow-lg">
+            <img src={center2Img} alt="AASTU HPC and Big Data Analytics Center" className="h-72 w-full rounded-xl object-cover lg:h-96" />
           </div>
-        </section>
-
-        {/* How it works */}
-        <section className="mb-16">
-          <div className="text-center mb-10">
-            <SectionEyebrow>Getting started</SectionEyebrow>
-            <h2 className="text-xl font-serif font-bold text-navy">How the portal works</h2>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {HOW_IT_WORKS.map(({ step, title, description, icon: Icon }) => (
-              <div key={step} className="bg-white rounded-xl p-6 border border-border hover:border-gold/40 hover:shadow-sm transition text-center">
-                <span className="text-xs font-bold text-gold tracking-widest">{step}</span>
-                <span className="w-10 h-10 rounded-full bg-navy text-gold flex items-center justify-center mx-auto mt-3 mb-4"><Icon className="w-5 h-5" /></span>
-                <h3 className="font-semibold text-navy">{title}</h3>
-                <p className="text-xs text-gray-500 mt-2 leading-relaxed">{description}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* Research departments */}
-        <section className="mb-16 bg-white rounded-2xl border border-border p-8 lg:p-10">
-          <div className="text-center mb-8">
-            <SectionEyebrow>Across the university</SectionEyebrow>
-            <h2 className="text-xl font-serif font-bold text-navy">Research data from every faculty</h2>
-            <p className="text-sm text-gray-500 mt-2 max-w-xl mx-auto">
-              Engineering, agriculture, health sciences, computer science, and more — all contributing to Ethiopia&apos;s open research record.
+          <div className="order-1 lg:order-2">
+            <SectionEyebrow>HPC &amp; Big Data Analytics</SectionEyebrow>
+            <h2 className="text-2xl font-serif font-bold leading-tight text-navy sm:text-3xl">Advanced computing for AASTU research</h2>
+            <p className="mt-4 text-sm leading-relaxed text-gray-600">
+              The HPC and Big Data Analytics Center provides advanced computing, scalable storage, and data science expertise for demanding research across AASTU. Its infrastructure supports simulation, machine learning, geospatial analysis, genomics, climate modelling, and engineering research.
             </p>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-            {["Engineering", "Computer Science", "Agriculture", "Health Sciences", "Architecture", "Material Science", "Water Resources", "Applied Physics"].map((dept) => (
-              <button
-                key={dept}
-                type="button"
-                onClick={() => navigate(`/datasets?q=${encodeURIComponent(dept)}`)}
-                className="py-4 px-3 rounded-xl border border-border hover:border-gold hover:bg-gold-light/30 text-sm font-medium text-navy transition"
-              >
-                {dept}
-              </button>
-            ))}
-          </div>
-        </section>
-
-        {/* CTA */}
-        <section className="relative bg-navy rounded-2xl px-8 py-16 text-center overflow-hidden">
-          <svg className="absolute inset-0 w-full h-full opacity-[0.06] pointer-events-none" preserveAspectRatio="none" viewBox="0 0 800 300">
-            <path d="M0,240 Q200,190 400,220 T800,200" stroke="#A87E0E" strokeWidth="1.5" fill="none" />
-          </svg>
-          <div className="relative max-w-xl mx-auto">
-            <p className="text-xs font-semibold tracking-[0.25em] text-gold uppercase mb-4">Add to the record</p>
-            <h2 className="text-2xl sm:text-3xl font-serif font-bold text-white">Share knowledge through data</h2>
-            <p className="text-slate-300 mt-3 text-sm sm:text-base">Publish datasets, discover useful data, and help researchers build better solutions.</p>
-            <button onClick={() => navigate("/datasets/contribute")} className="mt-7 inline-flex items-center gap-2 bg-gold text-white font-semibold rounded-lg px-6 py-3.5 hover:bg-gold-dark transition">
-              <UploadCloud className="w-4 h-4" /> Submit a Dataset
+            <p className="mt-4 text-sm leading-relaxed text-gray-600">
+              This portal is the center&apos;s shared research record: a place to publish well-described datasets, preserve provenance, support reproducible workflows, and help researchers responsibly reuse high-value data.
+            </p>
+            <button onClick={openAnalyticsDatasets} className="mt-7 inline-flex items-center gap-2 rounded-lg bg-gold px-5 py-3 text-sm font-semibold text-white transition hover:bg-gold-dark">
+              Explore analytics datasets <ArrowRight className="h-4 w-4" />
             </button>
           </div>
         </section>
+
+        <section className="mb-16">
+          <div className="mb-7">
+            <SectionEyebrow>AASTU Centers of Excellence</SectionEyebrow>
+            <h2 className="text-2xl font-serif font-bold text-navy sm:text-3xl">Eight centers driving discovery</h2>
+            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-gray-600">Explore the specialized research centers that contribute knowledge, tools, and data to AASTU&apos;s open research community.</p>
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {CENTERS_OF_EXCELLENCE.map(({ name, description, icon: Icon }) => (
+              <article key={name} className="rounded-xl border border-border bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-gold hover:shadow-md">
+                <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-gold-light text-gold">
+                  <Icon className="h-5 w-5" />
+                </div>
+                <h3 className="mt-4 text-sm font-bold leading-snug text-navy">{name}</h3>
+                <p className="mt-2 text-xs leading-relaxed text-gray-500">{description}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
       </div>
 
       {/* Footer */}
       <footer className="border-t border-border bg-white">
         <div className="max-w-7xl mx-auto px-6 py-10">
+          <blockquote className="mb-7 max-w-2xl border-l-2 border-gold pl-4 text-sm italic leading-relaxed text-slate-600">
+            “Contribute today&apos;s research data so tomorrow&apos;s discoveries have a stronger foundation.”
+            <cite className="mt-2 block text-xs font-semibold not-italic tracking-wide text-gold-dark">AASTU Open Research Data Portal</cite>
+          </blockquote>
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
             <div className="flex items-center gap-3">
               <img src={logo} alt="AASTU" className="h-10 w-10 object-contain" />

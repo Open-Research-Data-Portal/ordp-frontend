@@ -14,6 +14,7 @@ import DashboardShell from "../../../components/dashboard/DashboardShell";
 import StatCard from "../../../components/dashboard/StatCard";
 import { useAuth } from "../../../context/useAuth";
 import { getDisplayName } from "../../../utils/userRoles";
+import { ProfileSavedNotice } from "../../../components/dashboard/dashboardUi";
 import * as datasetsApi from "../hooks/datasetsApi";
 import * as authApi from "../../accounts/api/authApi";
 import { getDatasetImage } from "../../../utils/datasetImage";

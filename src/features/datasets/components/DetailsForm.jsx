@@ -1,36 +1,62 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import FormField from "../../../components/FormField";
 import TagInput from "../../../components/TagInput";
 import { useAuth } from "../../../context/useAuth";
-import * as metadataApi from "../../../api/metadata";
 
-export default function DetailsForm({ initialValues = {}, onNext, onInvite, isSubmitting, submitError }) {
+const LANGUAGE_OPTIONS = [
+  // Language is OPTIONAL — a dataset with no textual/linguistic content
+  // can select Not Applicable. Covers English, all major Ethiopian
+  // languages, and common international research languages.
+  { value: "English", label: "English" },
+  { value: "Amharic", label: "Amharic — አማርኛ" },
+  { value: "Afaan Oromo", label: "Afaan Oromo — Afaan Oromoo" },
+  { value: "Tigrinya", label: "Tigrinya — ትግርኛ" },
+  { value: "Somali", label: "Somali — Soomaali" },
+  { value: "Afar", label: "Afar — Qafár af" },
+  { value: "Sidama", label: "Sidama — Sidaamu Afoo" },
+  { value: "Wolaytta", label: "Wolaytta" },
+  { value: "Gurage", label: "Gurage — ጉራጌ" },
+  { value: "Hadiyya", label: "Hadiyya" },
+  { value: "Kembata", label: "Kembata" },
+  { value: "Gamo", label: "Gamo" },
+  { value: "Gofa", label: "Gofa" },
+  { value: "Silte", label: "Silte" },
+  { value: "Arsi Oromo", label: "Arsi Oromo" },
+  { value: "Boorana Oromo", label: "Boorana Oromo" },
+  { value: "Guragigna", label: "Guragigna" },
+  { value: "Harari", label: "Harari — ሐረሪ" },
+  { value: "Kafa", label: "Kafa" },
+  { value: "Shinasha", label: "Shinasha" },
+  { value: "Bench", label: "Bench — Bench Non" },
+  { value: "Sheko", label: "Sheko" },
+  { value: "Dawuro", label: "Dawuro" },
+  { value: "Konso", label: "Konso" },
+  { value: "Maji", label: "Maji" },
+  { value: "Surma", label: "Surma" },
+  { value: "Me'en", label: "Me'en" },
+  { value: "Not Applicable", label: "Not Applicable" },
+  { value: "Arabic", label: "Arabic — العربية" },
+  { value: "French", label: "French" },
+  { value: "German", label: "German" },
+  { value: "Chinese", label: "Chinese" },
+  { value: "Portuguese", label: "Portuguese" },
+  { value: "Italian", label: "Italian" },
+  { value: "Japanese", label: "Japanese" },
+  { value: "Korean", label: "Korean" },
+  { value: "Swahili", label: "Swahili — Kiswahili" },
+];
+
+export default function DetailsForm({ initialValues = {}, onNext, isSubmitting, submitError }) {
   const { user } = useAuth();
 
   const [title, setTitle] = useState(initialValues.title || "");
   const [description, setDescription] = useState(initialValues.description || "");
-  const [languageId, setLanguageId] = useState(initialValues.languageId || initialValues.language_id || "");
-  const [languageName, setLanguageName] = useState(initialValues.language || "English");
-  const [languages, setLanguages] = useState([]);
+  const [language, setLanguage] = useState(initialValues.language || "English");
   const [coAuthors, setCoAuthors] = useState(initialValues.coAuthors || []);
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteStatus, setInviteStatus] = useState("");
   const [relatedResources, setRelatedResources] = useState(initialValues.relatedResources || []);
   const [geographicCoverage, setGeographicCoverage] = useState(initialValues.geographicCoverage || "");
   const [temporalCoverage, setTemporalCoverage] = useState(initialValues.temporalCoverage || "");
   const [localError, setLocalError] = useState("");
-
-  useEffect(() => {
-    metadataApi.getLanguages().then((items) => {
-      const list = Array.isArray(items) ? items : (items?.results || []);
-      setLanguages(list);
-      if (!languageId && list.length) {
-        const match = list.find((l) => l.name === languageName);
-        if (match) setLanguageId(match.id);
-        else setLanguageId(list[0]?.id || "");
-      }
-    }).catch(() => {});
-  }, [languageId, languageName]);
 
   const handleContinue = async (e) => {
     e.preventDefault();
@@ -38,7 +64,7 @@ export default function DetailsForm({ initialValues = {}, onNext, onInvite, isSu
       setLocalError("Dataset title is required.");
       return;
     }
-    if (!languageId && !languageName) {
+    if (!language) {
       setLocalError("Language is required.");
       return;
     }
@@ -46,31 +72,13 @@ export default function DetailsForm({ initialValues = {}, onNext, onInvite, isSu
     await onNext({
       title,
       description,
-      language: languageName,
-      languageId,
-      language_id: languageId,
+      language,
       authorId: user?.id,
       coAuthors,
       relatedResources,
       geographicCoverage,
       temporalCoverage,
     });
-  };
-
-  const handleInvite = async () => {
-    const email = inviteEmail.trim();
-    if (!email || !email.includes("@")) {
-      setInviteStatus("Enter a valid co-author email address.");
-      return;
-    }
-    setInviteStatus("");
-    try {
-      await onInvite({ email, title, description });
-      setInviteEmail("");
-      setInviteStatus("Invitation sent.");
-    } catch (err) {
-      setInviteStatus(err?.message || "Could not send the invitation.");
-    }
   };
 
   const inputClass = "w-full px-4 py-3 border border-[#E3E1DA] rounded-md text-sm bg-[#F7F6F2] focus:outline-none focus:border-navy";
@@ -94,42 +102,18 @@ export default function DetailsForm({ initialValues = {}, onNext, onInvite, isSu
       </FormField>
 
       <FormField label="Language" required>
-        <select value={languageId} onChange={(e) => { const id = e.target.value; setLanguageId(id); const found = languages.find((l) => String(l.id) === String(id)); if (found) setLanguageName(found.name); }} className={inputClass}>
-          {languages.length === 0 && <option value="">Loading...</option>}
-          {languages.map((l) => (
-            <option key={l.id} value={l.id}>{l.name}</option>
+        <select value={language} onChange={(e) => setLanguage(e.target.value)} className={inputClass}>
+          {LANGUAGE_OPTIONS.map((lang) => (
+            <option key={lang.value} value={lang.value}>{lang.label}</option>
           ))}
         </select>
       </FormField>
 
       {/* Primary author is auto-filled from the logged-in user */}
-      <div className="flex items-end gap-3">
-        <div className="flex-1">
-          <TagInput label="Co-Author(s)" tags={coAuthors} onChange={setCoAuthors} placeholder="+ Add Co-Author" />
-        </div>
-        <div className="mb-6 flex gap-2">
-          <input
-            type="email"
-            value={inviteEmail}
-            onChange={(e) => setInviteEmail(e.target.value)}
-            placeholder="coauthor@example.com"
-            aria-label="Co-author email"
-            className={`${inputClass} min-w-52`}
-          />
-          <button
-            type="button"
-            onClick={handleInvite}
-            disabled={isSubmitting}
-            className="rounded-md bg-[#A67A0D] px-4 py-3 text-sm font-semibold text-white hover:bg-[#8f690b] disabled:opacity-60"
-          >
-            Invite
-          </button>
-        </div>
-      </div>
+      <TagInput label="Co-Author(s)" tags={coAuthors} onChange={setCoAuthors} placeholder="+ Add Co-Author" />
       <p className="-mt-4 mb-6 text-sm text-gray-500">
         Researchers who contributed significantly to the intellectual work and co-author credit.
       </p>
-      {inviteStatus && <p className="-mt-4 mb-6 text-sm text-gray-500">{inviteStatus}</p>}
 
       <TagInput
         label="Related Resources (Optional)"

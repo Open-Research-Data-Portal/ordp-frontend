@@ -4,17 +4,29 @@ import { Loader2, CheckCircle2 } from "lucide-react";
 import AuthSplitCard from "../components/AuthSplitCard";
 import * as authApi from "../api/authApi";
 import { useAuth } from "../../../context/useAuth";
+import {
+  INTERESTS_ONBOARDING_PATH,
+  isInterestsOnboardingSatisfied,
+} from "../onboarding";
 
 export default function EmailVerifyConfirmPage() {
   const navigate = useNavigate();
-  const { setSession } = useAuth();
+  const { establishSession } = useAuth();
   const [searchParams] = useSearchParams();
-  const token = searchParams.get("token");
 
-  const [status, setStatus] = useState(() => (token ? "verifying" : "error"));
-  const [message, setMessage] = useState("");
+  // The backend sends the verification link as
+  //   {FRONTEND_URL}/verify-email?token=<uuid>
+  // (confirmed from app/accounts/views.py RegisterView), so the token is
+  // always in the `token` query param.
+  const token = searchParams.get("token") || "";
+
+  const [status, setStatus] = useState(() => (token ? "verifying" : "error")); // verifying | success | error
+  const [successMessage, setSuccessMessage] = useState("");
+  const [errorCode, setErrorCode] = useState(null);
   const [error, setError] = useState(() =>
-    token ? null : "Invalid verification link. Please register again or request a new link."
+    token
+      ? null
+      : "Invalid verification link. Please register again or request a new link."
   );
 
   useEffect(() => {
@@ -26,15 +38,48 @@ export default function EmailVerifyConfirmPage() {
       try {
         const data = await authApi.verifyEmail(token);
         if (cancelled) return;
-        const nextMessage = data?.detail || "Email verified. You can now log in.";
-        setMessage(nextMessage);
 
-        if (data?.access && data?.refresh) {
-          await setSession(data.access, data.refresh, false);
-          setTimeout(() => navigate("/dashboard", { replace: true }), 800);
+        const message = data?.detail || "Email verified successfully.";
+
+        // Backend contract: a successful verification returns access/refresh
+        // JWTs (auto-login). If they're absent, keep the simple flow: tell
+        // the user to sign in — the login page's completion check handles
+        // the rest.
+        if (!data?.access || !data?.refresh) {
+          navigate("/login", {
+            replace: true,
+            state: { message: `${message} Please log in to continue.` },
+          });
           return;
         }
 
+        // Auto-login: persist the JWTs returned by the verify endpoint.
+        const profile = await establishSession({
+          access: data.access,
+          refresh: data.refresh,
+          user: data.user || null,
+        });
+
+        // Route to the optional interests onboarding or the dashboard — the
+        // same decision the login page makes.
+        let completed = Boolean(profile) && authApi.isProfileCompleted(profile);
+        if (!completed) {
+          try {
+            const completion = await authApi.getProfileCompletion();
+            completed = isInterestsOnboardingSatisfied({
+              completion,
+              profile,
+              user: data.user || profile,
+              backendCompleted: authApi.isProfileCompleted(completion),
+            });
+          } catch {
+            // Fall back to onboarding; it re-checks completion before
+            // requiring any input and redirects to the dashboard if done.
+          }
+        }
+
+        if (cancelled) return;
+        setSuccessMessage(message);
         setStatus("success");
         setTimeout(
           () =>
@@ -63,7 +108,7 @@ export default function EmailVerifyConfirmPage() {
     return () => {
       cancelled = true;
     };
-  }, [token, navigate, setSession]);
+  }, [token, navigate, establishSession]);
 
   return (
     <AuthSplitCard logoSize="xlarge">

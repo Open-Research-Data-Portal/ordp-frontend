@@ -13,7 +13,7 @@ import { getDashboardPath } from "../utils/userRoles";
  * @param {React.ReactNode} children - The dashboard page component
  * @param {string} expectedDashboard - The dashboard that should be accessed (e.g., '/user-dashboard')
  */
-export default function DashboardGuard({ children, expectedDashboard }) {
+export default function DashboardGuard({ children }) {
   const { user, loading } = useAuth();
   const location = useLocation();
 

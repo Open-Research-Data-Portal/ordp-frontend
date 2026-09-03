@@ -102,11 +102,11 @@ export default function AppRoutes() {
       <Route path="/admin-dashboard" element={
         <ProtectedRoute><AdminDashboardPage /></ProtectedRoute>
       } />
+      <Route path="/admin/audit-log" element={
+        <ProtectedRoute><AdminAuditLogPage /></ProtectedRoute>
+      } />
       <Route path="/profile" element={
         <ProtectedRoute><ProfilePage /></ProtectedRoute>
-      } />
-      <Route path="/data-upload" element={
-        <ProtectedRoute><DataUploadPage /></ProtectedRoute>
       } />
       <Route path="/my-datasets" element={
         <ProtectedRoute><DatasetListPage /></ProtectedRoute>

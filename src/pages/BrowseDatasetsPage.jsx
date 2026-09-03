@@ -27,14 +27,6 @@ const QUICK_CATEGORIES = [
 ];
 
 const FILE_TYPES = ["CSV", "JSON", "SQLite", "Parquet", "BigQuery"];
-const LICENSES = ["Creative Commons", "GPL", "Open Database", "Other"];
-const USABILITY_OPTIONS = ["8.00 or higher", "9.00 or higher", "10.00"];
-const HIGHLY_VOTED_FOR = [
-  "Learning", "Research", "Application", "Well-documented",
-  "Well-maintained", "Clean data", "Original", "High-quality notebooks", "LLM Fine-Tuning",
-];
-const SIZE_UNITS = ["KB", "MB", "GB"];
-
 function formatBytes(bytes) {
   if (!bytes) return "0 B";
   if (bytes < 1024) return `${bytes} B`;
@@ -249,7 +241,6 @@ function CuratedSection({ icon: Icon, title, datasets, navigate, onSeeAll, bookm
 
 export default function BrowseDatasetsPage() {
   const navigate = useNavigate();
-  const { user, isAuthenticated } = useAuth();
   const [query, setQuery] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState("All datasets");

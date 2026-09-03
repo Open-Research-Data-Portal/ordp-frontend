@@ -409,14 +409,20 @@ export function buildProfileCompletionPatch({
   options = {},
   extra = {},
 } = {}) {
-  const { college, department } = pickCollegeAndDepartment(completion, options);
+  const { college, department: pickedDept } = pickCollegeAndDepartment(completion, options);
   const occupation =
     asChoiceSlug(extra.occupation || completion.occupation) || "researcher";
-  const academia =
-    asEntityId(extra.academia || completion.academia) ||
-    asEntityId(firstList(options.academia, options.academic_roles, options.occupations)[0]);
+  const rawAcademia = extra.academia || extra.occupation || completion.academia || completion.occupation || "researcher";
+  const academia = asChoiceSlug(rawAcademia) || "researcher";
+  const department =
+    asEntityId(
+      extra.department ||
+        extra.department_id ||
+        completion.department ||
+        completion.department_id
+    ) || pickedDept;
+
   return compact({
-    terms_accepted: true,
     occupation,
     academia,
     affiliation: extra.affiliation || completion.affiliation || DEFAULT_AFFILIATION,
@@ -438,18 +444,26 @@ function isUuidLikeFailure(err) {
   return /uuid|invalid pk|does not exist/.test(blob);
 }
 
-/** PATCH /profile/complete/, dropping UUID/FK fields if the backend rejects them. */
+/** PATCH /profile/complete/, preserving required backend completion fields. */
 export async function saveProfileCompletion(patch) {
   const attempts = [
     patch,
-    compact({ ...patch, research_interests: undefined, academia: undefined }),
+    compact({ ...patch, research_interests: undefined }),
     compact({
       terms_accepted: true,
-      occupation: asChoiceSlug(patch.occupation) || "researcher",
-      college: patch.college,
+      full_name: patch.full_name,
+      affiliation: patch.affiliation || DEFAULT_AFFILIATION,
       department: patch.department,
+      academia: patch.academia || "researcher",
+      profile_visibility: patch.profile_visibility || "public",
     }),
-    compact({ terms_accepted: true, college: patch.college, department: patch.department }),
+    compact({
+      terms_accepted: true,
+      affiliation: patch.affiliation || DEFAULT_AFFILIATION,
+      department: patch.department,
+      academia: patch.academia || "researcher",
+      profile_visibility: "public",
+    }),
     { terms_accepted: true },
   ];
   let lastErr;

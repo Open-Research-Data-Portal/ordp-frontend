@@ -96,6 +96,25 @@ export async function updateProfile(patch) {
     throw normalizeError(err, { allowDjangoFieldErrors: true });
   }
 }
+
+export async function getProfileCompletion() {
+  try {
+    const { data } = await client.get(`${BASE}/profile/complete/`);
+    return data;
+  } catch (err) {
+    throw normalizeError(err);
+  }
+}
+
+export async function updateProfileCompletion(patch) {
+  try {
+    const { data } = await client.patch(`${BASE}/profile/complete/`, patch);
+    return data;
+  } catch (err) {
+    throw normalizeError(err, { allowDjangoFieldErrors: true });
+  }
+}
+
 export async function getCompleteProfile() {
   try {
     const { data } = await client.get(`${BASE}/profile/complete/`);
@@ -289,11 +308,16 @@ export async function getDepartments(parentType, parentId) {
   if (parentType) params.parent_type = parentType;
   if (parentId) params.parent_id = parentId;
   const { data } = await client.get(`${BASE}/departments/`, { params });
-  return data?.results || [];
+  return Array.isArray(data) ? data : (data?.results || data?.departments || []);
 }
 
 export async function getProfileOptions() {
   const { data } = await client.get(`${BASE}/profile/options/`);
+  return data;
+}
+
+export async function addCustomInterest(name) {
+  const { data } = await client.post(`${BASE}/profile/interests/other/`, { name });
   return data;
 }
 
@@ -305,4 +329,18 @@ export async function addOtherInterest(name) {
 export async function getUserProfile(userId) {
   const { data } = await client.get(`${BASE}/users/${userId}/profile/`);
   return data;
+}
+
+export function isProfileCompleted(value) {
+  if (!value || typeof value !== "object") return false;
+  return Boolean(
+    value.completed ||
+      value.complete ||
+      value.is_complete ||
+      value.is_profile_complete ||
+      value.profile_completed ||
+      value.profile_completion_completed ||
+      value.onboarding_completed ||
+      value.research_interests_completed
+  );
 }

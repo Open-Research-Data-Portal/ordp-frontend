@@ -1,16 +1,18 @@
 import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
 import { useEffect } from "react";
 import ContributeLayout from "../../../layouts/ContributeLayout";
 import DetailsForm from "../components/DetailsForm";
 import MetadataForm from "../../metadata/components/MetadataForm";
 import UploadForm from "../components/UploadForm";
 import PolicyForm from "../components/PolicyForm";
+import PreReviewSummary from "../components/PreReviewSummary";
 import { useAuth } from "../../../context/useAuth";
 import { getDashboardPath } from "../../../utils/userRoles";
 import useDatasetSubmission from "../hooks/useDatasetSubmission";
 
 
-const STEPS = ["Details", "Metadata", "Upload", "Policy"];
+const STEPS = ["Details", "Metadata", "Upload", "Policy", "Preview"];
 
 export default function ContributeDatasetPage() {
   const navigate = useNavigate();
@@ -18,11 +20,13 @@ const [searchParams] = useSearchParams();
   const { user, isAuthenticated, loading } = useAuth();
   const {
     step, formData,
+    goToStep,
     goToPreviousStep,
     submitDetails,
     inviteCoauthor,
     submitMetadata,
     submitUpload,
+    submitPolicy,
     submitFinal,
     resumeDraftUpload,
     isSubmitting, submitError,
@@ -50,7 +54,7 @@ const [searchParams] = useSearchParams();
   };
 
   return (
-    <ContributeLayout currentStep={step} steps={STEPS}>
+    <ContributeLayout currentStep={step} steps={STEPS} onStepClick={goToStep}>
       <button
         type="button"
         onClick={() => navigate(getDashboardPath(user))}
@@ -89,8 +93,18 @@ const [searchParams] = useSearchParams();
         {step === 4 && (
           <PolicyForm
             initialValues={formData.policy}
-            onSubmit={handleFinalSubmit}
+            onSubmit={submitPolicy}
             onBack={goToPreviousStep}
+            isSubmitting={isSubmitting}
+            submitError={submitError}
+          />
+        )}
+        {step === 5 && (
+          <PreReviewSummary
+            formData={formData}
+            onEditStep={goToStep}
+            onSubmitForReview={() => handleFinalSubmit(formData.policy)}
+            onSaveDraft={() => handleFinalSubmit({ ...formData.policy, isDraft: true })}
             isSubmitting={isSubmitting}
             submitError={submitError}
           />

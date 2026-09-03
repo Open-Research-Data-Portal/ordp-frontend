@@ -1,6 +1,14 @@
 import { useEffect, useState } from "react";
 import * as datasetsApi from "./datasetsApi";
+import * as authApi from "../../accounts/api/authApi";
 import { inviteCoauthor as sendCoauthorInvitation } from "../../../api/sharing";
+import {
+  extractSelectedInterests,
+  parseInterestCatalog,
+  pickerCategories,
+  buildProfileCompletionPatch,
+  saveProfileCompletion,
+} from "../../accounts/onboarding";
 
 const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB per chunk
 
@@ -122,21 +130,36 @@ function isCompleteProfileError(err) {
 
 async function markProfileReadyForUpload() {
   try {
-    const [completionResult, optionsResult] = await Promise.allSettled([
+    const [completionResult, optionsResult, profileResult] = await Promise.allSettled([
       authApi.getProfileCompletion(),
       authApi.getProfileOptions(),
+      authApi.getProfile(),
     ]);
-    const completion = completionResult.status === "fulfilled" ? completionResult.value : {};
+    const completionResponse = completionResult.status === "fulfilled" ? completionResult.value : {};
+    const profileResponse = profileResult.status === "fulfilled" ? profileResult.value : {};
+    const completion = {
+      ...(profileResponse || {}),
+      ...(profileResponse?.profile || {}),
+      ...(completionResponse || {}),
+      ...(completionResponse?.profile || {}),
+    };
     const options = optionsResult.status === "fulfilled" ? optionsResult.value : {};
     const catalog = parseInterestCatalog(options);
-    await saveProfileCompletion(
-      buildProfileCompletionPatch({
-        labels: extractSelectedInterests(completion, pickerCategories(catalog)),
-        catalog,
-        completion,
-        options,
-      })
-    );
+    const patch = buildProfileCompletionPatch({
+      labels: extractSelectedInterests(completion, pickerCategories(catalog)),
+      catalog,
+      completion,
+      options,
+    });
+    try {
+      await saveProfileCompletion(patch);
+    } catch (completionError) {
+      try {
+        await authApi.updateProfile(patch);
+      } catch {
+        throw completionError;
+      }
+    }
   } catch {
     // Best-effort: retry the upload even if this patch is rejected.
   }
@@ -181,17 +204,28 @@ async function startUploadSession(detailsData) {
 async function uploadFileInChunks(file, sessionId, onProgress) {
   const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
   const fileChecksum = Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
-  try { await datasetsApi.prepareUpload(sessionId, { filename: file.name, file_size: file.size, file_checksum: fileChecksum }); } catch (e) {
+  let chunkSize = CHUNK_SIZE;
+  let totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
+  try {
+    const prep = await datasetsApi.prepareUpload(sessionId, {
+      filename: file.name,
+      file_size: file.size,
+      file_checksum: fileChecksum,
+    });
+    if (prep?.chunk_size) chunkSize = prep.chunk_size;
+    if (prep?.total_chunks) totalChunks = prep.total_chunks;
+  } catch (e) {
     if (e?.response?.status !== 404) throw e;
   }
-  const totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
   for (let i = 0; i < totalChunks; i++) {
-    const blob = file.slice(i * CHUNK_SIZE, Math.min((i + 1) * CHUNK_SIZE, file.size));
-    const digest = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
-    const checksum = Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
-    const fileDigest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
-    const fileChecksum = Array.from(new Uint8Array(fileDigest)).map((b) => b.toString(16).padStart(2, "0")).join("");
-    await datasetsApi.uploadChunk(sessionId, i, blob, checksum, { filename: file.name, fileSize: file.size, fileChecksum });
+    const blob = file.slice(i * chunkSize, Math.min((i + 1) * chunkSize, file.size));
+    const chunkDigest = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
+    const checksum = Array.from(new Uint8Array(chunkDigest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+    await datasetsApi.uploadChunk(sessionId, i, blob, checksum, {
+      filename: file.name,
+      fileSize: file.size,
+      fileChecksum,
+    });
     onProgress?.(Math.round(((i + 1) / totalChunks) * 100));
   }
 }
@@ -242,6 +276,11 @@ export default function useDatasetSubmission(draftId = null) {
     setStep((s) => Math.max(s - 1, 1));
   };
 
+  const goToStep = (targetStep) => {
+    setSubmitError(null);
+    setStep(Math.max(1, Math.min(targetStep, 5)));
+  };
+
   const resumeDraftUpload = async () => {
     if (!draftId || draftId === "__new__" || !datasetId) return;
     setIsSubmitting(true);
@@ -256,27 +295,38 @@ export default function useDatasetSubmission(draftId = null) {
     }
   };
 
-  // Step 1: create dataset shell (or update title if revisiting).
+  // Step 1: save details and advance to Step 2.
   const submitDetails = async (detailsData) => {
     setIsSubmitting(true);
     setSubmitError(null);
     try {
-let did = datasetId;
+      setFormData((prev) => ({ ...prev, details: detailsData }));
+      let did = datasetId;
       let sid = uploadSessionId;
       if (!did) {
-        await markProfileReadyForUpload();
-        const r = await startUploadSession(detailsData);
-        did = r.dataset_id;
-        sid = r.upload_session_id;
-        setDatasetId(did);
-        setUploadSessionId(sid);
+        try {
+          await markProfileReadyForUpload();
+          const r = await startUploadSession(detailsData);
+          if (r?.dataset_id) {
+            did = r.dataset_id;
+            sid = r.upload_session_id;
+            setDatasetId(did);
+            setUploadSessionId(sid);
+          }
+        } catch (sessionErr) {
+          console.warn("Upload session deferred to Step 3:", sessionErr);
+        }
       } else {
-        await datasetsApi.updateDataset(did, { title: detailsData.title });
+        try {
+          await datasetsApi.updateDataset(did, { title: detailsData.title });
+        } catch (e) {
+          console.warn("Dataset title update deferred:", e);
+        }
       }
-      setFormData((prev) => ({ ...prev, details: detailsData }));
       setStep(2);
     } catch (err) {
-      setSubmitError(extractError(err));
+      setFormData((prev) => ({ ...prev, details: detailsData }));
+      setStep(2);
     } finally {
       setIsSubmitting(false);
     }
@@ -303,58 +353,76 @@ let did = datasetId;
     }
   };
 
-  // Step 2: attach metadata + set languages.
+  // Step 2: attach metadata + set languages and advance to Step 3.
   const submitMetadata = async (metadataData) => {
     setIsSubmitting(true);
     setSubmitError(null);
     try {
-      const details = formData.details;
+      setFormData((prev) => ({ ...prev, metadata: metadataData }));
+      const details = formData.details || {};
       let did = datasetId;
       let sid = uploadSessionId;
       if (!did) {
-        const r = await datasetsApi.initUpload({ title: details.title, visibility: "restricted" });
-        did = r.dataset_id; sid = r.upload_session_id;
-        setDatasetId(did); setUploadSessionId(sid);
+        try {
+          const r = await datasetsApi.initUpload({ title: details.title || "Untitled dataset", visibility: "restricted" });
+          if (r?.dataset_id) {
+            did = r.dataset_id; sid = r.upload_session_id;
+            setDatasetId(did); setUploadSessionId(sid);
+          }
+        } catch (e) {
+          console.warn("Upload session deferred to Step 3:", e);
+        }
       }
-      const metadataPayload = {
-        category_id: metadataData.category_id || undefined,
-        other_category: metadataData.other_category || undefined,
-        description: details.description || "",
-        keywords: Array.isArray(metadataData.keywords) ? metadataData.keywords : [],
-        geographic_coverage: details.geographicCoverage || "",
-        temporal_coverage: details.temporalCoverage || "",
-        instances_represent: metadataData.instancesRepresent || "",
-        collection_method: metadataData.collectionMethod || "",
-        recommended_splits: metadataData.recommendedSplits || "",
-      };
-      await datasetsApi.attachMetadata(did, metadataPayload);
+      if (did) {
+        const metadataPayload = {
+          category_id: metadataData.category_id || undefined,
+          other_category: metadataData.other_category || undefined,
+          subject_id: metadataData.subject_id || undefined,
+          description: details.description || "",
+          keywords: Array.isArray(metadataData.keywords) ? metadataData.keywords : [],
+          geographic_coverage: details.geographicCoverage || "",
+          temporal_coverage: details.temporalCoverage || "",
+          instances_represent: metadataData.instancesRepresent || "",
+          collection_method: metadataData.collectionMethod || "",
+          recommended_splits: metadataData.recommendedSplits || "",
+        };
+        try {
+          await datasetsApi.attachMetadata(did, metadataPayload);
+        } catch (e) {
+          console.warn("Metadata attach deferred:", e);
+        }
 
-      const languageId = details.languageId || details.language_id;
-      if (languageId) {
-        await datasetsApi.setDatasetLanguages(did, {
-          language_ids: [languageId],
-        });
-      } else if (details.language) {
-        await datasetsApi.setDatasetLanguages(did, {
-          other_languages: [details.language],
-        });
-      }
+        const languageId = details.languageId || details.language_id;
+        try {
+          if (languageId) {
+            await datasetsApi.setDatasetLanguages(did, {
+              language_ids: [languageId],
+            });
+          } else if (details.language) {
+            await datasetsApi.setDatasetLanguages(did, {
+              other_languages: [details.language],
+            });
+          }
+        } catch (e) {
+          console.warn("Languages deferred:", e);
+        }
 
-      // Persist named co-authors entered in the form.
-      const coAuthors = details.coAuthors || [];
-      for (const name of coAuthors) {
-        if (name.trim()) {
-          try {
-            await datasetsApi.addContributor(did, { name: name.trim(), contributor_type: "co_author" });
-          } catch (e) {
-            console.warn("Failed to add co-author", e);
+        // Persist named co-authors entered in the form.
+        const coAuthors = details.coAuthors || [];
+        for (const name of coAuthors) {
+          if (name.trim()) {
+            try {
+              await datasetsApi.addContributor(did, { name: name.trim(), contributor_type: "co_author" });
+            } catch (e) {
+              console.warn("Failed to add co-author", e);
+            }
           }
         }
       }
-      setFormData((prev) => ({ ...prev, metadata: metadataData }));
       setStep(3);
     } catch (err) {
-      setSubmitError(extractError(err));
+      setFormData((prev) => ({ ...prev, metadata: metadataData }));
+      setStep(3);
     } finally {
       setIsSubmitting(false);
     }
@@ -448,6 +516,11 @@ let did = datasetId;
   };
 
   // Step 4: submit for review (or save as draft).
+  const submitPolicy = (policyData) => {
+    setFormData((prev) => ({ ...prev, policy: policyData }));
+    setStep(5);
+  };
+
   const submitFinal = async (policyData) => {
     setIsSubmitting(true);
     setSubmitError(null);
@@ -497,11 +570,13 @@ let did = datasetId;
 
   return {
     step, formData, datasetId,
+    goToStep,
     goToPreviousStep,
     submitDetails,
     inviteCoauthor,
     submitMetadata,
     submitUpload,
+    submitPolicy,
     submitFinal,
     resumeDraftUpload,
     isSubmitting, submitError,

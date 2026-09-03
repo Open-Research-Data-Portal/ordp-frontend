@@ -4,7 +4,7 @@ import { Mail, Lock, ArrowRight } from "lucide-react";
 import { useAuth } from "../../../context/useAuth";
 import * as authApi from "../api/authApi";
 import { INTERESTS_ONBOARDING_PATH, isInterestsOnboardingSatisfied } from "../onboarding";
-import { getDashboardPath, isAdmin } from "../../../utils/userRoles";
+import { getDashboardPath, isAdmin, isReviewer } from "../../../utils/userRoles";
 import AuthLayout from "../components/AuthLayout";
 import TextInput from "../../../components/ui/TextInput";
 import Button from "../../../components/ui/Button";
@@ -43,13 +43,55 @@ export default function LoginPage() {
 
     try {
       const result = await login(identifier, password, stayLoggedIn);
-      const completed = Boolean(
-        result.profile?.researchInterestsCompleted ||
-        result.profile?.onboardingCompleted ||
-        result.profile?.research_interests_completed ||
-        result.profile?.onboarding_completed ||
-        result.profile?.interests?.length
-      );
+
+      const signedIn = result.user || result.profile || result;
+      if (
+        isAdmin(signedIn) ||
+        isAdmin(result?.user) ||
+        isReviewer(signedIn) ||
+        isReviewer(result?.user) ||
+        isReviewer(result?.profile) ||
+        isReviewer(result)
+      ) {
+        navigate(getDashboardPath(signedIn), { replace: true });
+        return;
+      }
+
+      // Route new users to the optional interests onboarding until there is
+      // nothing left for them to do there (interests already chosen, skipped
+      // previously, or the backend reports the wider profile as complete).
+      let completed =
+        authApi.isProfileCompleted(result?.profile) ||
+        Boolean(
+          result.profile?.researchInterestsCompleted ||
+            result.profile?.onboardingCompleted ||
+            result.profile?.research_interests_completed ||
+            result.profile?.onboarding_completed ||
+            result.profile?.profileCompleted ||
+            result.profile?.profile_completed
+        );
+
+      if (!completed) {
+        completed = isInterestsOnboardingSatisfied({
+          profile: result?.profile,
+          user: result?.user || result?.profile,
+        });
+      }
+
+      if (!completed) {
+        try {
+          const completion = await authApi.getProfileCompletion();
+          completed = isInterestsOnboardingSatisfied({
+            completion,
+            profile: result?.profile,
+            user: result?.user || result?.profile,
+            backendCompleted: authApi.isProfileCompleted(completion),
+          });
+        } catch {
+          // Ignore — profile flags above are the fallback.
+        }
+      }
+
       if (!completed) {
         navigate(INTERESTS_ONBOARDING_PATH, { replace: true });
       } else {
@@ -169,6 +211,10 @@ export default function LoginPage() {
             Sign Up
           </Link>
         </p>
+        <blockquote className="mt-7 w-full border-l-2 border-[#B8860B] pl-4 text-left text-xs italic leading-relaxed text-slate-500">
+          “Contribute today&apos;s research data so tomorrow&apos;s discoveries have a stronger foundation.”
+          <cite className="mt-1 block text-[10px] font-semibold not-italic text-[#B8860B]">AASTU Open Research Data Portal</cite>
+        </blockquote>
       </div>
     </AuthLayout>
   );

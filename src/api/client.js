@@ -1,14 +1,8 @@
 import axios from "axios";
 import { getAccessToken, getRefreshToken, setTokens, clearTokens } from "./tokenStore";
 
-const isLocal =
-  typeof window !== "undefined" &&
-  (window.location.hostname === "localhost" ||
-    window.location.hostname === "127.0.0.1");
-
-const BASE_URL = isLocal
-  ? (import.meta.env.VITE_API_BASE_URL || "https://ordp-backend.onrender.com/api")
-  : "/api";
+const BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "https://ordp-backend.onrender.com/api";
 
 const client = axios.create({
   baseURL: BASE_URL,

@@ -157,6 +157,8 @@ export function getMediaUrl(url) {
     return url;
   }
   const apiBase = import.meta.env.VITE_API_BASE_URL || "";
-  const host = apiBase.replace(/\/api\/?$/, "");
+  const host = apiBase.startsWith("http")
+    ? apiBase.replace(/\/api\/?$/, "")
+    : "https://ordp-backend.onrender.com";
   return host ? `${host}${url.startsWith("/") ? "" : "/"}${url}` : url;
 }

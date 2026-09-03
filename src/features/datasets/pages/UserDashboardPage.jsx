@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bookmark, Download, Eye, MoreVertical } from "lucide-react";
+import { Bookmark, Download, Eye, UploadCloud, KeyRound, GitBranch } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
-import { ProfileBanner, ProfileSavedNotice, SectionHeader, StatusBadge, EmptyState } from "../../../components/dashboard/dashboardUi";
+import { ProfileBanner, ProfileSavedNotice, SectionHeader, EmptyState } from "../../../components/dashboard/dashboardUi";
 import { useAuth } from "../../../context/useAuth";
-import { getDisplayName } from "../../../utils/userRoles";
+import { getDisplayName, isReviewer, isAdmin } from "../../../utils/userRoles";
 import * as datasetsApi from "../hooks/datasetsApi";
+import * as authApi from "../../accounts/api/authApi";
 import { getDatasetImage } from "../../../utils/datasetImage";
 
 function normalizeList(data) {
@@ -18,9 +19,21 @@ export default function UserDashboardPage() {
   const navigate = useNavigate();
   const [feed, setFeed] = useState([]);
   const [bookmarks, setBookmarks] = useState([]);
+  const [stats, setStats] = useState(null);
   const [profileComplete, setProfileComplete] = useState(true);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (isReviewer(user)) {
+      navigate("/reviewer-dashboard", { replace: true });
+      return;
+    }
+    if (isAdmin(user)) {
+      navigate("/admin-dashboard", { replace: true });
+      return;
+    }
+  }, [user, navigate]);
 
   useEffect(() => {
     let active = true;
@@ -33,7 +46,39 @@ export default function UserDashboardPage() {
       if (!active) return;
       if (feedRes.status === "fulfilled") setFeed(normalizeList(feedRes.value));
       if (bookmarksRes.status === "fulfilled") setBookmarks(normalizeList(bookmarksRes.value));
-setProfileComplete(Boolean(user?.can_upload_datasets || user?.profile?.can_upload_datasets || user?.profile_complete || user?.profile?.profile_complete || user?.is_profile_complete));
+      const statsRes = await Promise.allSettled([datasetsApi.getDashboardStats()]);
+      if (statsRes[0].status === "fulfilled") setStats(statsRes[0].value);
+
+      // Check profile completion via user state, storage, and API
+      let isComplete = Boolean(
+        user?.can_upload_datasets ||
+        user?.profile?.can_upload_datasets ||
+        user?.profile_complete ||
+        user?.profile?.profile_complete ||
+        user?.is_profile_complete ||
+        sessionStorage.getItem("ordp:profile_completed") === "true" ||
+        localStorage.getItem("ordp:profile_completed") === "true"
+      );
+
+      if (!isComplete) {
+        try {
+          const profileData = await authApi.getCompleteProfile();
+          if (
+            profileData?.can_upload_datasets ||
+            profileData?.is_profile_complete ||
+            profileData?.completed ||
+            profileData?.is_complete ||
+            authApi.isProfileCompleted(profileData)
+          ) {
+            isComplete = true;
+            sessionStorage.setItem("ordp:profile_completed", "true");
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      setProfileComplete(isComplete);
       setLoading(false);
     }
     load();
@@ -53,6 +98,22 @@ setProfileComplete(Boolean(user?.can_upload_datasets || user?.profile?.can_uploa
         <h1 className="text-2xl font-serif font-bold text-navy">Welcome, {getDisplayName(user)}</h1>
         <p className="text-sm text-gray-500 mt-1">Discover research materials and track your submissions.</p>
       </div>
+
+      <section className="mt-6 mb-10 grid grid-cols-2 gap-3 md:grid-cols-5 animate-fade-in-up" aria-label="Your activity statistics">
+        {[
+          ["Downloads", stats?.downloads ?? stats?.downloads_i_made ?? 0, Download],
+          ["Views", stats?.views ?? stats?.views_received ?? 0, Eye],
+          ["Uploads", stats?.uploads ?? stats?.total_uploads ?? 0, UploadCloud],
+          ["Dataset access", stats?.dataset_access ?? stats?.access_requests ?? 0, KeyRound],
+          ["Contributions", stats?.contributions ?? stats?.total_contributions ?? 0, GitBranch],
+        ].map(([label, value, Icon]) => (
+          <div key={label} className="rounded-xl border border-border bg-white p-4 shadow-sm">
+            <Icon className="h-4 w-4 text-gold" />
+            <p className="mt-3 text-xl font-serif font-bold text-navy">{Number(value || 0).toLocaleString()}</p>
+            <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-gray-500">{label}</p>
+          </div>
+        ))}
+      </section>
 
       {/* Explore Datasets */}
       <section className="mt-8 mb-10 animate-fade-in-up">

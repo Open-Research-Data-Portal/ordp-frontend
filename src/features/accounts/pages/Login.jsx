@@ -4,7 +4,7 @@ import { Mail, Lock, ArrowRight } from "lucide-react";
 import { useAuth } from "../../../context/useAuth";
 import * as authApi from "../api/authApi";
 import { INTERESTS_ONBOARDING_PATH, isInterestsOnboardingSatisfied } from "../onboarding";
-import { getDashboardPath, isAdmin } from "../../../utils/userRoles";
+import { getDashboardPath, isAdmin, isReviewer } from "../../../utils/userRoles";
 import AuthLayout from "../components/AuthLayout";
 import TextInput from "../../../components/ui/TextInput";
 import Button from "../../../components/ui/Button";
@@ -44,8 +44,15 @@ export default function LoginPage() {
     try {
       const result = await login(identifier, password, stayLoggedIn);
 
-      const signedIn = result.user || result.profile;
-      if (isAdmin(signedIn)) {
+      const signedIn = result.user || result.profile || result;
+      if (
+        isAdmin(signedIn) ||
+        isAdmin(result?.user) ||
+        isReviewer(signedIn) ||
+        isReviewer(result?.user) ||
+        isReviewer(result?.profile) ||
+        isReviewer(result)
+      ) {
         navigate(getDashboardPath(signedIn), { replace: true });
         return;
       }
@@ -204,6 +211,10 @@ export default function LoginPage() {
             Sign Up
           </Link>
         </p>
+        <blockquote className="mt-7 w-full border-l-2 border-[#B8860B] pl-4 text-left text-xs italic leading-relaxed text-slate-500">
+          “Contribute today&apos;s research data so tomorrow&apos;s discoveries have a stronger foundation.”
+          <cite className="mt-1 block text-[10px] font-semibold not-italic text-[#B8860B]">AASTU Open Research Data Portal</cite>
+        </blockquote>
       </div>
     </AuthLayout>
   );

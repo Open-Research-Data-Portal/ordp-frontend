@@ -1,4 +1,5 @@
 import logo from "../../../assets/aastulogo.png";
+import AuthFooter from "./AuthFooter";
 
 /**
  * Split-card layout used on check-email, verify-email, and reset-password pages.
@@ -12,7 +13,7 @@ export default function AuthSplitCard({
   const isXLarge = logoSize === "xlarge";
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-[#F0F0EE] px-4 py-8">
+    <div className="min-h-screen w-full flex flex-col items-center justify-center bg-[#F0F0EE] px-4 py-8">
       <div className="w-full max-w-4xl bg-white rounded-2xl shadow-[0_8px_40px_rgba(11,21,38,0.1)] overflow-hidden flex flex-col md:flex-row">
         <div className="md:w-[38%] bg-navy text-white p-8 md:p-10 flex flex-col items-center justify-center text-center relative overflow-hidden min-h-[300px]">
           <div className="absolute inset-0 opacity-[0.04] bg-[linear-gradient(white_1px,transparent_1px),linear-gradient(90deg,white_1px,transparent_1px)] [background-size:20px_20px]" />
@@ -38,6 +39,9 @@ export default function AuthSplitCard({
         <div className="md:w-[62%] p-8 md:p-12 flex flex-col items-center text-center justify-center">
           {children}
         </div>
+      </div>
+      <div className="w-full max-w-4xl mt-6 rounded-2xl overflow-hidden">
+        <AuthFooter />
       </div>
     </div>
   );

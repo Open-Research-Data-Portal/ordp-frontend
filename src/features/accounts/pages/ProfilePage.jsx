@@ -274,6 +274,7 @@ export default function ProfilePage() {
       const fullName = [firstName, fatherName, grandFatherName].filter(Boolean).join(" ").trim();
       const occupation =
         toOptionValue(OCCUPATION_OPTIONS, academicRole) || academicRole;
+      const deptId = department ? Number(department) : undefined;
       const payload = buildProfileCompletionPatch({
         labels: researchInterests,
         catalog: interestCatalog,
@@ -285,6 +286,9 @@ export default function ProfilePage() {
           grand_father_name: grandFatherName,
           full_name: fullName,
           affiliation,
+          department: deptId,
+          department_id: deptId,
+          academia: occupation || "researcher",
           occupation,
           student_type: studentType,
           academic_title: toOptionValue(ACADEMIC_TITLE_OPTIONS, academicTitle) || academicTitle,
@@ -305,7 +309,10 @@ export default function ProfilePage() {
         await authApi.updateProfile({
           first_name: firstName,
           last_name: fatherName,
+          full_name: fullName,
           affiliation,
+          department: deptId,
+          academia: occupation || "researcher",
           occupation,
           bio,
           orcid_id: orcidId,
@@ -330,8 +337,12 @@ department,
         orcid_id: orcidId,
         profile_visibility: profileVisibility,
         terms_accepted: termsAccepted,
-profile_complete: true,
+        profile_complete: true,
+        is_profile_complete: true,
+        can_upload_datasets: true,
       };
+      sessionStorage.setItem("ordp:profile_completed", "true");
+      localStorage.setItem("ordp:profile_completed", "true");
       setUser?.(nextUser);
       navigate(getDashboardPath(nextUser), {
         replace: true,

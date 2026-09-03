@@ -16,7 +16,7 @@ import {
   saveProfileCompletion,
 } from "../onboarding";
 import { RESEARCH_INTEREST_CATEGORIES } from "./constants";
-import { getDashboardPath } from "../../../utils/userRoles";
+import { getDashboardPath, isReviewer, isAdmin } from "../../../utils/userRoles";
 
 /**
  * Single-step onboarding: research interests only.
@@ -51,6 +51,13 @@ export default function ResearchInterestsOnboardingPage() {
       return;
     }
     if (!isAuthenticated) return;
+    if (isReviewer(user) || isAdmin(user)) {
+      navigate("/profile", {
+        replace: true,
+        state: { from: "/research-interests-onboarding" },
+      });
+      return;
+    }
 
     let cancelled = false;
 
@@ -121,11 +128,17 @@ export default function ResearchInterestsOnboardingPage() {
         })
       );
       persistSelectedInterests(user, interests);
-      setUser?.((current) => ({
-        ...(current || {}),
+      sessionStorage.setItem("ordp:profile_completed", "true");
+      localStorage.setItem("ordp:profile_completed", "true");
+      const nextUser = {
+        ...(user || {}),
         research_interests: interests,
         researchInterests: interests,
-      }));
+        can_upload_datasets: true,
+        profile_complete: true,
+        is_profile_complete: true,
+      };
+      setUser?.(nextUser);
       navigate(getDashboardPath(user), { replace: true });
     } catch (err) {
       setError(err?.message || "Failed to save your interests. Please try again.");

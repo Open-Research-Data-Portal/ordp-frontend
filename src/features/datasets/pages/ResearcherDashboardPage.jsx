@@ -5,11 +5,13 @@ import {
   Download,
   FolderOpen,
   Plus,
-  MoreVertical,
   Bookmark,
   User,
   X,
   ArrowRight,
+  AlertTriangle,
+  Clock,
+  GitPullRequest,
 } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import StatCard from "../../../components/dashboard/StatCard";
@@ -44,7 +46,10 @@ export default function ResearcherDashboardPage() {
   const [feed, setFeed] = useState([]);
   const [bookmarks, setBookmarks] = useState([]);
   const [stats, setStats] = useState(null);
+  const [recentActivity, setRecentActivity] = useState([]);
+  const [contributions, setContributions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [forbidden, setForbidden] = useState(false);
 
   // Profile completion banner: reappears every time the dashboard loads
   // until the user's profile is actually marked complete.
@@ -53,36 +58,60 @@ export default function ResearcherDashboardPage() {
     user?.profile?.can_upload_datasets ||
     user?.profile_complete ||
     user?.profile?.profile_complete ||
-    user?.is_profile_complete
+    user?.is_profile_complete ||
+    sessionStorage.getItem("ordp:profile_completed") === "true" ||
+    localStorage.getItem("ordp:profile_completed") === "true"
   );
   const [showProfileBanner, setShowProfileBanner] = useState(!isProfileComplete);
 
   useEffect(() => {
+    if (isProfileComplete) {
+      setShowProfileBanner(false);
+      return;
+    }
     authApi.getCompleteProfile().then((profile) => {
-      const complete = Boolean(profile?.can_upload_datasets || profile?.is_profile_complete ||
-        (profile?.full_name && profile?.affiliation && profile?.department && profile?.academia && profile?.profile_visibility && profile?.terms_accepted));
-      setShowProfileBanner(!complete);
+      const complete = Boolean(
+        profile?.can_upload_datasets ||
+        profile?.is_profile_complete ||
+        profile?.completed ||
+        profile?.is_complete ||
+        authApi.isProfileCompleted(profile) ||
+        (profile?.full_name && profile?.affiliation && profile?.department && profile?.academia && profile?.profile_visibility && profile?.terms_accepted)
+      );
+      if (complete) {
+        sessionStorage.setItem("ordp:profile_completed", "true");
+        setShowProfileBanner(false);
+      } else {
+        setShowProfileBanner(true);
+      }
     }).catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    setShowProfileBanner(!isProfileComplete);
   }, [isProfileComplete]);
   useEffect(() => {
     let active = true;
     async function load() {
       setLoading(true);
+      setForbidden(false);
       const results = await Promise.allSettled([
         datasetsApi.getMyDatasets(),
         datasetsApi.getDashboardStats(),
         datasetsApi.getDashboardFeed(),
         datasetsApi.getMyBookmarks?.() ?? Promise.resolve([]),
+        datasetsApi.getDashboardRecentActivity(),
+        datasetsApi.getDashboardMyContributions(),
       ]);
       if (!active) return;
+
+      // Check if stats returned 403 (user lacks CanUploadDatasets)
+      if (results[1].status === "rejected" && results[1].reason?.response?.status === 403) {
+        setForbidden(true);
+      }
+
       if (results[0].status === "fulfilled") setDatasets(normalizeList(results[0].value));
       if (results[1].status === "fulfilled") setStats(results[1].value);
       if (results[2].status === "fulfilled") setFeed(normalizeList(results[2].value));
       if (results[3].status === "fulfilled") setBookmarks(normalizeList(results[3].value));
+      if (results[4].status === "fulfilled") setRecentActivity(normalizeList(results[4].value));
+      if (results[5].status === "fulfilled") setContributions(normalizeList(results[5].value));
       setLoading(false);
     }
     load();
@@ -212,8 +241,60 @@ export default function ResearcherDashboardPage() {
         )}
       </section>
 
-      {/* My Bookmarks */}
+      {/* Recent Activity */}
       <section className="mb-8 animate-fade-in-up" style={{ animationDelay: "300ms" }}>
+        <h2 className="text-lg font-serif font-bold text-navy mb-4">Recent Activity</h2>
+        {recentActivity.length === 0 ? (
+          <div className="bg-white rounded-xl border border-border shadow-sm py-10 flex flex-col items-center text-center px-6">
+            <span className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+              <Clock className="w-5 h-5 text-gray-400" />
+            </span>
+            <p className="text-sm font-semibold text-navy">No recent activity</p>
+            <p className="text-xs text-gray-500 mt-1 max-w-sm">Downloads, revisions, and other activity on your datasets will appear here.</p>
+          </div>
+        ) : (
+          <div className="bg-white rounded-xl border border-border shadow-sm overflow-hidden">
+            <div className="divide-y divide-gray-100">
+              {recentActivity.slice(0, 8).map((activity, idx) => (
+                <div key={activity.id || idx} className="flex items-center gap-3 px-5 py-3 hover:bg-bg/50">
+                  <span className="w-8 h-8 rounded-full bg-gold-light flex items-center justify-center shrink-0">
+                    {activity.type === "download" ? <Download className="w-4 h-4 text-gold" /> : <Eye className="w-4 h-4 text-gold" />}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-navy truncate">{activity.description || activity.message || `${activity.type || "Activity"} on ${activity.dataset_title || "dataset"}`}</p>
+                    <p className="text-xs text-gray-400">{formatDate(activity.created_at || activity.timestamp)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* My Contributions */}
+      {contributions.length > 0 && (
+        <section className="mb-8 animate-fade-in-up" style={{ animationDelay: "350ms" }}>
+          <h2 className="text-lg font-serif font-bold text-navy mb-4">My Contributions</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {contributions.slice(0, 6).map((c) => (
+              <div
+                key={c.id || c.dataset_id}
+                onClick={() => navigate(`/datasets/${c.id || c.dataset_id}`)}
+                className="bg-white rounded-xl p-4 border border-border hover:border-gold/30 cursor-pointer transition-colors"
+              >
+                <div className="flex items-start gap-2 mb-2">
+                  <GitPullRequest className="w-4 h-4 text-violet-500 mt-0.5 shrink-0" />
+                  <p className="text-sm font-semibold text-navy line-clamp-2">{c.title || c.dataset_title || "Untitled"}</p>
+                </div>
+                <p className="text-xs text-gray-500">{c.owner?.email || c.owner_name || "Unknown researcher"}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* My Bookmarks */}
+      <section className="mb-8 animate-fade-in-up" style={{ animationDelay: "400ms" }}>
         <h2 className="text-lg font-serif font-bold text-navy mb-4">My Bookmarks</h2>
 
         {bookmarks.length === 0 ? (

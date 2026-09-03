@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Search, SlidersHorizontal, User } from "lucide-react";
 import { useAuth } from "../context/useAuth";
-import { getDashboardPath } from "../utils/userRoles";
+import { getDisplayName, getDashboardPath } from "../utils/userRoles";
 import logo from "../assets/aastulogo.png";
 
 export default function TopBar() {
@@ -16,6 +16,9 @@ export default function TopBar() {
       navigate(`/datasets?q=${encodeURIComponent(query.trim())}`);
     }
   }
+
+  const displayName = getDisplayName(user);
+  const initial = (displayName.charAt(0) || "U").toUpperCase();
 
   return (
     <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm border-b border-border shadow-sm">
@@ -59,12 +62,14 @@ export default function TopBar() {
           {isAuthenticated ? (
             <Link
               to={getDashboardPath(user)}
-              className="flex items-center gap-2 text-sm font-medium text-navy hover:bg-gray-50 rounded-lg px-3 py-2 transition"
+              className="flex items-center gap-2 text-sm font-semibold text-navy hover:bg-gray-50 rounded-xl px-3 py-1.5 border border-slate-200/80 shadow-xs transition"
             >
-              <span className="w-8 h-8 rounded-full bg-gold-light flex items-center justify-center">
-                <User className="w-4 h-4 text-gold" />
+              <span className="w-8 h-8 rounded-full bg-gold-light flex items-center justify-center text-xs font-bold text-navy shrink-0">
+                {initial}
               </span>
-              <span className="hidden md:inline max-w-[140px] truncate">{user?.name || "Dashboard"}</span>
+              <span className="inline max-w-[130px] sm:max-w-[160px] truncate text-xs sm:text-sm font-bold text-navy">
+                {displayName}
+              </span>
             </Link>
           ) : (
             <>

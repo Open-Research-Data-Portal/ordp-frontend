@@ -5,12 +5,13 @@ import DetailsForm from "../components/DetailsForm";
 import MetadataForm from "../../metadata/components/MetadataForm";
 import UploadForm from "../components/UploadForm";
 import PolicyForm from "../components/PolicyForm";
+import PreReviewSummary from "../components/PreReviewSummary";
 import { useAuth } from "../../../context/useAuth";
 import { getDashboardPath } from "../../../utils/userRoles";
 import useDatasetSubmission from "../hooks/useDatasetSubmission";
 
 
-const STEPS = ["Details", "Metadata", "Upload", "Policy"];
+const STEPS = ["Details", "Metadata", "Upload", "Policy", "Preview"];
 
 export default function ContributeDatasetPage() {
   const navigate = useNavigate();
@@ -18,10 +19,12 @@ const [searchParams] = useSearchParams();
   const { user, isAuthenticated, loading } = useAuth();
   const {
     step, formData,
+    goToStep,
     goToPreviousStep,
     submitDetails,
     submitMetadata,
     submitUpload,
+    submitPolicy,
     submitFinal,
     isSubmitting, submitError,
   } = useDatasetSubmission(searchParams.get("new") ? "__new__" : searchParams.get("draft"));
@@ -40,7 +43,7 @@ const [searchParams] = useSearchParams();
   };
 
   return (
-    <ContributeLayout currentStep={step} steps={STEPS}>
+    <ContributeLayout currentStep={step} steps={STEPS} onStepClick={goToStep}>
       <button
         type="button"
         onClick={() => navigate(getDashboardPath(user))}
@@ -78,8 +81,18 @@ const [searchParams] = useSearchParams();
         {step === 4 && (
           <PolicyForm
             initialValues={formData.policy}
-            onSubmit={handleFinalSubmit}
+            onSubmit={submitPolicy}
             onBack={goToPreviousStep}
+            isSubmitting={isSubmitting}
+            submitError={submitError}
+          />
+        )}
+        {step === 5 && (
+          <PreReviewSummary
+            formData={formData}
+            onEditStep={goToStep}
+            onSubmitForReview={() => handleFinalSubmit(formData.policy)}
+            onSaveDraft={() => handleFinalSubmit({ ...formData.policy, isDraft: true })}
             isSubmitting={isSubmitting}
             submitError={submitError}
           />

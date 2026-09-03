@@ -244,6 +244,11 @@ export default function useDatasetSubmission(draftId = null) {
     setStep((s) => Math.max(s - 1, 1));
   };
 
+  const goToStep = (targetStep) => {
+    setSubmitError(null);
+    setStep(Math.max(1, Math.min(targetStep, 5)));
+  };
+
   // Step 1: create dataset shell (or update title if revisiting).
   const submitDetails = async (detailsData) => {
     setIsSubmitting(true);
@@ -286,6 +291,7 @@ let did = datasetId;
       const metadataPayload = {
         category_id: metadataData.category_id || undefined,
         other_category: metadataData.other_category || undefined,
+        subject_id: metadataData.subject_id || undefined,
         description: details.description || "",
         keywords: Array.isArray(metadataData.keywords) ? metadataData.keywords : [],
         geographic_coverage: details.geographicCoverage || "",
@@ -418,6 +424,11 @@ let did = datasetId;
   };
 
   // Step 4: submit for review (or save as draft).
+  const submitPolicy = (policyData) => {
+    setFormData((prev) => ({ ...prev, policy: policyData }));
+    setStep(5);
+  };
+
   const submitFinal = async (policyData) => {
     setIsSubmitting(true);
     setSubmitError(null);
@@ -456,10 +467,12 @@ let did = datasetId;
 
   return {
     step, formData, datasetId,
+    goToStep,
     goToPreviousStep,
     submitDetails,
     submitMetadata,
     submitUpload,
+    submitPolicy,
     submitFinal,
     isSubmitting, submitError,
   };

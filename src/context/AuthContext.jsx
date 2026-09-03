@@ -21,8 +21,12 @@ function persistAuthFlags(user) {
         is_superuser: Boolean(user?.is_superuser),
         is_admin: Boolean(user?.is_admin),
         role: user?.role || null,
+        roles: user?.roles || [],
         username: user?.username || null,
         groups: user?.groups || [],
+        profile_complete: Boolean(user?.profile_complete || user?.is_profile_complete || user?.can_upload_datasets),
+        is_profile_complete: Boolean(user?.profile_complete || user?.is_profile_complete || user?.can_upload_datasets),
+        can_upload_datasets: Boolean(user?.can_upload_datasets || user?.profile_complete || user?.is_profile_complete),
       })
     );
   } catch {
@@ -87,11 +91,22 @@ export function AuthProvider({ children }) {
         setTokens(access, newRefresh);
         client.defaults.headers.common.Authorization = `Bearer ${access}`;
         setAccessToken(access);
-        return authApi.getProfile().then((profile) =>
-          mergeAuthUser({ ...readAuthFlags(), ...claimsFromAccessToken(access) }, profile)
-        );
+        return Promise.allSettled([
+          authApi.getProfile(),
+          authApi.getCompleteProfile(),
+        ]).then(([profileRes, completeRes]) => {
+          const profile = profileRes.status === "fulfilled" ? profileRes.value : {};
+          const complete = completeRes.status === "fulfilled" ? completeRes.value : {};
+          return mergeAuthUser(
+            { ...readAuthFlags(), ...claimsFromAccessToken(access) },
+            { ...profile, ...complete }
+          );
+        });
       })
-      .then(setUser)
+      .then((mergedUser) => {
+        persistAuthFlags(mergedUser);
+        setUser(mergedUser);
+      })
       .catch(() => {
         // Stored refresh token is invalid or revoked — wipe everything.
         clearTokens();
@@ -117,11 +132,17 @@ export function AuthProvider({ children }) {
     client.defaults.headers.common.Authorization = `Bearer ${data.access}`;
     setAccessToken(data.access);
 
-    let profile;
+    let profile = data.user || {};
     try {
-      profile = await authApi.getProfile();
+      const [profileRes, completeRes] = await Promise.allSettled([
+        authApi.getProfile(),
+        authApi.getCompleteProfile(),
+      ]);
+      const p = profileRes.status === "fulfilled" ? profileRes.value : {};
+      const c = completeRes.status === "fulfilled" ? completeRes.value : {};
+      profile = { ...(data.user || {}), ...p, ...c };
     } catch {
-      profile = data.user;
+      profile = data.user || {};
     }
     const claims = claimsFromAccessToken(data.access);
     const merged = mergeAuthUser(

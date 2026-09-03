@@ -16,6 +16,7 @@ import {
   Bookmark,
 } from "lucide-react";
 import { useAuth } from "../context/useAuth";
+import { useToast } from "../context/ToastContext";
 import { getDashboardPath } from "../utils/userRoles";
 import TopBar from "../layouts/TopBar";
 import { searchDatasets } from "../api/search";
@@ -162,6 +163,8 @@ function BookmarkButton({ bookmarked, onToggle, className = "" }) {
 }
 
 function DatasetCard({ dataset, navigate, bookmarked, onToggleBookmark }) {
+  const { isAuthenticated } = useAuth();
+  const { addToast } = useToast();
   const Icon = dataset.icon || Database;
   const image = getDatasetImage(dataset);
   const author = dataset.author ?? dataset.owner_name ?? "Unknown";
@@ -177,7 +180,13 @@ function DatasetCard({ dataset, navigate, bookmarked, onToggleBookmark }) {
 
   return (
     <div
-      onClick={() => navigate(`/datasets/${dataset.id}`)}
+      onClick={() => {
+        if (!isAuthenticated) {
+          addToast("Please log in or register first to view dataset details.", "info");
+          return;
+        }
+        navigate(`/datasets/${dataset.id}`);
+      }}
       className="group bg-white rounded-xl border border-[#E3E1DA] overflow-hidden cursor-pointer transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-lg hover:border-gold/40"
     >
       <div className="h-48 bg-[#F0EFEA] overflow-hidden">

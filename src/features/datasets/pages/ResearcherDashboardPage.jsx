@@ -43,24 +43,33 @@ export default function ResearcherDashboardPage() {
   const [datasetsError, setDatasetsError] = useState(null);
 
   const isProfileComplete = Boolean(
+    sessionStorage.getItem("ordp:profile_completed") === "true" ||
+    localStorage.getItem("ordp:profile_completed") === "true" ||
     user?.can_upload_datasets ||
     user?.profile?.can_upload_datasets ||
     user?.profile_complete ||
     user?.profile?.profile_complete ||
-    user?.is_profile_complete
+    user?.is_profile_complete ||
+    (user?.full_name && user?.affiliation)
   );
   const [showProfileBanner, setShowProfileBanner] = useState(!isProfileComplete);
 
   useEffect(() => {
+    if (isProfileComplete) {
+      setShowProfileBanner(false);
+      return;
+    }
     authApi.getCompleteProfile().then((profile) => {
-      const complete = Boolean(profile?.can_upload_datasets || profile?.is_profile_complete ||
-        (profile?.full_name && profile?.affiliation && profile?.department && profile?.academia && profile?.profile_visibility && profile?.terms_accepted));
-      setShowProfileBanner(!complete);
+      const complete = Boolean(
+        profile?.can_upload_datasets ||
+        profile?.is_profile_complete ||
+        (profile?.full_name && profile?.affiliation)
+      );
+      if (complete) {
+        sessionStorage.setItem("ordp:profile_completed", "true");
+        setShowProfileBanner(false);
+      }
     }).catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    queueMicrotask(() => setShowProfileBanner(!isProfileComplete));
   }, [isProfileComplete]);
   useEffect(() => {
     let active = true;

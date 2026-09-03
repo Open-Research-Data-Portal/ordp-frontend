@@ -130,21 +130,36 @@ function isCompleteProfileError(err) {
 
 async function markProfileReadyForUpload() {
   try {
-    const [completionResult, optionsResult] = await Promise.allSettled([
+    const [completionResult, optionsResult, profileResult] = await Promise.allSettled([
       authApi.getProfileCompletion(),
       authApi.getProfileOptions(),
+      authApi.getProfile(),
     ]);
-    const completion = completionResult.status === "fulfilled" ? completionResult.value : {};
+    const completionResponse = completionResult.status === "fulfilled" ? completionResult.value : {};
+    const profileResponse = profileResult.status === "fulfilled" ? profileResult.value : {};
+    const completion = {
+      ...(profileResponse || {}),
+      ...(profileResponse?.profile || {}),
+      ...(completionResponse || {}),
+      ...(completionResponse?.profile || {}),
+    };
     const options = optionsResult.status === "fulfilled" ? optionsResult.value : {};
     const catalog = parseInterestCatalog(options);
-    await saveProfileCompletion(
-      buildProfileCompletionPatch({
-        labels: extractSelectedInterests(completion, pickerCategories(catalog)),
-        catalog,
-        completion,
-        options,
-      })
-    );
+    const patch = buildProfileCompletionPatch({
+      labels: extractSelectedInterests(completion, pickerCategories(catalog)),
+      catalog,
+      completion,
+      options,
+    });
+    try {
+      await saveProfileCompletion(patch);
+    } catch (completionError) {
+      try {
+        await authApi.updateProfile(patch);
+      } catch {
+        throw completionError;
+      }
+    }
   } catch {
     // Best-effort: retry the upload even if this patch is rejected.
   }
@@ -189,17 +204,28 @@ async function startUploadSession(detailsData) {
 async function uploadFileInChunks(file, sessionId, onProgress) {
   const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
   const fileChecksum = Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
-  try { await datasetsApi.prepareUpload(sessionId, { filename: file.name, file_size: file.size, file_checksum: fileChecksum }); } catch (e) {
+  let chunkSize = CHUNK_SIZE;
+  let totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
+  try {
+    const prep = await datasetsApi.prepareUpload(sessionId, {
+      filename: file.name,
+      file_size: file.size,
+      file_checksum: fileChecksum,
+    });
+    if (prep?.chunk_size) chunkSize = prep.chunk_size;
+    if (prep?.total_chunks) totalChunks = prep.total_chunks;
+  } catch (e) {
     if (e?.response?.status !== 404) throw e;
   }
-  const totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
   for (let i = 0; i < totalChunks; i++) {
-    const blob = file.slice(i * CHUNK_SIZE, Math.min((i + 1) * CHUNK_SIZE, file.size));
-    const digest = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
-    const checksum = Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
-    const fileDigest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
-    const fileChecksum = Array.from(new Uint8Array(fileDigest)).map((b) => b.toString(16).padStart(2, "0")).join("");
-    await datasetsApi.uploadChunk(sessionId, i, blob, checksum, { filename: file.name, fileSize: file.size, fileChecksum });
+    const blob = file.slice(i * chunkSize, Math.min((i + 1) * chunkSize, file.size));
+    const chunkDigest = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
+    const checksum = Array.from(new Uint8Array(chunkDigest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+    await datasetsApi.uploadChunk(sessionId, i, blob, checksum, {
+      filename: file.name,
+      fileSize: file.size,
+      fileChecksum,
+    });
     onProgress?.(Math.round(((i + 1) / totalChunks) * 100));
   }
 }

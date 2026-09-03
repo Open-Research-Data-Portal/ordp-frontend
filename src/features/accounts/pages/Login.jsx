@@ -43,48 +43,13 @@ export default function LoginPage() {
 
     try {
       const result = await login(identifier, password, stayLoggedIn);
-
-      const signedIn = result.user || result.profile;
-      if (isAdmin(signedIn)) {
-        navigate(getDashboardPath(signedIn), { replace: true });
-        return;
-      }
-
-      // Route new users to the optional interests onboarding until there is
-      // nothing left for them to do there (interests already chosen, skipped
-      // previously, or the backend reports the wider profile as complete).
-      let completed =
-        authApi.isProfileCompleted(result?.profile) ||
-        Boolean(
-          result.profile?.researchInterestsCompleted ||
-            result.profile?.onboardingCompleted ||
-            result.profile?.research_interests_completed ||
-            result.profile?.onboarding_completed ||
-            result.profile?.profileCompleted ||
-            result.profile?.profile_completed
-        );
-
-      if (!completed) {
-        completed = isInterestsOnboardingSatisfied({
-          profile: result?.profile,
-          user: result?.user || result?.profile,
-        });
-      }
-
-      if (!completed) {
-        try {
-          const completion = await authApi.getProfileCompletion();
-          completed = isInterestsOnboardingSatisfied({
-            completion,
-            profile: result?.profile,
-            user: result?.user || result?.profile,
-            backendCompleted: authApi.isProfileCompleted(completion),
-          });
-        } catch {
-          // Ignore — profile flags above are the fallback.
-        }
-      }
-
+      const completed = Boolean(
+        result.profile?.researchInterestsCompleted ||
+        result.profile?.onboardingCompleted ||
+        result.profile?.research_interests_completed ||
+        result.profile?.onboarding_completed ||
+        result.profile?.interests?.length
+      );
       if (!completed) {
         navigate(INTERESTS_ONBOARDING_PATH, { replace: true });
       } else {

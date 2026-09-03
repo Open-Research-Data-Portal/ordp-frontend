@@ -87,11 +87,21 @@ export function AuthProvider({ children }) {
         setTokens(access, newRefresh);
         client.defaults.headers.common.Authorization = `Bearer ${access}`;
         setAccessToken(access);
-        return authApi.getProfile().then((profile) =>
-          mergeAuthUser({ ...readAuthFlags(), ...claimsFromAccessToken(access) }, profile)
-        );
+        // Fetch both profile endpoints and merge them
+        return Promise.all([
+          authApi.getProfile().catch(() => null),
+          authApi.getCompleteProfile().catch(() => null),
+        ]);
       })
-      .then(setUser)
+      .then(([profile, completeProfile]) => {
+        console.log("🔍 AuthContext session restore — profile endpoints:");
+        console.log("  - getProfile():", profile);
+        console.log("  - getCompleteProfile():", completeProfile);
+        const mergedProfile = { ...(profile || {}), ...(completeProfile || {}) };
+        console.log("  - merged:", mergedProfile);
+        console.log("  - can_upload_datasets:", mergedProfile?.can_upload_datasets);
+        setUser(mergedProfile);
+      })
       .catch(() => {
         // Stored refresh token is invalid or revoked — wipe everything.
         clearTokens();
@@ -103,17 +113,13 @@ export function AuthProvider({ children }) {
   const login = useCallback(async (identifier, password, stayLoggedIn) => {
     const data = await authApi.login(identifier, password, stayLoggedIn); // throws AuthApiError on failure
 
-    // "Stay logged in" — persist to localStorage before setTokens so token rotation updates it.
     if (stayLoggedIn) {
       localStorage.setItem(REFRESH_KEY, data.refresh);
     } else {
       localStorage.removeItem(REFRESH_KEY);
     }
 
-    // Write tokens to the in-memory store and sessionStorage so the axios
-    // interceptor can use them immediately for any subsequent request.
     setTokens(data.access, data.refresh);
-
     client.defaults.headers.common.Authorization = `Bearer ${data.access}`;
     setAccessToken(data.access);
 
@@ -122,6 +128,12 @@ export function AuthProvider({ children }) {
       profile = await authApi.getProfile();
     } catch {
       profile = data.user;
+    }
+    let completeProfile;
+    try {
+      completeProfile = await authApi.getCompleteProfile();
+    } catch {
+      // complete profile may not be available for all account states
     }
     const claims = claimsFromAccessToken(data.access);
     const merged = mergeAuthUser(
@@ -136,7 +148,37 @@ export function AuthProvider({ children }) {
     persistAuthFlags(merged);
     setUser(merged);
 
-    return { ...data, profile: merged, user: merged };
+    console.log("🔍 AuthContext login — profile endpoints:");
+    console.log("  - getProfile():", profile);
+    console.log("  - getCompleteProfile():", completeProfile);
+    const mergedProfile = { ...(profile || {}), ...(completeProfile || {}) };
+    console.log("  - merged:", mergedProfile);
+    console.log("  - can_upload_datasets:", mergedProfile?.can_upload_datasets);
+    setUser(mergedProfile);
+
+    return { ...data, profile: mergedProfile };
+  }, []);
+
+  const setSession = useCallback(async (access, refresh, stayLoggedIn = false) => {
+    if (stayLoggedIn) {
+      localStorage.setItem(REFRESH_KEY, refresh);
+    } else {
+      localStorage.removeItem(REFRESH_KEY);
+    }
+    setTokens(access, refresh);
+    client.defaults.headers.common.Authorization = `Bearer ${access}`;
+    setAccessToken(access);
+    try {
+      // Fetch both profile endpoints and merge them
+      const [profile, completeProfile] = await Promise.all([
+        authApi.getProfile().catch(() => null),
+        authApi.getCompleteProfile().catch(() => null),
+      ]);
+      const mergedProfile = { ...(profile || {}), ...(completeProfile || {}) };
+      setUser(mergedProfile);
+    } catch {
+      // keep user null if profile fetch fails
+    }
   }, []);
 
   const updateProfile = useCallback(async (patch) => {
@@ -145,45 +187,31 @@ export function AuthProvider({ children }) {
     return updated;
   }, []);
 
-  /**
-   * Establish a session from tokens that were NOT obtained via the login
-   * endpoint — used after email verification, which the backend resolves by
-   * returning fresh access/refresh JWTs directly. Persists the tokens, sets
-   * the axios default header, and loads the profile.
-   *
-   * @param {{access: string, refresh: string, user?: object|null, stayLoggedIn?: boolean}} session
-   * @returns {Promise<object|null>} the loaded profile (or the raw user payload fallback)
-   */
-  const establishSession = useCallback(
-    async ({ access, refresh, user: userPayload = null, stayLoggedIn = false }) => {
-      if (!access || !refresh) return null;
-
-      setTokens(access, refresh);
-      // "Stay logged in" — also persist to localStorage so the session
-      // survives the tab being closed and re-opened.
-      if (stayLoggedIn) {
-        localStorage.setItem(REFRESH_KEY, refresh);
-      }
-
-      client.defaults.headers.common.Authorization = `Bearer ${access}`;
-      setAccessToken(access);
-
+  const refreshProfile = useCallback(async () => {
+    try {
       let profile;
       try {
         profile = await authApi.getProfile();
       } catch {
-        profile = userPayload;
+        profile = null;
       }
-      const merged = mergeAuthUser(
-        { ...claimsFromAccessToken(access), ...userPayload },
-        profile
-      );
-      persistAuthFlags(merged);
-      setUser(merged);
-      return merged;
-    },
-    []
-  );
+      
+      let completeProfile;
+      try {
+        completeProfile = await authApi.getCompleteProfile();
+      } catch {
+        // complete profile may not be available for all account states
+        completeProfile = null;
+      }
+      
+      const mergedProfile = { ...(profile || {}), ...(completeProfile || {}) };
+      setUser(mergedProfile);
+      return mergedProfile;
+    } catch (err) {
+      console.error("Failed to refresh profile:", err);
+      throw err;
+    }
+  }, []);
 
   const logout = useCallback(async () => {
     const currentRefresh = getRefreshToken();
@@ -207,9 +235,10 @@ export function AuthProvider({ children }) {
       login,
       logout,
       updateProfile,
-      establishSession,
+      refreshProfile,
+      setSession,
     }),
-    [user, accessToken, loading, login, logout, updateProfile, establishSession]
+    [user, accessToken, loading, login, logout, updateProfile, refreshProfile, setSession]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

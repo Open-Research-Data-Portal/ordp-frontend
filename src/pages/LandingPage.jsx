@@ -24,7 +24,6 @@ import campusImg from "../assets/1.jfif";
 import { searchDatasets } from "../api/search";
 import { getDatasetImage } from "../utils/datasetImage";
 
-
 const CATEGORIES = [
   { label: "Machine Learning", icon: Bot, slug: "machine-learning" },
   { label: "Computer Vision", icon: Eye, slug: "computer-vision" },

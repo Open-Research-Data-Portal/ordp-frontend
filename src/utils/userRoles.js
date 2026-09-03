@@ -65,14 +65,39 @@ export function isReviewer(user) {
   return getUserRole(user) === "reviewer";
 }
 
+export function isProfileComplete(user) {
+  const profile = user?.profile || user;
+
+  return Boolean(
+    profile?.full_name?.trim?.() &&
+    profile?.affiliation?.trim?.() &&
+    profile?.department &&
+    profile?.academia &&
+    profile?.profile_visibility &&
+    profile?.terms_accepted
+  );
+}
+
 export function isResearcher(user) {
-  return getUserRole(user) === "researcher";
+  return Boolean(
+    user?.profile?.can_upload_datasets ||
+    user?.can_upload_datasets ||
+    isProfileComplete(user)
+  );
 }
 
 export function getDashboardPath(user) {
   if (isAdmin(user)) return "/admin-dashboard";
   if (isReviewer(user)) return "/reviewer-dashboard";
-  if (isResearcher(user)) return "/researcher-dashboard";
+  const isRes = isResearcher(user);
+  console.log("🔍 getDashboardPath():", {
+    user: user?.email || "no-user",
+    isResearcher: isRes,
+    can_upload_datasets: user?.can_upload_datasets,
+    profile_can_upload: user?.profile?.can_upload_datasets,
+    returning: isRes ? "/researcher-dashboard" : "/user-dashboard"
+  });
+  if (isRes) return "/researcher-dashboard";
   return "/user-dashboard";
 }
 
@@ -101,4 +126,14 @@ export function getDisplayName(user) {
     user?.name ??
     [user?.first_name, user?.last_name].filter(Boolean).join(" ").trim();
   return full || user?.username || user?.email || "User";
+}
+
+export function getMediaUrl(url) {
+  if (!url) return null;
+  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("blob:")) {
+    return url;
+  }
+  const apiBase = import.meta.env.VITE_API_BASE_URL || "";
+  const host = apiBase.replace(/\/api\/?$/, "");
+  return host ? `${host}${url.startsWith("/") ? "" : "/"}${url}` : url;
 }

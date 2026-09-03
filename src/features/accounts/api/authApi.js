@@ -115,107 +115,8 @@ export async function updateCompleteProfile(patch) {
 }
 
 /**
- * Profile-completion / onboarding endpoints.
- *
- * The onboarding flow is: college → department → research interests.
- * Each step's data is submitted (and can be re-fetched) through
- * `/accounts/profile/complete/`.
- */
-
-/** GET /accounts/profile/complete/ — current completion + profile fields. */
-export async function getProfileCompletion() {
-  try {
-    const { data } = await client.get(`${BASE}/profile/complete/`);
-    return data;
-  } catch (err) {
-    throw normalizeError(err);
-  }
-}
-
-/**
- * PATCH /accounts/profile/complete/ — submit/update onboarding fields
- * (college, department, research interests, etc.).
- * @param {Partial<{college: number|string, department: number|string, research_interests: string[]}>} patch
- */
-export async function updateProfileCompletion(patch) {
-  try {
-    const { data } = await client.patch(`${BASE}/profile/complete/`, patch);
-    return data;
-  } catch (err) {
-    throw normalizeError(err, { allowDjangoFieldErrors: true });
-  }
-}
-
-/** GET /accounts/profile/options/ — options for profile fields. */
-export async function getProfileOptions() {
-  try {
-    const { data } = await client.get(`${BASE}/profile/options/`);
-    return data;
-  } catch (err) {
-    throw normalizeError(err);
-  }
-}
-
-/**
- * POST /accounts/profile/interests/other/ — add a custom interest that is not
- * in the predefined list.
- * @param {string} name
- * @returns {Promise<{id?: number, name: string}>}
- */
-export async function addCustomInterest(name) {
-  try {
-    const { data } = await client.post(`${BASE}/profile/interests/other/`, {
-      name,
-    });
-    return data;
-  } catch (err) {
-    throw normalizeError(err, { allowDjangoFieldErrors: true });
-  }
-}
-
-/** GET /accounts/users/{id}/profile/ — view another user's public profile. */
-export async function getUserProfile(userId) {
-  try {
-    const { data } = await client.get(`${BASE}/users/${userId}/profile/`);
-    return data;
-  } catch (err) {
-    throw normalizeError(err);
-  }
-}
-
-/**
- * True when a profile-completion payload/response indicates the user has
- * finished onboarding. Defensive against the exact key the backend uses.
- */
-export function isProfileCompleted(value) {
-  if (!value || typeof value !== "object") return false;
-  return Boolean(
-    value.completed ||
-      value.complete ||
-      value.is_complete ||
-      value.is_profile_complete ||
-      value.profile_completed ||
-      value.profile_completion_completed ||
-      value.onboarding_completed ||
-      value.research_interests_completed
-  );
-}
-
-/**
- * Verifies the emailed activation token and auto-logs the user in.
- *
- * Backend contract (confirmed from the ordp-backend source + Postman):
- *   POST /accounts/verify-email/
- *   Body: { token }  ← the UUID from the email link (?token=<uuid>)
- *
- * On success the endpoint returns access/refresh JWT pairs plus the user,
- * i.e. the account is activated AND the user is signed in. Callers should
- * persist those tokens (see AuthContext.establishSession) and then check
- * /accounts/profile/complete/ to route the user to onboarding or the
- * dashboard.
- *
- * @param {string} token The UUID verification token from the emailed link.
- * @returns {Promise<{detail: string, access?: string, refresh?: string, user?: {id:number,email:string}}>}
+ * @param {string} token
+ * @returns {Promise<{detail: string, access?: string, refresh?: string, user?: {id: number, email: string}}>}
  * @throws {AuthApiError}
  */
 export async function verifyEmail(token) {
@@ -373,7 +274,35 @@ export async function getCategories() {
   return Array.isArray(data) ? data : (data?.results || []);
 }
 
-export async function getDepartments() {
-  const { data } = await client.get(`${BASE}/departments/`);
+export async function getColleges() {
+  const { data } = await client.get(`${BASE}/colleges/`);
   return data?.results || [];
+}
+
+export async function getCentersOfExcellence() {
+  const { data } = await client.get(`${BASE}/centers-of-excellence/`);
+  return data?.results || [];
+}
+
+export async function getDepartments(parentType, parentId) {
+  const params = {};
+  if (parentType) params.parent_type = parentType;
+  if (parentId) params.parent_id = parentId;
+  const { data } = await client.get(`${BASE}/departments/`, { params });
+  return data?.results || [];
+}
+
+export async function getProfileOptions() {
+  const { data } = await client.get(`${BASE}/profile/options/`);
+  return data;
+}
+
+export async function addOtherInterest(name) {
+  const { data } = await client.post(`${BASE}/profile/interests/other/`, { name });
+  return data;
+}
+
+export async function getUserProfile(userId) {
+  const { data } = await client.get(`${BASE}/users/${userId}/profile/`);
+  return data;
 }

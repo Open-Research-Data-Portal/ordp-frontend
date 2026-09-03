@@ -118,8 +118,8 @@ export async function submitDataset(datasetId, termsAccepted) {
   return data;
 }
 
-export async function getMyDatasets() {
-  const { data } = await client.get(`${DATASETS_BASE}/mine/`);
+export async function getMyDatasets(params = {}) {
+  const { data } = await client.get(`${DATASETS_BASE}/mine/`, { params });
   return data;
 }
 
@@ -169,7 +169,24 @@ export async function getAdminUploadRequests() {
 }
 
 export async function getReviewerQueue() {
-  const { data } = await client.get(`${DATASETS_BASE}/reviewer/queue/`);
+  const { data } = await client.get("/admin-panel/queue/");
+  return data;
+}
+
+export async function getMyReviews() {
+  const { data } = await client.get("/admin-panel/my-reviews/");
+  return data;
+}
+
+export async function decideDataset(datasetId, decision, reason) {
+  const payload = { decision };
+  if (reason) payload.reason = reason;
+  const { data } = await client.post(`/admin-panel/${datasetId}/decide/`, payload);
+  return data;
+}
+
+export async function initExistingDraftUpload(datasetId) {
+  const { data } = await client.post(`/datasets/${datasetId}/upload/init/`);
   return data;
 }
 
@@ -243,10 +260,6 @@ export async function getMySuggestions() {
   return data;
 }
 
-export async function getMyDownloads() {
-  const { data } = await client.get(`${DATASETS_BASE}/dashboard/my-downloads/`);
-  return data;
-}
 export async function addContributor(datasetId, payload) {
   const { data } = await client.post(`${DATASETS_BASE}/${datasetId}/contributors/`, payload);
   return data;

@@ -1,13 +1,6 @@
 import { useEffect, useState } from "react";
 import * as datasetsApi from "./datasetsApi";
-import * as authApi from "../../accounts/api/authApi";
-import {
-  extractSelectedInterests,
-  parseInterestCatalog,
-  pickerCategories,
-  buildProfileCompletionPatch,
-  saveProfileCompletion,
-} from "../../accounts/onboarding";
+import { inviteCoauthor as sendCoauthorInvitation } from "../../../api/sharing";
 
 const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB per chunk
 
@@ -215,8 +208,13 @@ export default function useDatasetSubmission(draftId = null) {
   useEffect(() => {
     if (draftId === "__new__") {
       localStorage.removeItem(draftKey);
-      setStep(1); setFormData({ details: {}, metadata: {}, upload: {}, policy: {} });
-      setDatasetId(null); setUploadSessionId(null);
+      queueMicrotask(() => {
+        setStep(1);
+        setFormData({ details: {}, metadata: {}, upload: {}, policy: {} });
+        setDatasetId(null);
+        setUploadSessionId(null);
+      });
+      return;
     }
   }, [draftId]);
 
@@ -244,6 +242,20 @@ export default function useDatasetSubmission(draftId = null) {
     setStep((s) => Math.max(s - 1, 1));
   };
 
+  const resumeDraftUpload = async () => {
+    if (!draftId || draftId === "__new__" || !datasetId) return;
+    setIsSubmitting(true);
+    setSubmitError(null);
+    try {
+      const r = await datasetsApi.initExistingDraftUpload(datasetId);
+      setUploadSessionId(r.upload_session_id);
+    } catch (err) {
+      setSubmitError(extractError(err));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   // Step 1: create dataset shell (or update title if revisiting).
   const submitDetails = async (detailsData) => {
     setIsSubmitting(true);
@@ -265,6 +277,27 @@ let did = datasetId;
       setStep(2);
     } catch (err) {
       setSubmitError(extractError(err));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const inviteCoauthor = async ({ email, title }) => {
+    setIsSubmitting(true);
+    setSubmitError(null);
+    try {
+      let did = datasetId;
+      if (!did) {
+        const result = await datasetsApi.initUpload({ title: title.trim(), visibility: "restricted" });
+        did = result.dataset_id;
+        setDatasetId(did);
+        setUploadSessionId(result.upload_session_id);
+      }
+      await sendCoauthorInvitation(did, email);
+    } catch (err) {
+      const message = extractError(err);
+      setSubmitError(message);
+      throw new Error(message, { cause: err });
     } finally {
       setIsSubmitting(false);
     }
@@ -295,11 +328,19 @@ let did = datasetId;
         recommended_splits: metadataData.recommendedSplits || "",
       };
       await datasetsApi.attachMetadata(did, metadataPayload);
-      await datasetsApi.setDatasetLanguages(did, {
-        other_languages: [details.language || "English"],
-      });
 
-      // Integrate Co-Authors and Contributors API
+      const languageId = details.languageId || details.language_id;
+      if (languageId) {
+        await datasetsApi.setDatasetLanguages(did, {
+          language_ids: [languageId],
+        });
+      } else if (details.language) {
+        await datasetsApi.setDatasetLanguages(did, {
+          other_languages: [details.language],
+        });
+      }
+
+      // Persist named co-authors entered in the form.
       const coAuthors = details.coAuthors || [];
       for (const name of coAuthors) {
         if (name.trim()) {
@@ -307,16 +348,6 @@ let did = datasetId;
             await datasetsApi.addContributor(did, { name: name.trim(), contributor_type: "co_author" });
           } catch (e) {
             console.warn("Failed to add co-author", e);
-          }
-        }
-      }
-      const contributors = details.contributors || [];
-      for (const name of contributors) {
-        if (name.trim()) {
-          try {
-            await datasetsApi.addContributor(did, { name: name.trim(), contributor_type: "contributor" });
-          } catch (e) {
-            console.warn("Failed to add contributor", e);
           }
         }
       }
@@ -353,12 +384,12 @@ let did = datasetId;
       }
 
       const files = (uploadData.files || []).filter((e) => e.file);
-      if (files.length > 1) {
-        throw new Error("Only a single file can be uploaded per submission. Please remove extra files.");
-      }
+      for (const [index, entry] of files.entries()) {
+        if (index > 0) {
+          const nextSession = await datasetsApi.initExistingDraftUpload(activeDatasetId);
+          activeSessionId = nextSession.upload_session_id;
+        }
 
-      if (files.length === 1) {
-        const entry = files[0];
         const fileType = entry.fileType || deriveFileType(entry.file);
         const isStructuredFileType = STRUCTURED_FILE_TYPES.has(fileType);
         const metadata = formData.metadata || {};
@@ -387,10 +418,9 @@ let did = datasetId;
         } catch (uploadError) {
           const detail = uploadError?.response?.data?.detail || uploadError?.message || "";
           if (!/unknown upload session/i.test(detail)) throw uploadError;
-          const fresh = await datasetsApi.initUpload({ title: details.title, visibility: "restricted" });
+          const fresh = await datasetsApi.initExistingDraftUpload(activeDatasetId);
           activeSessionId = fresh.upload_session_id;
-          activeDatasetId = fresh.dataset_id;
-          setDatasetId(fresh.dataset_id); setUploadSessionId(activeSessionId);
+          setUploadSessionId(activeSessionId);
           await uploadFileInChunks(entry.file, activeSessionId, (progress) => {
             setFormData((prev) => ({ ...prev, upload: { ...uploadData, files: files.map((f) => f.id === entry.id ? { ...f, status: progress === 100 ? "complete" : "uploading", progress } : f) } }));
           });
@@ -426,13 +456,24 @@ let did = datasetId;
       const metadata = formData.metadata || {};
       const upload = formData.upload || {};
       const files = (upload.files || []).filter((e) => e.file);
-      const totalSize = files.reduce((sum, f) => sum + (f.file?.size || 0), 0);
 
-      let status = "draft";
       if (!policyData.isDraft) {
+        const missing = [];
+        if (!files.length) missing.push("at least one file");
+        if (!metadata.category_id && !metadata.other_category) missing.push("a category");
+        const hasLanguage = details.languageId || details.language_id || details.language;
+        if (!hasLanguage) missing.push("a language");
+        if (missing.length > 0) {
+          throw new Error(`Please add ${missing.join(", ")} before submitting.`);
+        }
+        if (!policyData.termsAccepted) {
+          throw new Error("You must accept the Terms & Conditions to submit a dataset.");
+        }
         await datasetsApi.submitDataset(datasetId, true);
-        status = "pending";
       }
+
+      const status = policyData.isDraft ? "draft" : "pending";
+      const totalSize = files.reduce((sum, f) => sum + (f.file?.size || 0), 0);
 
       localStorage.removeItem(draftKey);
 
@@ -458,9 +499,11 @@ let did = datasetId;
     step, formData, datasetId,
     goToPreviousStep,
     submitDetails,
+    inviteCoauthor,
     submitMetadata,
     submitUpload,
     submitFinal,
+    resumeDraftUpload,
     isSubmitting, submitError,
   };
 }

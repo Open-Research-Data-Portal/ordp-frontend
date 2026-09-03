@@ -27,15 +27,29 @@ import BrowseDatasetsPage from "../pages/BrowseDatasetsPage.jsx";
 import DatasetViewPage from "../pages/DatasetViewPage";
 import BookmarksPage from "../features/datasets/pages/BookmarksPage";
 
+import { useAuth } from "../context/useAuth";
+import DashboardGuard from "./DashboardGuard.jsx";
+
+function ProtectedRoute({ children }) {
+  const { isAuthenticated, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#F5F5F3] text-sm text-slate-500">
+        Loading…
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return children;
+}
+
 function VerifyEmailRoute() {
   const [searchParams] = useSearchParams();
-
-  // The backend's verification emails link to
-  //   {FRONTEND_URL}/verify-email?token=<uuid>
-  // (confirmed from ordp-backend apps/accounts/views.py RegisterView), so the
-  // presence of the `token` query param means the user clicked the link in
-  // their email → show the confirming page. The bare /verify-email path
-  // (right after registration) is the "check your email" page.
   const token = searchParams.get("token");
 
   if (token) return <EmailVerifyConfirmPage />;
@@ -45,10 +59,8 @@ function VerifyEmailRoute() {
 export default function AppRoutes() {
   return (
     <Routes>
-      {/* Root */}
+      {/* Public */}
       <Route path="/" element={<LandingPage />} />
-
-      {/* Auth */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/verify-email" element={<VerifyEmailRoute />} />
@@ -57,33 +69,69 @@ export default function AppRoutes() {
       <Route path="/check-email" element={<CheckEmailPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-      {/* Onboarding */}
-      <Route path="/research-interests-onboarding" element={<ResearchInterestsOnboardingPage />} />
-
-      {/* Dashboards — role-specific */}
-      <Route path="/dashboard" element={<DashboardRouter />} />
-      <Route path="/user-dashboard" element={<UserDashboardPage />} />
-      <Route path="/researcher-dashboard" element={<ResearcherDashboardPage />} />
-      <Route path="/reviewer-dashboard" element={<ReviewerDashboardPage />} />
-      <Route path="/admin-dashboard" element={<AdminDashboardPage />} />
-      <Route path="/admin/audit-log" element={<AdminAuditLogPage />} />
-
-      {/* Profile */}
-      <Route path="/profile" element={<ProfilePage />} />
-
-      {/* Datasets — public browsing */}
+      {/* Public dataset browsing */}
       <Route path="/datasets" element={<BrowseDatasetsPage />} />
-      <Route path="/datasets/:id" element={<DatasetViewPage />} />
+      <Route path="/datasets/:id" element={
+        <ProtectedRoute><DatasetViewPage /></ProtectedRoute>
+      } />
 
-      {/* Datasets — the researcher's own (upload/draft/manage) */}
-      <Route path="/my-datasets" element={<DatasetListPage />} />
-      <Route path="/my-datasets/:id" element={<DatasetDetailPage />} />
-      <Route path="/projects" element={<DatasetManagementPage />} />
-      <Route path="/submissions" element={<DatasetManagementPage />} />
-      <Route path="/submissions/new" element={<DatasetManagementPage />} />
-      <Route path="/datasets/contribute" element={<ContributeDatasetPage />} />
-      <Route path="/datasets/contribute/success" element={<SubmissionSuccessPage />} />
-      <Route path="/bookmarks" element={<BookmarksPage />} />
+      {/* Protected */}
+      <Route path="/research-interests-onboarding" element={
+        <ProtectedRoute><ResearchInterestsOnboardingPage /></ProtectedRoute>
+      } />
+      <Route path="/dashboard" element={
+        <ProtectedRoute><DashboardRouter /></ProtectedRoute>
+      } />
+      <Route path="/user-dashboard" element={
+        <ProtectedRoute>
+          <DashboardGuard expectedDashboard="/user-dashboard">
+            <UserDashboardPage />
+          </DashboardGuard>
+        </ProtectedRoute>
+      } />
+      <Route path="/researcher-dashboard" element={
+        <ProtectedRoute>
+          <DashboardGuard expectedDashboard="/researcher-dashboard">
+            <ResearcherDashboardPage />
+          </DashboardGuard>
+        </ProtectedRoute>
+      } />
+      <Route path="/reviewer-dashboard" element={
+        <ProtectedRoute><ReviewerDashboardPage /></ProtectedRoute>
+      } />
+      <Route path="/admin-dashboard" element={
+        <ProtectedRoute><AdminDashboardPage /></ProtectedRoute>
+      } />
+      <Route path="/profile" element={
+        <ProtectedRoute><ProfilePage /></ProtectedRoute>
+      } />
+      <Route path="/data-upload" element={
+        <ProtectedRoute><DataUploadPage /></ProtectedRoute>
+      } />
+      <Route path="/my-datasets" element={
+        <ProtectedRoute><DatasetListPage /></ProtectedRoute>
+      } />
+      <Route path="/my-datasets/:id" element={
+        <ProtectedRoute><DatasetDetailPage /></ProtectedRoute>
+      } />
+      <Route path="/projects" element={
+        <ProtectedRoute><DatasetManagementPage /></ProtectedRoute>
+      } />
+      <Route path="/submissions" element={
+        <ProtectedRoute><DatasetManagementPage /></ProtectedRoute>
+      } />
+      <Route path="/submissions/new" element={
+        <ProtectedRoute><DatasetManagementPage /></ProtectedRoute>
+      } />
+      <Route path="/datasets/contribute" element={
+        <ProtectedRoute><ContributeDatasetPage /></ProtectedRoute>
+      } />
+      <Route path="/datasets/contribute/success" element={
+        <ProtectedRoute><SubmissionSuccessPage /></ProtectedRoute>
+      } />
+      <Route path="/bookmarks" element={
+        <ProtectedRoute><BookmarksPage /></ProtectedRoute>
+      } />
 
       {/* Catch-all — kept last on purpose */}
       <Route path="*" element={<Navigate to="/login" replace />} />

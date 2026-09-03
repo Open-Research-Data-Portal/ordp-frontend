@@ -249,6 +249,7 @@ function CuratedSection({ icon: Icon, title, datasets, navigate, onSeeAll, bookm
 
 export default function BrowseDatasetsPage() {
   const navigate = useNavigate();
+  const { user, isAuthenticated } = useAuth();
   const [query, setQuery] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState("All datasets");

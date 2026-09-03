@@ -11,7 +11,6 @@ import ResetPasswordPage from "../features/accounts/pages/ResetPassword.jsx";
 import ProfilePage from "../features/accounts/pages/ProfilePage.jsx";
 import ResearchInterestsOnboardingPage from "../features/accounts/pages/ResearchInterestsOnboardingPage.jsx";
 
-import DataUploadPage from "../pages/DataUpload/DataUploadPage.jsx";
 import DashboardRouter from "../pages/Dashboard/DashboardRouter.jsx";
 
 import ContributeDatasetPage from "../features/datasets/pages/ContributeDatasetPage.jsx";
@@ -20,6 +19,7 @@ import SubmissionSuccessPage from "../features/datasets/pages/SubmissionSuccessP
 import DatasetListPage from "../features/datasets/pages/DatasetListPage.jsx";
 import ResearcherDashboardPage from "../features/datasets/pages/ResearcherDashboardPage.jsx";
 import AdminDashboardPage from "../features/datasets/pages/AdminDashboardPage.jsx";
+import AdminAuditLogPage from "../features/datasets/pages/AdminAuditLogPage.jsx";
 import ReviewerDashboardPage from "../features/datasets/pages/ReviewerDashboardPage.jsx";
 import UserDashboardPage from "../features/datasets/pages/UserDashboardPage.jsx";
 import DatasetDetailPage from "../features/datasets/pages/Datasetdetailpage.jsx";

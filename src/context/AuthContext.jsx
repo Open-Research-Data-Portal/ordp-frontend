@@ -2,12 +2,41 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import * as authApi from "../features/accounts/api/authApi";
 import client from "../api/client";
 import AuthContext from "./AuthContextInstance";
+import { mergeAuthUser, claimsFromAccessToken } from "../utils/userRoles";
 import {
   setTokens,
   clearTokens,
   getRefreshToken,
   REFRESH_KEY,
 } from "../api/tokenStore";
+
+const AUTH_FLAGS_KEY = "ordp:auth-flags";
+
+function persistAuthFlags(user) {
+  try {
+    sessionStorage.setItem(
+      AUTH_FLAGS_KEY,
+      JSON.stringify({
+        is_staff: Boolean(user?.is_staff),
+        is_superuser: Boolean(user?.is_superuser),
+        is_admin: Boolean(user?.is_admin),
+        role: user?.role || null,
+        username: user?.username || null,
+        groups: user?.groups || [],
+      })
+    );
+  } catch {
+    // ignore
+  }
+}
+
+function readAuthFlags() {
+  try {
+    return JSON.parse(sessionStorage.getItem(AUTH_FLAGS_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -28,6 +57,21 @@ export function AuthProvider({ children }) {
       delete client.defaults.headers.common.Authorization;
     }
   }, [accessToken]);
+
+  // When the shared axios client realises the session is unrecoverable
+  // (refresh token revoked/expired — e.g. a 401 mid-request), it dispatches
+  // "ordp:session-expired". We reset the React-side auth state to match.
+  useEffect(() => {
+    function handleSessionExpired() {
+      clearTokens();
+      delete client.defaults.headers.common.Authorization;
+      setAccessToken(null);
+      setUser(null);
+    }
+    window.addEventListener("ordp:session-expired", handleSessionExpired);
+    return () =>
+      window.removeEventListener("ordp:session-expired", handleSessionExpired);
+  }, []);
 
   // On mount: silently exchange any stored refresh token for a fresh access
   // token so the user doesn't have to log in again after a page refresh.
@@ -91,6 +135,18 @@ export function AuthProvider({ children }) {
     } catch {
       // complete profile may not be available for all account states
     }
+    const claims = claimsFromAccessToken(data.access);
+    const merged = mergeAuthUser(
+      {
+        ...claims,
+        ...data.user,
+        login_identifier: identifier,
+        username: data.user?.username || identifier,
+      },
+      profile
+    );
+    persistAuthFlags(merged);
+    setUser(merged);
 
     console.log("🔍 AuthContext login — profile endpoints:");
     console.log("  - getProfile():", profile);
@@ -172,6 +228,7 @@ export function AuthProvider({ children }) {
   const value = useMemo(
     () => ({
       user,
+      setUser,
       accessToken,
       isAuthenticated: Boolean(accessToken),
       loading,

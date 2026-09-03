@@ -10,13 +10,26 @@ import Button from "../../../components/ui/Button";
 import { useAuth } from "../../../context/useAuth";
 import * as authApi from "../api/authApi";
 import {
+  asEntityId,
+  extractSelectedInterests,
+  loadPersistedInterests,
+  parseInterestCatalog,
+  persistSelectedInterests,
+  pickerCategories,
+  buildProfileCompletionPatch,
+  saveProfileCompletion,
+} from "../onboarding";
+import {
   OCCUPATION_OPTIONS,
   ACADEMIC_TITLE_OPTIONS,
   ACADEMIC_RANK_OPTIONS,
   HIGHEST_DEGREE_OPTIONS,
   DEFAULT_AFFILIATION,
   BIO_MAX_LENGTH,
+  toOptionValue,
 } from "./constants";
+import { getDashboardPath } from "../../../utils/userRoles";
+import { useNavigate } from "react-router-dom";
 
 function getNameParts(source) {
   const full =
@@ -81,6 +94,7 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+  const [saveError, setSaveError] = useState("");
 
   const [colleges, setColleges] = useState([]);
   const [centers, setCenters] = useState([]);
@@ -108,7 +122,9 @@ export default function ProfilePage() {
       setResearchInterests(user?.researchInterests ?? user?.research_interests ?? []);
       setBio(user?.bio ?? "");
       setOrcidId(user?.orcidId ?? user?.orcid_id ?? "");
-      setProfileVisibility(user?.profileVisibility ?? user?.profile_visibility ?? "");
+      setProfileVisibility(
+        user?.profileVisibility ?? user?.profile_visibility ?? "public"
+      );
     });
   }, [user]);
 
@@ -126,8 +142,27 @@ export default function ProfilePage() {
     ])
       .then(([profile, completeProfile, options, collegesData, centersData, categoriesList]) => {
         if (cancelled) return;
-        const data = { ...(profile || {}), ...(completeProfile || {}) };
-        const parts = getNameParts(data);
+
+        const profile =
+          profileResult.status === "fulfilled" ? profileResult.value : null;
+        const completion =
+          completionResult.status === "fulfilled" ? completionResult.value : null;
+        const options =
+          optionsResult.status === "fulfilled" ? optionsResult.value : null;
+
+        completionRef.current = completion || {};
+        optionsRef.current = options || {};
+        const remoteCatalog = options ? parseInterestCatalog(options) : [];
+        const catalog =
+          remoteCatalog.length > 0
+            ? remoteCatalog
+            : parseInterestCatalog(RESEARCH_INTEREST_CATEGORIES);
+        setInterestCatalog(catalog);
+        const picker = pickerCategories(catalog);
+        if (picker.length > 0) setInterestCategories(picker);
+
+        const merged = { ...(user || {}), ...(profile || {}), ...(completion || {}) };
+        const parts = getNameParts(merged);
         setFirstName(parts.firstName);
         setFatherName(parts.fatherName);
         setGrandFatherName(parts.grandFatherName);
@@ -169,7 +204,7 @@ export default function ProfilePage() {
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated]);
+  }, [isAuthenticated, user]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -200,9 +235,23 @@ export default function ProfilePage() {
   }
 
   async function handleSave() {
-    setSaving(true);
     setSaved(false);
-    setError("");
+    setSaveError("");
+
+    if (!firstName.trim() || !fatherName.trim()) {
+      setSaveError("First name and father name are required.");
+      return;
+    }
+    if (!profileVisibility) {
+      setSaveError("Choose who can see your profile.");
+      return;
+    }
+    if (!termsAccepted) {
+      setSaveError("Please accept the terms of use to save your profile.");
+      return;
+    }
+
+    setSaving(true);
     try {
       const fullName = [firstName, fatherName, grandFatherName].filter(Boolean).join(" ").trim();
 
@@ -238,7 +287,6 @@ export default function ProfilePage() {
       const payload = {
         first_name: firstName,
         last_name: fatherName,
-        grand_father_name: grandFatherName,
         full_name: fullName,
         affiliation: DEFAULT_AFFILIATION,
         college: resolvedCollege,
@@ -253,10 +301,9 @@ export default function ProfilePage() {
         interests: interestIds,
         bio,
         orcid_id: orcidId,
-        project_work: projectWork,
-        additional_link: additionalLink,
         profile_visibility: profileVisibility,
         terms_accepted: termsAccepted,
+profile_complete: true,
       };
 
       await Promise.all([
@@ -312,8 +359,11 @@ export default function ProfilePage() {
         }
       }
     } catch (err) {
-      console.error("Failed to save profile:", err);
-      setError(err?.message || "Failed to save profile. Please check your inputs.");
+      const message =
+        typeof err?.message === "string" && err.message
+          ? err.message
+          : "Couldn't save your profile. Please try again.";
+      setSaveError(message);
     } finally {
       setSaving(false);
     }
@@ -324,9 +374,21 @@ export default function ProfilePage() {
   return (
     <DashboardShell title="Settings" subtitle={displayName ? `Profile — ${displayName}` : "Manage your profile and research identity"}>
         <div className="max-w-4xl">
+            <button
+              type="button"
+              onClick={() => navigate(getDashboardPath(user))}
+              className="mb-4 inline-flex items-center text-xs font-semibold text-gray-500 hover:text-navy transition-colors"
+            >
+              ← Back to dashboard
+            </button>
             {saved && (
               <div role="status" className="mb-4 rounded-xl border border-green-200 bg-green-50 px-4 py-2.5 text-sm text-green-700">
-                Profile changes saved.
+                Profile completed. Your changes have been saved.
+              </div>
+            )}
+            {saveError && (
+              <div role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
+                {saveError}
               </div>
             )}
 
@@ -633,7 +695,7 @@ export default function ProfilePage() {
                 icon={Save}
                 loading={saving}
                 onClick={handleSave}
-                disabled={!profileVisibility || !termsAccepted}
+                disabled={saving}
               >
                 Save Changes
               </Button>

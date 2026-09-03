@@ -79,6 +79,7 @@ export default function ReviewerDashboardPage() {
 
   return (
     <DashboardShell title="Reviewer Dashboard" subtitle="Manage pending approvals and moderation queues">
+      <ProfileSavedNotice />
       <div className="flex justify-between items-start mb-6 animate-fade-in-up">
         <div>
           <h1 className="text-2xl font-serif font-bold text-navy">Reviewer Dashboard</h1>

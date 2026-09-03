@@ -36,14 +36,25 @@ export default function EmailVerifyConfirmPage() {
         }
 
         setStatus("success");
-        setTimeout(() => navigate("/login", { replace: true, state: { message: nextMessage } }), 1500);
+        setTimeout(
+          () =>
+            navigate(completed ? "/dashboard" : INTERESTS_ONBOARDING_PATH, {
+              replace: true,
+            }),
+          1200
+        );
       } catch (err) {
         if (cancelled) return;
         setStatus("error");
+        // Show the backend's own error.message verbatim so the distinct failure
+        // modes stay distinguishable (e.g. "This verification link is invalid."
+        // vs an expired-token vs an already-used-token message). Only fall back
+        // to a generic string when no message reached us at all.
         setError(
-          err instanceof authApi.AuthApiError
-            ? err.message
-            : err?.message || "Verification failed. The link may have expired."
+          err?.message || "Verification failed. Please request a new link."
+        );
+        setErrorCode(
+          err instanceof authApi.AuthApiError && err.code ? err.code : null
         );
       }
     }
@@ -73,7 +84,7 @@ export default function EmailVerifyConfirmPage() {
           </div>
           <h1 className="text-2xl font-bold text-[#0B1526] mb-2">Email verified!</h1>
           <p className="text-sm text-slate-500 max-w-sm">
-            {message || "Your account is active. Redirecting you to sign in…"}
+            {successMessage} Redirecting you…
           </p>
         </>
       )}
@@ -81,7 +92,10 @@ export default function EmailVerifyConfirmPage() {
       {status === "error" && (
         <>
           <h1 className="text-2xl font-bold text-[#0B1526] mb-2">Verification failed</h1>
-          <p className="text-sm text-red-600 max-w-sm mb-4">{error}</p>
+          <p className="text-sm text-red-600 max-w-sm mb-2">{error}</p>
+          {errorCode && (
+            <p className="text-xs text-slate-400 mb-4">Error code: {errorCode}</p>
+          )}
           <a href="/register" className="text-sm font-semibold text-[#B8860B] hover:underline">
             Return to registration
           </a>

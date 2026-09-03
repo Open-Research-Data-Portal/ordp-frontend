@@ -1,6 +1,24 @@
 import { useMemo, useState } from "react";
 import { Send, X } from "lucide-react";
 
+function subLabel(sub) {
+  if (sub == null) return "";
+  if (typeof sub === "string") return sub;
+  return String(sub.name ?? sub.label ?? "").trim();
+}
+
+/**
+ * Research-interest picker: search/filter categories, subfield chips,
+ * multi-select with removable "×" chips, plus a "Not listed?" mini-form that
+ * requests a brand-new category/subcategory for admin approval.
+ *
+ * The component is presentational about *where* a request goes: pass
+ * `onRequestCategory` and it will be awaited, so the caller decides which API
+ * endpoint backs the request (onboarding and profile settings both pass the
+ * same POST /accounts/profile/interests/other/ call). Without the prop the
+ * request is tracked locally only, which keeps the component usable in
+ * isolation (e.g. tests, storybook).
+ */
 export default function ResearchInterests({
   id,
   label,

@@ -1,4 +1,26 @@
 import { X } from "lucide-react";
+import { useState } from "react";
+import { useLocation } from "react-router-dom";
+
+export function ProfileSavedNotice() {
+  const location = useLocation();
+  const [visible, setVisible] = useState(Boolean(location.state?.profileJustCompleted));
+  if (!visible) return null;
+  return (
+    <div
+      role="status"
+      className="mb-6 flex items-center justify-between gap-4 rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-3.5 animate-fade-in-up"
+    >
+      <p className="text-sm text-emerald-800">
+        <span className="font-semibold">Profile completed.</span>{" "}
+        Your academic details and research interests have been saved.
+      </p>
+      <button type="button" onClick={() => setVisible(false)} aria-label="Dismiss" className="text-emerald-700 hover:text-emerald-900 p-1">
+        <X className="w-4 h-4" />
+      </button>
+    </div>
+  );
+}
 
 export function ProfileBanner({ onDismiss, onGoToProfile }) {
   return (
@@ -6,7 +28,7 @@ export function ProfileBanner({ onDismiss, onGoToProfile }) {
       <p className="text-sm text-navy">
         <span className="font-semibold">Complete your profile</span>
         {" — "}
-        Add your research interests and affiliation to get better recommendations.
+        Share your academic details and research interests to unlock personalized recommendations.
       </p>
       <div className="flex items-center gap-2 shrink-0">
         <button

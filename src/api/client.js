@@ -1,7 +1,8 @@
 import axios from "axios";
 import { getAccessToken, getRefreshToken, setTokens, clearTokens } from "./tokenStore";
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "https://ordp-backend.onrender.com/api";
 
 const client = axios.create({
   baseURL: BASE_URL,
@@ -45,6 +46,13 @@ function processQueue(error, newToken = null) {
   failedQueue = [];
 }
 
+/** Lets AuthContext wipe the React-side session when silent refresh fails. */
+function notifySessionExpired() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("ordp:session-expired"));
+  }
+}
+
 client.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -55,10 +63,13 @@ client.interceptors.response.use(
     //   • not a 401 response
     //   • already retried once (_retry flag)
     //   • the failing request WAS the refresh endpoint (prevents infinite loops)
+    //   • the failing request WAS the login endpoint (a 401 there simply means
+    //     bad credentials — we must not try to refresh an existing session)
     if (
       error.response?.status !== 401 ||
       original._retry ||
-      original.url?.includes("/accounts/refresh/")
+      original.url?.includes("/accounts/refresh/") ||
+      original.url?.includes("/accounts/login/")
     ) {
       return Promise.reject(error);
     }
@@ -67,6 +78,7 @@ client.interceptors.response.use(
     if (!refreshToken) {
       // No refresh token at all — nothing we can do, caller must re-login.
       clearTokens();
+      notifySessionExpired();
       return Promise.reject(error);
     }
 
@@ -106,6 +118,7 @@ client.interceptors.response.use(
       processQueue(refreshError, null);
       clearTokens();
       delete client.defaults.headers.common.Authorization;
+      notifySessionExpired();
       return Promise.reject(refreshError);
     } finally {
       isRefreshing = false;

@@ -1,12 +1,12 @@
 /**
- * Auth API client — wraps the endpoints documented in
- * ORDP_Auth_API_Reference_for_Sosina.md (owner: Rebika, branch:
- * feature/login-session-auth).
+ * Auth & profile API client — wraps the endpoints documented in the ORDP
+ * backend spec. All paths are relative and resolved against the shared
+ * axios instance (src/api/client.js), whose baseURL comes from
+ * VITE_API_BASE_URL. No endpoint is hardcoded to a local server.
  */
 import client from "../../../api/client"; // shared axios instance
 
-// const BASE = "/accounts";
-const BASE = '/accounts';
+const BASE = "/accounts";
 
 /**
  * @param {string} identifier
@@ -224,6 +224,31 @@ function normalizeError(
         status,
       });
     }
+  }
+
+  // Preserve any message the backend actually sent, even when it isn't wrapped
+  // in the documented { error: { code, message } } envelope (e.g. a bare
+  // { detail: "..." } body). Collapsing these into one generic string makes
+  // genuinely different failures — invalid link vs expired token vs
+  // already-used token — indistinguishable to the user and to us.
+  const backendMessage =
+    (typeof body?.detail === "string" && body.detail.trim()) ||
+    (typeof body?.message === "string" && body.message.trim()) ||
+    // A plain-text body, but never an HTML error page (e.g. a Django 500),
+    // which would dump markup into the UI.
+    (typeof body === "string" &&
+      !/^\s*</.test(body) &&
+      body.trim().length > 0 &&
+      body.trim().length <= 300 &&
+      body.trim()) ||
+    null;
+
+  if (backendMessage) {
+    return new AuthApiError({
+      code: body?.code ? String(body.code).toUpperCase() : "ERROR",
+      message: backendMessage,
+      status,
+    });
   }
 
   return new AuthApiError({

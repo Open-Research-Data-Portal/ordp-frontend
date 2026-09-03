@@ -3,6 +3,11 @@ import client from "../../../api/client";
 const DATASETS_BASE = "/datasets";
 const METADATA_BASE = "/metadata";
 
+export async function createDataset(payload) {
+  const { data } = await client.post(`${DATASETS_BASE}/`, payload);
+  return data;
+}
+
 // Step 1: create the dataset + start an upload session
 export async function initUpload(detailsPayload) {
   const { data } = await client.post(`${DATASETS_BASE}/upload/init/`, detailsPayload);
@@ -207,6 +212,31 @@ export async function getAdminAuditLog() {
 
 export async function getAdminDeletionQueue() {
   const { data } = await client.get("/admin-panel/deletion-requests/queue/");
+  return data;
+}
+
+export async function getAdminUsers() {
+  const { data } = await client.get("/admin-panel/users/");
+  return data;
+}
+
+export async function createAdminUser(payload) {
+  const { data } = await client.post("/admin-panel/users/create/", payload);
+  return data;
+}
+
+export async function deleteAdminUser(userId) {
+  const { data } = await client.delete(`/admin-panel/users/${userId}/`);
+  return data;
+}
+
+export async function getAdminQueue() {
+  const { data } = await client.get("/admin-panel/queue/");
+  return data;
+}
+
+export async function getMyReviews() {
+  const { data } = await client.get("/admin-panel/my-reviews/");
   return data;
 }
 

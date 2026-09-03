@@ -2,7 +2,9 @@ import { useState, useEffect } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
 import { Mail, Lock, ArrowRight } from "lucide-react";
 import { useAuth } from "../../../context/useAuth";
-import { AuthApiError } from "../api/authApi";
+import * as authApi from "../api/authApi";
+import { INTERESTS_ONBOARDING_PATH, isInterestsOnboardingSatisfied } from "../onboarding";
+import { getDashboardPath, isAdmin } from "../../../utils/userRoles";
 import AuthLayout from "../components/AuthLayout";
 import TextInput from "../../../components/ui/TextInput";
 import Button from "../../../components/ui/Button";
@@ -49,15 +51,15 @@ export default function LoginPage() {
         result.profile?.interests?.length
       );
       if (!completed) {
-        navigate("/research-interests-onboarding");
+        navigate(INTERESTS_ONBOARDING_PATH, { replace: true });
       } else {
-        navigate("/dashboard");
+        navigate(getDashboardPath(signedIn), { replace: true });
       }
     } catch (err) {
       setApiError(
-        err instanceof AuthApiError
+        err instanceof authApi.AuthApiError
           ? err
-          : new AuthApiError({ code: "UNKNOWN_ERROR", message: "Something went wrong. Please try again." })
+          : new authApi.AuthApiError({ code: "UNKNOWN_ERROR", message: "Something went wrong. Please try again." })
       );
     } finally {
       setSubmitting(false);

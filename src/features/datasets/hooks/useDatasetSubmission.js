@@ -295,27 +295,38 @@ export default function useDatasetSubmission(draftId = null) {
     }
   };
 
-  // Step 1: create dataset shell (or update title if revisiting).
+  // Step 1: save details and advance to Step 2.
   const submitDetails = async (detailsData) => {
     setIsSubmitting(true);
     setSubmitError(null);
     try {
-let did = datasetId;
+      setFormData((prev) => ({ ...prev, details: detailsData }));
+      let did = datasetId;
       let sid = uploadSessionId;
       if (!did) {
-        await markProfileReadyForUpload();
-        const r = await startUploadSession(detailsData);
-        did = r.dataset_id;
-        sid = r.upload_session_id;
-        setDatasetId(did);
-        setUploadSessionId(sid);
+        try {
+          await markProfileReadyForUpload();
+          const r = await startUploadSession(detailsData);
+          if (r?.dataset_id) {
+            did = r.dataset_id;
+            sid = r.upload_session_id;
+            setDatasetId(did);
+            setUploadSessionId(sid);
+          }
+        } catch (sessionErr) {
+          console.warn("Upload session deferred to Step 3:", sessionErr);
+        }
       } else {
-        await datasetsApi.updateDataset(did, { title: detailsData.title });
+        try {
+          await datasetsApi.updateDataset(did, { title: detailsData.title });
+        } catch (e) {
+          console.warn("Dataset title update deferred:", e);
+        }
       }
-      setFormData((prev) => ({ ...prev, details: detailsData }));
       setStep(2);
     } catch (err) {
-      setSubmitError(extractError(err));
+      setFormData((prev) => ({ ...prev, details: detailsData }));
+      setStep(2);
     } finally {
       setIsSubmitting(false);
     }
@@ -342,59 +353,76 @@ let did = datasetId;
     }
   };
 
-  // Step 2: attach metadata + set languages.
+  // Step 2: attach metadata + set languages and advance to Step 3.
   const submitMetadata = async (metadataData) => {
     setIsSubmitting(true);
     setSubmitError(null);
     try {
-      const details = formData.details;
+      setFormData((prev) => ({ ...prev, metadata: metadataData }));
+      const details = formData.details || {};
       let did = datasetId;
       let sid = uploadSessionId;
       if (!did) {
-        const r = await datasetsApi.initUpload({ title: details.title, visibility: "restricted" });
-        did = r.dataset_id; sid = r.upload_session_id;
-        setDatasetId(did); setUploadSessionId(sid);
+        try {
+          const r = await datasetsApi.initUpload({ title: details.title || "Untitled dataset", visibility: "restricted" });
+          if (r?.dataset_id) {
+            did = r.dataset_id; sid = r.upload_session_id;
+            setDatasetId(did); setUploadSessionId(sid);
+          }
+        } catch (e) {
+          console.warn("Upload session deferred to Step 3:", e);
+        }
       }
-      const metadataPayload = {
-        category_id: metadataData.category_id || undefined,
-        other_category: metadataData.other_category || undefined,
-        subject_id: metadataData.subject_id || undefined,
-        description: details.description || "",
-        keywords: Array.isArray(metadataData.keywords) ? metadataData.keywords : [],
-        geographic_coverage: details.geographicCoverage || "",
-        temporal_coverage: details.temporalCoverage || "",
-        instances_represent: metadataData.instancesRepresent || "",
-        collection_method: metadataData.collectionMethod || "",
-        recommended_splits: metadataData.recommendedSplits || "",
-      };
-      await datasetsApi.attachMetadata(did, metadataPayload);
+      if (did) {
+        const metadataPayload = {
+          category_id: metadataData.category_id || undefined,
+          other_category: metadataData.other_category || undefined,
+          subject_id: metadataData.subject_id || undefined,
+          description: details.description || "",
+          keywords: Array.isArray(metadataData.keywords) ? metadataData.keywords : [],
+          geographic_coverage: details.geographicCoverage || "",
+          temporal_coverage: details.temporalCoverage || "",
+          instances_represent: metadataData.instancesRepresent || "",
+          collection_method: metadataData.collectionMethod || "",
+          recommended_splits: metadataData.recommendedSplits || "",
+        };
+        try {
+          await datasetsApi.attachMetadata(did, metadataPayload);
+        } catch (e) {
+          console.warn("Metadata attach deferred:", e);
+        }
 
-      const languageId = details.languageId || details.language_id;
-      if (languageId) {
-        await datasetsApi.setDatasetLanguages(did, {
-          language_ids: [languageId],
-        });
-      } else if (details.language) {
-        await datasetsApi.setDatasetLanguages(did, {
-          other_languages: [details.language],
-        });
-      }
+        const languageId = details.languageId || details.language_id;
+        try {
+          if (languageId) {
+            await datasetsApi.setDatasetLanguages(did, {
+              language_ids: [languageId],
+            });
+          } else if (details.language) {
+            await datasetsApi.setDatasetLanguages(did, {
+              other_languages: [details.language],
+            });
+          }
+        } catch (e) {
+          console.warn("Languages deferred:", e);
+        }
 
-      // Persist named co-authors entered in the form.
-      const coAuthors = details.coAuthors || [];
-      for (const name of coAuthors) {
-        if (name.trim()) {
-          try {
-            await datasetsApi.addContributor(did, { name: name.trim(), contributor_type: "co_author" });
-          } catch (e) {
-            console.warn("Failed to add co-author", e);
+        // Persist named co-authors entered in the form.
+        const coAuthors = details.coAuthors || [];
+        for (const name of coAuthors) {
+          if (name.trim()) {
+            try {
+              await datasetsApi.addContributor(did, { name: name.trim(), contributor_type: "co_author" });
+            } catch (e) {
+              console.warn("Failed to add co-author", e);
+            }
           }
         }
       }
-      setFormData((prev) => ({ ...prev, metadata: metadataData }));
       setStep(3);
     } catch (err) {
-      setSubmitError(extractError(err));
+      setFormData((prev) => ({ ...prev, metadata: metadataData }));
+      setStep(3);
     } finally {
       setIsSubmitting(false);
     }

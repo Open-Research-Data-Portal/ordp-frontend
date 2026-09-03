@@ -493,7 +493,6 @@ department,
                     onChange={(e) => setAffiliation(e.target.value)}
                   />
                 </div>
-                <Select id="department" label="Department" required value={department} onChange={(e) => setDepartment(e.target.value)} options={departments.map((d) => ({ value: d.id, label: d.name }))} placeholder="Choose your department..." />
                 <Select
                   id="academicRole"
                   label="Occupation"

@@ -185,6 +185,46 @@ export async function decideDataset(datasetId, decision, reason) {
   return data;
 }
 
+export async function moderateDataset(datasetId, payload) {
+  const { data } = await client.post(`/admin-panel/${datasetId}/decide/`, payload);
+  return data;
+}
+
+export async function getContentUpdateQueue() {
+  const { data } = await client.get("/admin-panel/content-updates/queue/");
+  return data;
+}
+
+export async function getRevisionRequestsQueue() {
+  const { data } = await client.get("/admin-panel/revision-requests/queue/");
+  return data;
+}
+
+export async function getAccessRequestsQueue() {
+  const { data } = await client.get("/sharing/access-requests/queue/");
+  return data;
+}
+
+export async function getReviewerGuidelines() {
+  const { data } = await client.get("/admin-panel/dashboard/reviewer/guidelines/");
+  return data;
+}
+
+export async function voteContentUpdate(updateId, payload) {
+  const { data } = await client.post(`/admin-panel/content-updates/${updateId}/vote/`, payload);
+  return data;
+}
+
+export async function voteRevisionRequest(requestId, payload) {
+  const { data } = await client.post(`/admin-panel/revision-requests/${requestId}/vote/`, payload);
+  return data;
+}
+
+export async function voteAccessRequest(requestId, payload) {
+  const { data } = await client.post(`/sharing/access-requests/${requestId}/vote/`, payload);
+  return data;
+}
+
 export async function initExistingDraftUpload(datasetId) {
   const { data } = await client.post(`/datasets/${datasetId}/upload/init/`);
   return data;

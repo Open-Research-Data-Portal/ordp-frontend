@@ -437,11 +437,16 @@ export default function useDatasetSubmission(draftId = null) {
       let activeDatasetId = datasetId;
       let activeSessionId = uploadSessionId;
       if (!activeDatasetId || !activeSessionId) {
-        const fresh = await datasetsApi.initUpload({ title: details.title || "Untitled dataset", visibility: "restricted" });
+        await markProfileReadyForUpload();
+        const fresh = await startUploadSession(details);
         activeDatasetId = fresh.dataset_id; activeSessionId = fresh.upload_session_id;
         setDatasetId(activeDatasetId); setUploadSessionId(activeSessionId);
       }
-      await datasetsApi.updateDataset(activeDatasetId, { visibility: uploadData.access || "restricted" });
+      try {
+        await datasetsApi.updateDataset(activeDatasetId, { visibility: uploadData.access || "restricted" });
+      } catch (e) {
+        console.warn("Visibility update deferred:", e);
+      }
 
       if (uploadData.thumbnail) {
         try {

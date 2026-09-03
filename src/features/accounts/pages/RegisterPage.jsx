@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { GraduationCap, Database, Users } from "lucide-react";
+import { GraduationCap, Database, Users, ArrowLeft } from "lucide-react";
 import AuthLayout from "../components/AuthLayout";
 import TextInput from "../../../components/ui/TextInput";
 import Button from "../../../components/ui/Button";
@@ -98,12 +98,16 @@ export default function RegisterPage() {
     setSubmitting(true);
     try {
       await register({
-        full_name: fullName,
-        email,
-        username,
+        full_name: fullName.trim(),
+        email: email.trim(),
+        username: username.trim(),
         password,
       });
-      navigate("/verify-email", { state: { email } });
+
+      navigate("/verify-email", {
+        state: { email: email.trim() },
+        replace: true,
+      });
     } catch (err) {
       if (err instanceof AuthApiError) {
         setApiError(err.message);
@@ -117,18 +121,24 @@ export default function RegisterPage() {
 
   return (
     <AuthLayout
-      showChrome
       variant="register"
       left={
         <>
-          <h1 className="text-3xl md:text-4xl font-bold leading-tight mb-4">
+          <Link
+            to="/"
+            className="inline-flex items-center gap-2 text-xs font-semibold text-slate-300 hover:text-white mb-8 transition-colors group"
+          >
+            <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1 text-gold" />
+            <span>Back to Home</span>
+          </Link>
+          <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold leading-tight mb-4 text-white">
             Empowering Innovation &amp; Research.
           </h1>
-          <p className="text-slate-300 mb-10 leading-relaxed text-sm md:text-base">
+          <p className="text-slate-300 mb-8 leading-relaxed text-sm md:text-base">
             Join the Addis Ababa Science &amp; Technology University community
             of world-class researchers and scholars.
           </p>
-          <ul className="space-y-5">
+          <ul className="space-y-4">
             <FeatureRow icon={GraduationCap} text="Access exclusive grants" />
             <FeatureRow icon={Database} text="Centralized research data" />
             <FeatureRow icon={Users} text="Global collaboration tools" />
@@ -136,13 +146,13 @@ export default function RegisterPage() {
         </>
       }
     >
-      <div className="flex justify-center mb-5">
-        <img src={logo} alt="AASTU" className="w-24 h-24 object-contain" />
+      <div className="flex justify-center mb-3">
+        <img src={logo} alt="AASTU" className="w-16 h-16 object-contain" />
       </div>
       <h2 className="text-xl font-bold text-center text-[#0B1526] mb-1">
         Create Your Account
       </h2>
-      <p className="text-sm text-slate-500 text-center mb-6">
+      <p className="text-xs text-slate-500 text-center mb-4">
         Complete the form below to register your profile.
       </p>
 

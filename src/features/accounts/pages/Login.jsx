@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
-import { Mail, Lock, ArrowRight } from "lucide-react";
+import { Mail, Lock, ArrowRight, ArrowLeft } from "lucide-react";
 import { useAuth } from "../../../context/useAuth";
 import * as authApi from "../api/authApi";
 import { INTERESTS_ONBOARDING_PATH, isInterestsOnboardingSatisfied } from "../onboarding";
@@ -121,8 +121,15 @@ export default function LoginPage() {
       variant="login"
       left={
         <>
-          <h1 className="text-3xl md:text-4xl font-bold leading-tight mb-4">
-            Empowering Innovation at AASTU
+          <Link
+            to="/"
+            className="inline-flex items-center gap-2 text-xs font-semibold text-slate-300 hover:text-white mb-8 transition-colors group"
+          >
+            <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1 text-gold" />
+            <span>Back to Home</span>
+          </Link>
+          <h1 className="text-2xl md:text-3xl lg:text-4xl font-serif font-bold leading-tight mb-4 text-white">
+            “Contribute today&apos;s research data so tomorrow&apos;s discoveries have a stronger foundation.”
           </h1>
           <p className="text-slate-300 mb-10 leading-relaxed text-sm md:text-base">
             Welcome to the official Research Portal of Addis Ababa Science
@@ -211,10 +218,6 @@ export default function LoginPage() {
             Sign Up
           </Link>
         </p>
-        <blockquote className="mt-7 w-full border-l-2 border-[#B8860B] pl-4 text-left text-xs italic leading-relaxed text-slate-500">
-          “Contribute today&apos;s research data so tomorrow&apos;s discoveries have a stronger foundation.”
-          <cite className="mt-1 block text-[10px] font-semibold not-italic text-[#B8860B]">AASTU Open Research Data Portal</cite>
-        </blockquote>
       </div>
     </AuthLayout>
   );

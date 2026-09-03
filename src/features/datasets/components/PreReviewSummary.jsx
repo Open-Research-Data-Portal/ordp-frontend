@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   FileText,
   Tag,
@@ -7,13 +6,7 @@ import {
   Edit3,
   CheckCircle2,
   AlertCircle,
-  Clock,
-  Eye,
-  Globe,
-  Calendar,
-  Layers,
   Sparkles,
-  ArrowRight,
 } from "lucide-react";
 
 export default function PreReviewSummary({
@@ -27,7 +20,6 @@ export default function PreReviewSummary({
   const details = formData.details || {};
   const metadata = formData.metadata || {};
   const upload = formData.upload || {};
-  const policy = formData.policy || {};
 
   const files = (upload.files || []).filter((e) => e.file || e.name);
   const totalSizeBytes = files.reduce((acc, f) => acc + (f.file?.size || 0), 0);

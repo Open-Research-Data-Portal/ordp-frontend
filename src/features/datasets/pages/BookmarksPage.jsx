@@ -5,7 +5,6 @@ import {
   Bookmark,
   ChevronDown,
   Database,
-  Download,
 } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import * as bookmarksApi from "../../../api/bookmarks";

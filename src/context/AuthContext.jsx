@@ -132,7 +132,7 @@ export function AuthProvider({ children }) {
     client.defaults.headers.common.Authorization = `Bearer ${data.access}`;
     setAccessToken(data.access);
 
-    let profile = data.user || {};
+    let profile;
     try {
       const [profileRes, completeRes] = await Promise.allSettled([
         authApi.getProfile(),

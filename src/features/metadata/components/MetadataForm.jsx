@@ -40,10 +40,8 @@ const CHARACTERISTICS = [
 
 export default function MetadataForm({ initialValues = {}, onNext, onBack, isSubmitting = false, submitError = null }) {
   const [categories, setCategories] = useState([]);
-  const [subjects, setSubjects] = useState([]);
   const [categoryId, setCategoryId] = useState(initialValues.category_id || "");
   const [otherCategory, setOtherCategory] = useState(initialValues.other_category || "");
-  const [subjectId, setSubjectId] = useState(initialValues.subject_id || "");
   const [keywords, setKeywords] = useState(initialValues.keywords || []);
   const [dataFormats, setDataFormats] = useState(initialValues.dataFormats || []);
   const [characteristics, setCharacteristics] = useState(initialValues.characteristics || []);
@@ -70,17 +68,10 @@ export default function MetadataForm({ initialValues = {}, onNext, onBack, isSub
     let isMounted = true;
     Promise.allSettled([
       datasetsApi.listCategories(),
-      datasetsApi.listSubjects(),
-    ]).then(([catsRes, subsRes]) => {
+    ]).then(([catsRes]) => {
       if (!isMounted) return;
       if (catsRes.status === "fulfilled") {
         setCategories(Array.isArray(catsRes.value) ? catsRes.value : []);
-      }
-      if (subsRes.status === "fulfilled") {
-        setSubjects(Array.isArray(subsRes.value) ? subsRes.value : []);
-      }
-      if (subsRes.status !== "fulfilled" || !Array.isArray(subsRes.value) || subsRes.value.length === 0) {
-        setSubjects(catsRes.status === "fulfilled" && Array.isArray(catsRes.value) ? catsRes.value : []);
       }
     });
     return () => { isMounted = false; };
@@ -91,7 +82,6 @@ export default function MetadataForm({ initialValues = {}, onNext, onBack, isSub
   };
 
   const selectedCategory = categories.find((c) => c.id === categoryId);
-  const selectedSubject = subjects.find((s) => s.id === subjectId);
 
   const handleContinue = async (e) => {
     e.preventDefault();
@@ -103,10 +93,6 @@ export default function MetadataForm({ initialValues = {}, onNext, onBack, isSub
       setLocalError("Please select a category or describe a new one.");
       return;
     }
-    if (!subjectId) {
-      setLocalError("Please select a subject.");
-      return;
-    }
     if (keywords.length < 1) {
       setLocalError("Please add at least one keyword.");
       return;
@@ -116,8 +102,6 @@ export default function MetadataForm({ initialValues = {}, onNext, onBack, isSub
       category_id: resolvedCategoryId,
       other_category: resolvedOtherCategory,
       categoryName: useOtherCategory ? resolvedOtherCategory : selectedCategory?.name || "",
-      subject_id: subjectId,
-      subjectName: selectedSubject?.name || "",
       keywords,
       dataFormats,
       characteristics,
@@ -157,12 +141,6 @@ export default function MetadataForm({ initialValues = {}, onNext, onBack, isSub
               <option value="">Select category</option>
               {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               <option value="__other__">Other (suggest a new category)</option>
-            </select>
-          </FormField>
-          <FormField label="Subject">
-            <select value={subjectId} onChange={(e) => setSubjectId(e.target.value)} className={inputClass}>
-              <option value="">Select subject</option>
-              {subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </FormField>
         </div>

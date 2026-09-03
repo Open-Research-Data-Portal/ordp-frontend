@@ -150,3 +150,13 @@ export function getDisplayName(user) {
     [user?.first_name, user?.last_name].filter(Boolean).join(" ").trim();
   return full || user?.username || user?.email || "User";
 }
+
+export function getMediaUrl(url) {
+  if (!url) return null;
+  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("blob:")) {
+    return url;
+  }
+  const apiBase = import.meta.env.VITE_API_BASE_URL || "";
+  const host = apiBase.replace(/\/api\/?$/, "");
+  return host ? `${host}${url.startsWith("/") ? "" : "/"}${url}` : url;
+}

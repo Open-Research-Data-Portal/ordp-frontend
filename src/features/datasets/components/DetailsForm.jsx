@@ -53,7 +53,6 @@ export default function DetailsForm({ initialValues = {}, onNext, isSubmitting, 
   const [description, setDescription] = useState(initialValues.description || "");
   const [language, setLanguage] = useState(initialValues.language || "English");
   const [coAuthors, setCoAuthors] = useState(initialValues.coAuthors || []);
-  const [contributors, setContributors] = useState(initialValues.contributors || []);
   const [relatedResources, setRelatedResources] = useState(initialValues.relatedResources || []);
   const [geographicCoverage, setGeographicCoverage] = useState(initialValues.geographicCoverage || "");
   const [temporalCoverage, setTemporalCoverage] = useState(initialValues.temporalCoverage || "");
@@ -76,7 +75,6 @@ export default function DetailsForm({ initialValues = {}, onNext, isSubmitting, 
       language,
       authorId: user?.id,
       coAuthors,
-      contributors,
       relatedResources,
       geographicCoverage,
       temporalCoverage,

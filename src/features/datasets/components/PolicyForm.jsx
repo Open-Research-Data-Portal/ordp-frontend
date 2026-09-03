@@ -14,12 +14,12 @@ export default function PolicyForm({ initialValues = {}, onSubmit, onBack, isSub
     if (!allChecked) { setError("Both confirmations are required before submitting."); return; }
     setError("");
     setActiveAction("submit");
-    onSubmit({ ownership, piiRemoval });
+    onSubmit({ ownership, piiRemoval, termsAccepted: true });
   };
 
   const handleSaveDraft = () => {
     setActiveAction("draft");
-    onSubmit({ ownership, piiRemoval, isDraft: true });
+    onSubmit({ ownership, piiRemoval, isDraft: true, termsAccepted: true });
   };
 
   const checkRow = "flex gap-4 items-start p-5 border border-[#E3E1DA] rounded-lg mb-4 cursor-pointer";

@@ -114,7 +114,6 @@ export default function ProfilePage() {
 
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [error, setError] = useState("");
   const [saveError, setSaveError] = useState("");
 
   useEffect(() => {
@@ -379,12 +378,6 @@ department,
             {saveError && (
               <div role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
                 {saveError}
-              </div>
-            )}
-
-            {error && (
-              <div role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
-                {error}
               </div>
             )}
 

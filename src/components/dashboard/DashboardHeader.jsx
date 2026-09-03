@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, Bell, HelpCircle, ChevronDown } from "lucide-react";
 import { useAuth } from "../../context/useAuth";
-import { getDisplayName } from "../../utils/userRoles";
+import { getDisplayName, getMediaUrl } from "../../utils/userRoles";
 
 export default function DashboardHeader({ title, subtitle }) {
   const [query, setQuery] = useState("");
@@ -53,9 +53,17 @@ export default function DashboardHeader({ title, subtitle }) {
           onClick={() => navigate("/profile")}
           className="flex items-center gap-2 pl-2 pr-1 py-1 rounded-lg hover:bg-gray-50 transition"
         >
-          <span className="w-8 h-8 rounded-full bg-gold-light flex items-center justify-center text-xs font-bold text-navy">
-            {getDisplayName(user).charAt(0).toUpperCase()}
-          </span>
+          <div className="w-8 h-8 rounded-full bg-gold-light overflow-hidden flex items-center justify-center text-xs font-bold text-navy">
+            {user?.profile_picture || user?.profile?.profile_picture ? (
+              <img
+                src={getMediaUrl(user?.profile_picture || user?.profile?.profile_picture)}
+                alt="Profile"
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              getDisplayName(user).charAt(0).toUpperCase()
+            )}
+          </div>
           <span className="hidden sm:block text-sm font-medium text-navy max-w-[120px] truncate">
             {getDisplayName(user)}
           </span>

@@ -9,15 +9,12 @@ import {
   User,
   X,
   ArrowRight,
-  AlertTriangle,
-  Clock,
-  GitPullRequest,
 } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import StatCard from "../../../components/dashboard/StatCard";
-import { StatusBadge, EmptyState, ProfileSavedNotice } from "../../../components/dashboard/dashboardUi";
 import { useAuth } from "../../../context/useAuth";
 import { getDisplayName } from "../../../utils/userRoles";
+import { ProfileSavedNotice } from "../../../components/dashboard/dashboardUi";
 import * as datasetsApi from "../hooks/datasetsApi";
 import * as authApi from "../../accounts/api/authApi";
 import { getDatasetImage } from "../../../utils/datasetImage";
@@ -27,97 +24,92 @@ function normalizeList(data) {
   return data?.results || [];
 }
 
-function formatDate(dateString) {
-  if (!dateString) return "—";
-  return new Date(dateString).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
 
 
 export default function ResearcherDashboardPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  const [datasets, setDatasets] = useState([]);
   const [feed, setFeed] = useState([]);
   const [bookmarks, setBookmarks] = useState([]);
   const [stats, setStats] = useState(null);
-  const [recentActivity, setRecentActivity] = useState([]);
-  const [contributions, setContributions] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [forbidden, setForbidden] = useState(false);
+  const [totalDatasets, setTotalDatasets] = useState(0);
+  const [pendingDatasets, setPendingDatasets] = useState(0);
+  const [loadingStats, setLoadingStats] = useState(true);
+  const [loadingDatasets, setLoadingDatasets] = useState(true);
+  const [loadingFeed, setLoadingFeed] = useState(true);
+  const [loadingBookmarks, setLoadingBookmarks] = useState(true);
+  const [statsError, setStatsError] = useState(null);
+  const [datasetsError, setDatasetsError] = useState(null);
 
-  // Profile completion banner: reappears every time the dashboard loads
-  // until the user's profile is actually marked complete.
   const isProfileComplete = Boolean(
     user?.can_upload_datasets ||
     user?.profile?.can_upload_datasets ||
     user?.profile_complete ||
     user?.profile?.profile_complete ||
-    user?.is_profile_complete ||
-    sessionStorage.getItem("ordp:profile_completed") === "true" ||
-    localStorage.getItem("ordp:profile_completed") === "true"
+    user?.is_profile_complete
   );
   const [showProfileBanner, setShowProfileBanner] = useState(!isProfileComplete);
 
   useEffect(() => {
-    if (isProfileComplete) {
-      setShowProfileBanner(false);
-      return;
-    }
     authApi.getCompleteProfile().then((profile) => {
-      const complete = Boolean(
-        profile?.can_upload_datasets ||
-        profile?.is_profile_complete ||
-        profile?.completed ||
-        profile?.is_complete ||
-        authApi.isProfileCompleted(profile) ||
-        (profile?.full_name && profile?.affiliation && profile?.department && profile?.academia && profile?.profile_visibility && profile?.terms_accepted)
-      );
-      if (complete) {
-        sessionStorage.setItem("ordp:profile_completed", "true");
-        setShowProfileBanner(false);
-      } else {
-        setShowProfileBanner(true);
-      }
+      const complete = Boolean(profile?.can_upload_datasets || profile?.is_profile_complete ||
+        (profile?.full_name && profile?.affiliation && profile?.department && profile?.academia && profile?.profile_visibility && profile?.terms_accepted));
+      setShowProfileBanner(!complete);
     }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    queueMicrotask(() => setShowProfileBanner(!isProfileComplete));
   }, [isProfileComplete]);
   useEffect(() => {
     let active = true;
     async function load() {
-      setLoading(true);
-      setForbidden(false);
-      const results = await Promise.allSettled([
-        datasetsApi.getMyDatasets(),
+      setLoadingStats(true);
+      setLoadingDatasets(true);
+      setLoadingFeed(true);
+      setLoadingBookmarks(true);
+      setStatsError(null);
+      setDatasetsError(null);
+
+      const [statsResult, datasetsResult, pendingResult, feedResult, bookmarksResult] = await Promise.allSettled([
         datasetsApi.getDashboardStats(),
+        datasetsApi.getMyDatasets(),
+        datasetsApi.getMyDatasets({ status: "pending" }),
         datasetsApi.getDashboardFeed(),
         datasetsApi.getMyBookmarks?.() ?? Promise.resolve([]),
-        datasetsApi.getDashboardRecentActivity(),
-        datasetsApi.getDashboardMyContributions(),
       ]);
+
       if (!active) return;
 
-      // Check if stats returned 403 (user lacks CanUploadDatasets)
-      if (results[1].status === "rejected" && results[1].reason?.response?.status === 403) {
-        setForbidden(true);
+      if (statsResult.status === "fulfilled") {
+        setStats(statsResult.value);
+      } else {
+        setStatsError("Failed to load dashboard stats.");
       }
 
-      if (results[0].status === "fulfilled") setDatasets(normalizeList(results[0].value));
-      if (results[1].status === "fulfilled") setStats(results[1].value);
-      if (results[2].status === "fulfilled") setFeed(normalizeList(results[2].value));
-      if (results[3].status === "fulfilled") setBookmarks(normalizeList(results[3].value));
-      if (results[4].status === "fulfilled") setRecentActivity(normalizeList(results[4].value));
-      if (results[5].status === "fulfilled") setContributions(normalizeList(results[5].value));
-      setLoading(false);
+      if (datasetsResult.status === "fulfilled") {
+        const list = normalizeList(datasetsResult.value);
+        setTotalDatasets(list.length);
+      } else {
+        setDatasetsError("Failed to load your datasets.");
+      }
+
+      if (pendingResult.status === "fulfilled") {
+        const pendingList = normalizeList(pendingResult.value);
+        setPendingDatasets(pendingList.length);
+      }
+
+      if (feedResult.status === "fulfilled") setFeed(normalizeList(feedResult.value));
+      if (bookmarksResult.status === "fulfilled") setBookmarks(normalizeList(bookmarksResult.value));
+
+      setLoadingStats(false);
+      setLoadingDatasets(false);
+      setLoadingFeed(false);
+      setLoadingBookmarks(false);
     }
     load();
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, []);
 
   return (
@@ -176,11 +168,44 @@ export default function ResearcherDashboardPage() {
 
       {/* Stats row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
-        <StatCard label="VIEWS RECEIVED" value={loading ? "…" : (stats?.total_views_received ?? 0).toLocaleString()} icon={Eye} trend="+12% this month" delay={50} />
-        <StatCard label="DOWNLOADS RECEIVED" value={loading ? "…" : (stats?.total_downloads_received ?? 0).toLocaleString()} icon={Download} trend="+5% this month" delay={100} />
-        <StatCard label="DOWNLOADS I MADE" value={loading ? "…" : (stats?.downloads_i_made ?? 0)} icon={FolderOpen} hint="Across all datasets" delay={150} />
-        <StatCard label="MOST VIEWED" value={loading ? "…" : (stats?.most_viewed_dataset?.title ?? "None")} icon={Eye} hint={stats?.most_viewed_dataset ? `${stats.most_viewed_dataset.view_count} views` : ""} delay={200} />
+        <StatCard
+          label="TOTAL DATASETS"
+          value={loadingDatasets ? "…" : totalDatasets.toLocaleString()}
+          icon={FolderOpen}
+          delay={50}
+        />
+        <StatCard
+          label="PENDING DATASETS"
+          value={loadingDatasets ? "…" : pendingDatasets.toLocaleString()}
+          icon={Eye}
+          delay={100}
+        />
+        <StatCard
+          label="DOWNLOADS RECEIVED"
+          value={loadingStats ? "…" : (stats?.total_downloads_received ?? 0).toLocaleString()}
+          icon={Download}
+          trend="+5% this month"
+          delay={150}
+        />
+        <StatCard
+          label="DOWNLOADS MADE"
+          value={loadingStats ? "…" : (stats?.downloads_i_made ?? 0)}
+          icon={FolderOpen}
+          hint="Across all datasets"
+          delay={200}
+        />
       </div>
+
+      {statsError && (
+        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {statsError}
+        </div>
+      )}
+      {datasetsError && (
+        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {datasetsError}
+        </div>
+      )}
 
       {/* Recommendations */}
       <section className="mb-8 animate-fade-in-up" style={{ animationDelay: "250ms" }}>
@@ -199,11 +224,11 @@ export default function ResearcherDashboardPage() {
           </button>
         </div>
 
-        {loading ? (
-          <p className="text-sm text-gray-500">Loading…</p>
-        ) : feed.length === 0 ? (
-          <p className="text-sm text-gray-500">No recommendations available at the moment.</p>
-        ) : (
+      {loadingFeed ? (
+        <p className="text-sm text-gray-500">Loading…</p>
+      ) : feed.length === 0 ? (
+        <p className="text-sm text-gray-500">No recommendations available at the moment.</p>
+      ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {feed.slice(0, 3).map((item) => (
               <div
@@ -241,63 +266,13 @@ export default function ResearcherDashboardPage() {
         )}
       </section>
 
-      {/* Recent Activity */}
-      <section className="mb-8 animate-fade-in-up" style={{ animationDelay: "300ms" }}>
-        <h2 className="text-lg font-serif font-bold text-navy mb-4">Recent Activity</h2>
-        {recentActivity.length === 0 ? (
-          <div className="bg-white rounded-xl border border-border shadow-sm py-10 flex flex-col items-center text-center px-6">
-            <span className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-4">
-              <Clock className="w-5 h-5 text-gray-400" />
-            </span>
-            <p className="text-sm font-semibold text-navy">No recent activity</p>
-            <p className="text-xs text-gray-500 mt-1 max-w-sm">Downloads, revisions, and other activity on your datasets will appear here.</p>
-          </div>
-        ) : (
-          <div className="bg-white rounded-xl border border-border shadow-sm overflow-hidden">
-            <div className="divide-y divide-gray-100">
-              {recentActivity.slice(0, 8).map((activity, idx) => (
-                <div key={activity.id || idx} className="flex items-center gap-3 px-5 py-3 hover:bg-bg/50">
-                  <span className="w-8 h-8 rounded-full bg-gold-light flex items-center justify-center shrink-0">
-                    {activity.type === "download" ? <Download className="w-4 h-4 text-gold" /> : <Eye className="w-4 h-4 text-gold" />}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-navy truncate">{activity.description || activity.message || `${activity.type || "Activity"} on ${activity.dataset_title || "dataset"}`}</p>
-                    <p className="text-xs text-gray-400">{formatDate(activity.created_at || activity.timestamp)}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </section>
-
-      {/* My Contributions */}
-      {contributions.length > 0 && (
-        <section className="mb-8 animate-fade-in-up" style={{ animationDelay: "350ms" }}>
-          <h2 className="text-lg font-serif font-bold text-navy mb-4">My Contributions</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {contributions.slice(0, 6).map((c) => (
-              <div
-                key={c.id || c.dataset_id}
-                onClick={() => navigate(`/datasets/${c.id || c.dataset_id}`)}
-                className="bg-white rounded-xl p-4 border border-border hover:border-gold/30 cursor-pointer transition-colors"
-              >
-                <div className="flex items-start gap-2 mb-2">
-                  <GitPullRequest className="w-4 h-4 text-violet-500 mt-0.5 shrink-0" />
-                  <p className="text-sm font-semibold text-navy line-clamp-2">{c.title || c.dataset_title || "Untitled"}</p>
-                </div>
-                <p className="text-xs text-gray-500">{c.owner?.email || c.owner_name || "Unknown researcher"}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
       {/* My Bookmarks */}
-      <section className="mb-8 animate-fade-in-up" style={{ animationDelay: "400ms" }}>
+      <section className="mb-8 animate-fade-in-up" style={{ animationDelay: "300ms" }}>
         <h2 className="text-lg font-serif font-bold text-navy mb-4">My Bookmarks</h2>
 
-        {bookmarks.length === 0 ? (
+        {loadingBookmarks ? (
+          <p className="text-sm text-gray-500">Loading bookmarks…</p>
+        ) : bookmarks.length === 0 ? (
           <div className="bg-white rounded-xl border border-border shadow-sm py-14 flex flex-col items-center text-center px-6">
             <span className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-4">
               <Bookmark className="w-5 h-5 text-gray-400" />

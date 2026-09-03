@@ -13,5 +13,7 @@ export default function DashboardRouter() {
     );
   }
 
-  return <Navigate to={getDashboardPath(user)} replace />;
+  const redirectPath = getDashboardPath(user);
+  console.log("📍 DashboardRouter redirecting to:", redirectPath);
+  return <Navigate to={redirectPath} replace />;
 }

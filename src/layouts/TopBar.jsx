@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Search, SlidersHorizontal, User } from "lucide-react";
+import { Search, SlidersHorizontal } from "lucide-react";
 import { useAuth } from "../context/useAuth";
 import { getDisplayName, getDashboardPath } from "../utils/userRoles";
 import logo from "../assets/aastulogo.png";

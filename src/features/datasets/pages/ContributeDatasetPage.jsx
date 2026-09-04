@@ -6,11 +6,12 @@ import DetailsForm from "../components/DetailsForm";
 import MetadataForm from "../../metadata/components/MetadataForm";
 import UploadForm from "../components/UploadForm";
 import PolicyForm from "../components/PolicyForm";
+import PreReviewSummary from "../components/PreReviewSummary";
 import { useAuth } from "../../../context/useAuth";
 import { getDashboardPath, isProfileComplete } from "../../../utils/userRoles";
 import useDatasetSubmission from "../hooks/useDatasetSubmission";
 
-const STEPS = ["Details", "Metadata", "Upload", "Policy", "Preview"];
+const STEPS = ["Details", "Metadata", "Upload", "Policy", "Review"];
 
 export default function ContributeDatasetPage() {
   const navigate = useNavigate();
@@ -18,11 +19,13 @@ export default function ContributeDatasetPage() {
   const { user, isAuthenticated, loading } = useAuth();
   const {
     step, formData,
+    goToStep,
     goToPreviousStep,
     submitDetails,
     inviteCoauthor,
     submitMetadata,
     submitUpload,
+    submitPolicy,
     submitFinal,
     resumeDraftUpload,
     isSubmitting, submitError,
@@ -57,7 +60,7 @@ export default function ContributeDatasetPage() {
   };
 
   return (
-    <ContributeLayout currentStep={step} steps={STEPS}>
+    <ContributeLayout currentStep={step} steps={STEPS} onStepClick={goToStep}>
       <button
         type="button"
         onClick={() => navigate(getDashboardPath(user))}
@@ -96,8 +99,22 @@ export default function ContributeDatasetPage() {
         {step === 4 && (
           <PolicyForm
             initialValues={formData.policy}
-            onSubmit={handleFinalSubmit}
+            onSubmit={submitPolicy}
             onBack={goToPreviousStep}
+            isSubmitting={isSubmitting}
+            submitError={submitError}
+          />
+        )}
+        {step === 5 && (
+          <PreReviewSummary
+            formData={formData}
+            onEditStep={goToStep}
+            onSubmitForReview={() =>
+              handleFinalSubmit({ ...formData.policy, isDraft: false, termsAccepted: true })
+            }
+            onSaveDraft={() =>
+              handleFinalSubmit({ ...formData.policy, isDraft: true, termsAccepted: true })
+            }
             isSubmitting={isSubmitting}
             submitError={submitError}
           />

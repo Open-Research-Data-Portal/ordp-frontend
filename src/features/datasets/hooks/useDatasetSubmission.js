@@ -338,7 +338,8 @@ export default function useDatasetSubmission(draftId = null) {
     try {
       let did = datasetId;
       if (!did) {
-        const result = await datasetsApi.initUpload({ title: title.trim(), visibility: "restricted" });
+        const datasetTitle = (title || formData.details?.title || "Untitled dataset").trim();
+        const result = await datasetsApi.initUpload({ title: datasetTitle, visibility: "restricted" });
         did = result.dataset_id;
         setDatasetId(did);
         setUploadSessionId(result.upload_session_id);

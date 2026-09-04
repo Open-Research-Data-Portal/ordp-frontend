@@ -8,6 +8,8 @@ import {
   Building2,
   Globe,
   ArrowRight,
+  Eye,
+  Download,
   Image as ImageIcon,
 } from "lucide-react";
 import TopBar from "../layouts/TopBar";
@@ -67,55 +69,36 @@ function SectionEyebrow({ children }) {
 }
 
 function DatasetCard({ dataset, onClick }) {
-  const categoryName = dataset.metadata?.category_name || dataset.category || "UNKNOWN";
-  const desc = dataset.metadata?.description || dataset.description || "";
-  const fileCount = dataset.files ? dataset.files.length : (dataset.fileCount || 0);
-  const sizeBytes = dataset.files ? dataset.files.reduce((acc, f) => acc + f.file_size, 0) : 0;
-  const sizeStr = dataset.size || (sizeBytes > 0 ? (sizeBytes / 1024 / 1024).toFixed(1) + " MB" : "0 MB");
+  const categoryName = dataset.metadata?.category_name || dataset.category || dataset.subject_name || "Research";
   const views = dataset.view_count ?? dataset.views ?? 0;
-  const timeRef =
-    formatRelativeDate(dataset.created_at || dataset.date_published || dataset.published_at) ||
-    (dataset.updated_at && dataset.updated_at !== dataset.created_at
-      ? `Updated ${formatRelativeDate(dataset.updated_at).replace(/^Added/, "").toLowerCase()}`
-      : "");
-  // FIX: the backend field is `thumbnail_key` (see Dataset model /
-  // DatasetSerializer), not `thumbnail_url` or `thumbnailUrl` — neither
-  // of which exist on the API response. This was why images rendered
-  // fine on the /datasets page (whose DatasetCard already read
-  // thumbnail_key correctly) but never showed up here.
+  const downloads = dataset.downloads ?? dataset.download_count ?? 0;
   const thumbnailUrl = getDatasetImage(dataset);
 
   return (
-    <div onClick={onClick} role="button" tabIndex={0} className="group flex flex-col bg-white rounded-lg overflow-hidden border border-border hover:border-gold hover:shadow-md cursor-pointer transition">
-      <div className="h-40 w-full bg-gray-100 overflow-hidden">
+    <div
+      onClick={onClick}
+      role="button"
+      tabIndex={0}
+      className="group bg-white rounded-xl overflow-hidden border border-border hover:border-gold/40 hover:shadow-md cursor-pointer transition-all"
+    >
+      <div className="h-36 bg-navy/5 overflow-hidden">
         {thumbnailUrl ? (
           <img
             src={thumbnailUrl}
-            alt={dataset.title}
+            alt=""
             loading="lazy"
-            className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-300"
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-navy/10 to-gold/10">
-            <ImageIcon className="w-7 h-7 text-navy/30" />
-          </div>
+          <div className="w-full h-full bg-gradient-to-br from-navy/10 to-gold/10" />
         )}
       </div>
-      <div className="px-4 pt-4 flex items-center justify-between">
-        <span className="text-[10px] font-mono tracking-wide text-gray-400">{dataset.accession || dataset.id?.slice(0,8)}</span>
-        <span className="text-[10px] font-semibold tracking-wide text-navy bg-gold-light px-2 py-1 rounded">{categoryName.toUpperCase()}</span>
-      </div>
-      <div className="p-4 pt-3 flex-1 flex flex-col">
-        <h3 className="text-sm font-serif font-bold text-navy leading-snug">{dataset.title}</h3>
-        <p className="text-xs text-gray-500 mt-1.5 line-clamp-2 flex-1">{desc}</p>
-        {timeRef && (
-          <p className="text-[11px] font-medium text-gold-dark mb-2">{timeRef}</p>
-        )}
-        <div className="flex items-center justify-between mt-4 pt-3 border-t border-border">
-          <div className="flex items-center gap-2 text-[11px] text-gray-400">
-            <span>{views} views</span><span>·</span><span>{sizeStr}</span><span>·</span><span>{fileCount} file{fileCount === 1 ? "" : "s"}</span>
-          </div>
-          <ArrowRight className="w-3.5 h-3.5 text-gray-300 group-hover:text-gold group-hover:translate-x-0.5 transition" />
+      <div className="p-4">
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-gold">{categoryName}</span>
+        <h3 className="text-sm font-semibold text-navy mt-1 line-clamp-2 group-hover:text-gold transition-colors">{dataset.title}</h3>
+        <div className="flex items-center gap-3 mt-3 text-xs text-gray-500">
+          <span className="flex items-center gap-1"><Eye className="w-3 h-3" />{typeof views === 'number' ? views.toLocaleString() : views}</span>
+          <span className="flex items-center gap-1"><Download className="w-3 h-3" />{typeof downloads === 'number' ? downloads.toLocaleString() : downloads}</span>
         </div>
       </div>
     </div>

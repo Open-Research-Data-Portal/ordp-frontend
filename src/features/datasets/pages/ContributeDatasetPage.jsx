@@ -1,6 +1,6 @@
 import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
 import { useEffect } from "react";
+import { ArrowLeft } from "lucide-react";
 import ContributeLayout from "../../../layouts/ContributeLayout";
 import DetailsForm from "../components/DetailsForm";
 import MetadataForm from "../../metadata/components/MetadataForm";
@@ -8,15 +8,14 @@ import UploadForm from "../components/UploadForm";
 import PolicyForm from "../components/PolicyForm";
 import PreReviewSummary from "../components/PreReviewSummary";
 import { useAuth } from "../../../context/useAuth";
-import { getDashboardPath } from "../../../utils/userRoles";
+import { getDashboardPath, isProfileComplete } from "../../../utils/userRoles";
 import useDatasetSubmission from "../hooks/useDatasetSubmission";
 
-
-const STEPS = ["Details", "Metadata", "Upload", "Policy", "Preview"];
+const STEPS = ["Details", "Metadata", "Upload", "Policy", "Review"];
 
 export default function ContributeDatasetPage() {
   const navigate = useNavigate();
-const [searchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const { user, isAuthenticated, loading } = useAuth();
   const {
     step, formData,
@@ -47,6 +46,13 @@ const [searchParams] = useSearchParams();
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  // Backstop behind the route guard (ProfileCompleteRoute in AppRoutes.jsx).
+  // Covers the case where this page is reached some other way, or the
+  // user's profile state changes mid-session in another tab.
+  if (!isProfileComplete(user)) {
+    return <Navigate to="/researcher-dashboard?incomplete=1" replace />;
   }
 
   const handleFinalSubmit = async (policyData) => {
@@ -105,8 +111,12 @@ const [searchParams] = useSearchParams();
           <PreReviewSummary
             formData={formData}
             onEditStep={goToStep}
-            onSubmitForReview={() => handleFinalSubmit(formData.policy)}
-            onSaveDraft={() => handleFinalSubmit({ ...formData.policy, isDraft: true })}
+            onSubmitForReview={() =>
+              handleFinalSubmit({ ...formData.policy, isDraft: false, termsAccepted: true })
+            }
+            onSaveDraft={() =>
+              handleFinalSubmit({ ...formData.policy, isDraft: true, termsAccepted: true })
+            }
             isSubmitting={isSubmitting}
             submitError={submitError}
           />

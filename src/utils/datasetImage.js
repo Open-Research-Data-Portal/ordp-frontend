@@ -9,7 +9,14 @@ export function getDatasetImage(dataset) {
     null;
 
   if (typeof raw === "string" && raw.trim().length > 0) {
-    const trimmed = raw.trim();
+    let trimmed = raw.trim();
+    // If the URL accidentally contains a double URL or S3 bucket URL prefixing an external URL, clean it up!
+    if (trimmed.includes("backblazeb2.com") && trimmed.includes("https://")) {
+      const idx = trimmed.indexOf("https://", 8);
+      if (idx !== -1) {
+        trimmed = trimmed.substring(idx);
+      }
+    }
     if (
       trimmed.startsWith("http://") ||
       trimmed.startsWith("https://") ||

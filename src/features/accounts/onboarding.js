@@ -306,6 +306,13 @@ function interestLabelToId(label, catalog) {
     .toLowerCase();
   if (!needle) return undefined;
   for (const group of catalog || []) {
+    // Flat {id, name} items (no subcategories) — match directly by name.
+    if (!group.subcategories) {
+      if (String(group.name || "").toLowerCase() === needle) {
+        return asEntityId(group);
+      }
+      continue;
+    }
     const category = group.category || group.name;
     for (const sub of group.subcategories || []) {
       const name = interestName(sub);

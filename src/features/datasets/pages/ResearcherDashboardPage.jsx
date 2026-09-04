@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Eye,
   Download,
@@ -12,11 +12,11 @@ import {
 } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import StatCard from "../../../components/dashboard/StatCard";
-import { useAuth } from "../../../context/useAuth";
-import { getDisplayName } from "../../../utils/userRoles";
 import { ProfileSavedNotice } from "../../../components/dashboard/dashboardUi";
+import { useAuth } from "../../../context/useAuth";
+import { getDisplayName, isProfileComplete as checkProfileComplete } from "../../../utils/userRoles";
 import * as datasetsApi from "../hooks/datasetsApi";
-import * as authApi from "../../accounts/api/authApi";
+import { getDiscoverFeed } from "../../../api/search";
 import { getDatasetImage } from "../../../utils/datasetImage";
 
 function normalizeList(data) {
@@ -24,11 +24,10 @@ function normalizeList(data) {
   return data?.results || [];
 }
 
-
-
 export default function ResearcherDashboardPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [feed, setFeed] = useState([]);
   const [bookmarks, setBookmarks] = useState([]);
@@ -42,35 +41,30 @@ export default function ResearcherDashboardPage() {
   const [statsError, setStatsError] = useState(null);
   const [datasetsError, setDatasetsError] = useState(null);
 
-  const isProfileComplete = Boolean(
-    sessionStorage.getItem("ordp:profile_completed") === "true" ||
-    localStorage.getItem("ordp:profile_completed") === "true" ||
-    user?.can_upload_datasets ||
-    user?.profile?.can_upload_datasets ||
-    user?.profile_complete ||
-    user?.profile?.profile_complete ||
-    user?.is_profile_complete ||
-    (user?.full_name && user?.affiliation)
-  );
-  const [showProfileBanner, setShowProfileBanner] = useState(!isProfileComplete);
+  const [discoverFeed, setDiscoverFeed] = useState([]);
+  const [loadingDiscover, setLoadingDiscover] = useState(false);
+
+  // Single source of truth — mirrors the backend's is_profile_complete() exactly.
+  const profileComplete = checkProfileComplete(user);
+  const [showProfileBanner, setShowProfileBanner] = useState(!profileComplete);
+
+  // Came here bounced off the upload route (ProfileCompleteRoute) — show the
+  // specific "you need this to upload" message instead of the generic one.
+  const blockedFromUpload = searchParams.get("incomplete") === "1";
 
   useEffect(() => {
-    if (isProfileComplete) {
-      setShowProfileBanner(false);
+    setShowProfileBanner(!profileComplete);
+  }, [profileComplete]);
+
+  function handleNewDatasetClick() {
+    if (!profileComplete) {
+      setShowProfileBanner(true);
+      setSearchParams({ incomplete: "1" }, { replace: true });
       return;
     }
-    authApi.getCompleteProfile().then((profile) => {
-      const complete = Boolean(
-        profile?.can_upload_datasets ||
-        profile?.is_profile_complete ||
-        (profile?.full_name && profile?.affiliation)
-      );
-      if (complete) {
-        sessionStorage.setItem("ordp:profile_completed", "true");
-        setShowProfileBanner(false);
-      }
-    }).catch(() => {});
-  }, [isProfileComplete]);
+    navigate("/datasets/contribute?new=1");
+  }
+
   useEffect(() => {
     let active = true;
     async function load() {
@@ -121,10 +115,26 @@ export default function ResearcherDashboardPage() {
     return () => { active = false; };
   }, []);
 
+  // Fallback: if there are no personalized recommendations, pull the
+  // general discovery feed instead of showing a dead end.
+  useEffect(() => {
+    if (loadingFeed || feed.length > 0) return;
+    let active = true;
+    setLoadingDiscover(true);
+    getDiscoverFeed()
+      .then((items) => {
+        if (active) setDiscoverFeed(Array.isArray(items) ? items : []);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (active) setLoadingDiscover(false);
+      });
+    return () => { active = false; };
+  }, [loadingFeed, feed.length]);
+
   return (
     <DashboardShell title="Researcher Dashboard" subtitle="Manage your datasets and track engagement">
       <ProfileSavedNotice />
-      {/* Profile completion banner — reappears on every dashboard load until complete */}
       {showProfileBanner && (
         <div className="flex items-center justify-between gap-4 bg-gold-light border border-gold/30 rounded-xl px-5 py-4 mb-8 animate-fade-in-up">
           <div className="flex items-start gap-3">
@@ -132,9 +142,13 @@ export default function ResearcherDashboardPage() {
               <User className="w-4 h-4 text-gold-dark" />
             </span>
             <div>
-              <p className="text-sm font-semibold text-navy">Complete your profile</p>
+              <p className="text-sm font-semibold text-navy">
+                {blockedFromUpload ? "Complete your profile to upload datasets" : "Complete your profile"}
+              </p>
               <p className="text-xs text-gray-600 mt-0.5">
-                Enhance your research visibility. Complete your academic profile to unlock personalized recommendations.
+                {blockedFromUpload
+                  ? "You need a complete academic profile before you can upload a dataset. It only takes a minute."
+                  : "Enhance your research visibility. Complete your academic profile to unlock personalized recommendations."}
               </p>
             </div>
           </div>
@@ -167,7 +181,7 @@ export default function ResearcherDashboardPage() {
         </div>
         <button
           type="button"
-          onClick={() => navigate("/datasets/contribute?new=1")}
+          onClick={handleNewDatasetClick}
           className="flex items-center gap-2 bg-gold hover:bg-gold-dark text-white rounded-lg px-5 py-2.5 text-sm font-semibold transition-all hover:shadow-lg"
         >
           <Plus className="w-4 h-4" />
@@ -175,7 +189,6 @@ export default function ResearcherDashboardPage() {
         </button>
       </div>
 
-      {/* Stats row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
         <StatCard
           label="TOTAL DATASETS"
@@ -216,7 +229,6 @@ export default function ResearcherDashboardPage() {
         </div>
       )}
 
-      {/* Recommendations */}
       <section className="mb-8 animate-fade-in-up" style={{ animationDelay: "250ms" }}>
         <div className="flex items-end justify-between mb-4">
           <div>
@@ -233,11 +245,61 @@ export default function ResearcherDashboardPage() {
           </button>
         </div>
 
-      {loadingFeed ? (
-        <p className="text-sm text-gray-500">Loading…</p>
-      ) : feed.length === 0 ? (
-        <p className="text-sm text-gray-500">No recommendations available at the moment.</p>
-      ) : (
+        {loadingFeed ? (
+          <p className="text-sm text-gray-500">Loading…</p>
+        ) : feed.length === 0 ? (
+          loadingDiscover ? (
+            <p className="text-sm text-gray-500">Loading…</p>
+          ) : discoverFeed.length === 0 ? (
+            <div className="bg-white rounded-xl border border-border shadow-sm py-14 flex flex-col items-center text-center px-6">
+              <p className="text-sm font-semibold text-navy">No recommendations yet</p>
+              <p className="text-xs text-gray-500 mt-1 max-w-sm">
+                We don't have personalized picks for you yet — start exploring the full directory instead.
+              </p>
+              <button
+                type="button"
+                onClick={() => navigate("/datasets")}
+                className="mt-4 border border-gold text-gold hover:bg-gold hover:text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors"
+              >
+                Explore Datasets
+              </button>
+            </div>
+          ) : (
+            <>
+              <p className="text-sm text-gray-500 mb-4">No personalized recommendations yet — here's what's trending.</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                {discoverFeed.slice(0, 3).map((item) => (
+                  <div
+                    key={item.id}
+                    onClick={() => navigate(`/datasets/${item.id}`)}
+                    className="bg-white rounded-xl border border-border shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition-shadow"
+                  >
+                    <div className="h-32 bg-gray-100 overflow-hidden">
+                      {getDatasetImage(item) ? (
+                        <img src={getDatasetImage(item)} alt={item.title} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full bg-gradient-to-br from-navy/10 to-gold/10" />
+                      )}
+                    </div>
+                    <div className="p-4">
+                      <p className="text-sm font-semibold text-navy line-clamp-2">{item.title}</p>
+                      <div className="flex items-center gap-4 mt-3 text-xs text-gray-400">
+                        <span className="flex items-center gap-1">
+                          <Eye className="w-3.5 h-3.5" />
+                          {(item.view_count || 0).toLocaleString()} Views
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Download className="w-3.5 h-3.5" />
+                          {(item.download_count || 0).toLocaleString()} Downloads
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )
+        ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {feed.slice(0, 3).map((item) => (
               <div
@@ -275,7 +337,6 @@ export default function ResearcherDashboardPage() {
         )}
       </section>
 
-      {/* My Bookmarks */}
       <section className="mb-8 animate-fade-in-up" style={{ animationDelay: "300ms" }}>
         <h2 className="text-lg font-serif font-bold text-navy mb-4">My Bookmarks</h2>
 

@@ -26,7 +26,7 @@ const LANGUAGE_OPTIONS = [
   { value: "Not Applicable", label: "Not Applicable" },
 ];
 
-export default function DetailsForm({ initialValues = {}, onNext, isSubmitting, submitError }) {
+export default function DetailsForm({ initialValues = {}, onNext, onInvite, isSubmitting, submitError }) {
   const { user } = useAuth();
 
   const [title, setTitle] = useState(initialValues.title || "");
@@ -35,6 +35,9 @@ export default function DetailsForm({ initialValues = {}, onNext, isSubmitting, 
   const [languageId, setLanguageId] = useState(initialValues.languageId || initialValues.language_id || "");
   const [languagesList, setLanguagesList] = useState([]);
   const [coAuthors, setCoAuthors] = useState(initialValues.coAuthors || []);
+  const [coAuthorEmail, setCoAuthorEmail] = useState("");
+  const [inviting, setInviting] = useState(false);
+  const [inviteMsg, setInviteMsg] = useState("");
   const [relatedResources, setRelatedResources] = useState(initialValues.relatedResources || []);
   const [geographicCoverage, setGeographicCoverage] = useState(initialValues.geographicCoverage || "");
   const [temporalCoverage, setTemporalCoverage] = useState(initialValues.temporalCoverage || "");
@@ -150,6 +153,46 @@ export default function DetailsForm({ initialValues = {}, onNext, isSubmitting, 
           )}
         </select>
       </FormField>
+
+      {/* Co-Author Email & Invite Button */}
+      <FormField label="Invite Co-Author by Email (Optional)">
+        <div className="flex gap-2">
+          <input
+            type="email"
+            value={coAuthorEmail}
+            onChange={(e) => setCoAuthorEmail(e.target.value)}
+            placeholder="colleague@aastu.edu.et"
+            className={inputClass}
+          />
+          <button
+            type="button"
+            disabled={inviting || !coAuthorEmail.trim()}
+            onClick={async () => {
+              if (!coAuthorEmail.trim()) return;
+              setInviting(true);
+              setInviteMsg("");
+              try {
+                await onInvite?.({ email: coAuthorEmail.trim(), title: title.trim() || "Untitled dataset" });
+                setCoAuthors((prev) => [...prev, coAuthorEmail.trim()]);
+                setCoAuthorEmail("");
+                setInviteMsg("Co-author invitation sent successfully!");
+              } catch (err) {
+                setInviteMsg(err?.message || "Failed to invite co-author.");
+              } finally {
+                setInviting(false);
+              }
+            }}
+            className="px-5 py-3 bg-[#A67A0D] hover:bg-[#8f690b] text-white text-sm font-semibold rounded-md disabled:opacity-50 shrink-0 transition-colors"
+          >
+            {inviting ? "Inviting…" : "Invite"}
+          </button>
+        </div>
+      </FormField>
+      {inviteMsg && (
+        <p className={`text-xs mt-1 mb-4 ${inviteMsg.includes("success") ? "text-green-600 font-medium" : "text-red-600 font-medium"}`}>
+          {inviteMsg}
+        </p>
+      )}
 
       {/* Primary author is auto-filled from the logged-in user */}
       <TagInput label="Co-Author(s)" tags={coAuthors} onChange={setCoAuthors} placeholder="+ Add Co-Author" />

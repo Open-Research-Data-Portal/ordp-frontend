@@ -4,7 +4,6 @@ import { useAuth } from "../../../context/useAuth";
 import { getDisplayName } from "../../../utils/userRoles";
 import {
   Shield,
-  FileEdit,
   Clock,
   CheckCircle2,
   XCircle,
@@ -15,6 +14,15 @@ import {
   Loader2,
   BookOpen,
   X,
+  ExternalLink,
+  ChevronRight,
+  FileText,
+  TrendingUp,
+  Database,
+  Download,
+  Table,
+  Info,
+  Tag,
 } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import StatCard from "../../../components/dashboard/StatCard";
@@ -31,23 +39,38 @@ function formatDate(dateString) {
   if (!dateString) return "—";
   const d = new Date(dateString);
   if (isNaN(d.getTime())) return String(dateString);
-  const date = d.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-  const time = d.toLocaleTimeString("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  });
-  return `${date} at ${time}`;
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-// ── Tab definitions ──────────────────────────────────────────────────────
+function formatFileSize(bytes) {
+  if (!bytes || isNaN(bytes)) return "—";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function downloadPreviewCsv(file, datasetTitle) {
+  if (!file?.preview_rows || !file.preview_rows.length) return;
+  const header = file.columns && file.columns.length > 0
+    ? file.columns.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",") + "\n"
+    : "";
+  const rows = file.preview_rows
+    .map((row) => (Array.isArray(row) ? row : [row]).map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+  const blob = new Blob([header + rows], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${(datasetTitle || "dataset").replace(/[^a-z0-9_-]/gi, "_")}_preview.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 const TABS = [
   { id: "overview", label: "Overview" },
-  { id: "datasets", label: "Datasets" },
+  { id: "datasets", label: "Review Datasets" },
   { id: "content-updates", label: "Content Updates" },
   { id: "revision-requests", label: "Revision Requests" },
   { id: "access-requests", label: "Access Requests" },
@@ -76,6 +99,13 @@ export default function ReviewerDashboardPage() {
   const [actionId, setActionId] = useState(null);
   const [forbidden, setForbidden] = useState(false);
 
+  // Dataset detail drawer
+  const [selectedDataset, setSelectedDataset] = useState(null);
+  const [datasetDetail, setDatasetDetail] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [decisionModal, setDecisionModal] = useState(null); // { id, type } "rejected"|"changes_requested"
+  const [decisionReason, setDecisionReason] = useState("");
+
   // ── Data loading ─────────────────────────────────────────────────────
   useEffect(() => {
     let active = true;
@@ -84,18 +114,17 @@ export default function ReviewerDashboardPage() {
       setForbidden(false);
       try {
         const results = await Promise.allSettled([
-          datasetsApi.getReviewerOverview(),
-          datasetsApi.getReviewerMetrics(),
-          datasetsApi.getReviewerQueue(),
-          datasetsApi.getContentUpdateQueue(),
-          datasetsApi.getRevisionRequestsQueue(),
-          datasetsApi.getAccessRequestsQueue(),
-          datasetsApi.getMyReviews(),
-          datasetsApi.getAdminPendingReviews(),
+          datasetsApi.getReviewerOverview(),   // 0
+          datasetsApi.getReviewerMetrics(),    // 1
+          datasetsApi.getReviewerQueue(),      // 2 — /admin-panel/queue/
+          datasetsApi.getContentUpdateQueue(), // 3
+          datasetsApi.getRevisionRequestsQueue(), // 4
+          datasetsApi.getAccessRequestsQueue(), // 5
+          datasetsApi.getMyReviews(),          // 6 — /admin-panel/my-reviews/
+          datasetsApi.getAdminPendingReviews(), // 7 fallback
         ]);
         if (!active) return;
 
-        // Check if we got 403 on the overview (primary signal)
         if (results[0].status === "rejected" && results[0].reason?.response?.status === 403) {
           setForbidden(true);
           setLoading(false);
@@ -105,22 +134,14 @@ export default function ReviewerDashboardPage() {
         if (results[0].status === "fulfilled") setOverview(results[0].value);
         if (results[1].status === "fulfilled") setMetrics(results[1].value);
 
-        // Merge reviewer queue with admin pending reviews fallback
         const reviewerQ = results[2].status === "fulfilled" ? normalizeList(results[2].value) : [];
         const adminPending = results[7].status === "fulfilled" ? normalizeList(results[7].value) : [];
-
-        // Use reviewer queue if it has items, otherwise fallback to admin pending reviews
-        // Also merge both (deduplicate by ID) so reviewer sees all pending datasets
         const seen = new Set();
         const merged = [];
         for (const item of [...reviewerQ, ...adminPending]) {
           const id = String(item.id || item.dataset_id);
-          if (!seen.has(id)) {
-            seen.add(id);
-            merged.push(item);
-          }
+          if (!seen.has(id)) { seen.add(id); merged.push(item); }
         }
-        // Only show pending datasets
         const pendingOnly = merged.filter((d) => {
           const s = String(d.status || "").toLowerCase();
           return !s || s === "pending" || s === "submitted" || s === "in_review";
@@ -141,12 +162,8 @@ export default function ReviewerDashboardPage() {
     return () => { active = false; };
   }, [addToast]);
 
-  // ── Load guidelines on demand ────────────────────────────────────────
   const loadGuidelines = useCallback(async () => {
-    if (guidelines) {
-      setShowGuidelines(true);
-      return;
-    }
+    if (guidelines) { setShowGuidelines(true); return; }
     try {
       const data = await datasetsApi.getReviewerGuidelines();
       setGuidelines(data);
@@ -165,27 +182,110 @@ export default function ReviewerDashboardPage() {
     total: datasetQueue.length + contentUpdates.length + revisionRequests.length + accessRequests.length,
   }), [datasetQueue, contentUpdates, revisionRequests, accessRequests]);
 
-  // ── Tab switching ────────────────────────────────────────────────────
+  const reviewStats = useMemo(() => {
+    const approved = metrics?.approved ?? myReviews.filter(r => String(r.decision || r.vote || r.status || "").toLowerCase() === "approved").length;
+    const rejected = metrics?.rejected ?? myReviews.filter(r => String(r.decision || r.vote || r.status || "").toLowerCase() === "rejected").length;
+    const total = metrics?.total_reviewed ?? myReviews.length;
+    return { total, approved, rejected, pending: pendingCounts.datasets };
+  }, [metrics, myReviews, pendingCounts.datasets]);
+
   function setTab(tabId) {
-    if (tabId === "overview") {
-      setSearchParams({});
-    } else {
-      setSearchParams({ tab: tabId });
+    if (tabId === "overview") setSearchParams({});
+    else setSearchParams({ tab: tabId });
+  }
+
+  // ── View Dataset ─────────────────────────────────────────────────────
+  async function handleViewDataset(item) {
+    setSelectedDataset(item);
+    setDatasetDetail(null);
+    setDetailLoading(true);
+    try {
+      const id = item.id || item.dataset_id;
+      const raw = await datasetsApi.getDatasetDetail(id);
+      setDatasetDetail(raw);
+    } catch {
+      setDatasetDetail(null);
+    } finally {
+      setDetailLoading(false);
     }
   }
 
-  // ── Voting handlers ──────────────────────────────────────────────────
-  async function handleDatasetDecide(datasetId, decision, comment = "") {
+  function closeDetail() {
+    setSelectedDataset(null);
+    setDatasetDetail(null);
+    setDecisionModal(null);
+    setDecisionReason("");
+  }
+
+  const [downloading, setDownloading] = useState(false);
+
+  async function handleDownloadDataset(datasetId) {
+    setDownloading(true);
+    try {
+      const url = await datasetsApi.getDownloadUrl(datasetId);
+      if (url) {
+        window.open(url, "_blank");
+        addToast("Dataset download started.", "success");
+        return;
+      }
+    } catch {
+      // Fallback
+    } finally {
+      setDownloading(false);
+    }
+
+    const firstFile = datasetDetail?.files?.[0];
+    if (firstFile?.preview_rows && firstFile.preview_rows.length > 0) {
+      downloadPreviewCsv(firstFile, datasetDetail?.title || selectedDataset?.title);
+      addToast("Exported sample preview rows to CSV.", "success");
+    } else {
+      addToast("Download link is not available yet for this pending submission.", "info");
+    }
+  }
+
+  // ── Decision handlers ─────────────────────────────────────────────────
+  async function handleDecide(datasetId, decision, reason = "") {
+    if ((decision === "rejected" || decision === "changes_requested") && !reason.trim()) {
+      setDecisionModal({ id: datasetId, type: decision });
+      return;
+    }
     setActionId(datasetId);
     try {
-      await datasetsApi.moderateDataset(datasetId, { decision, comment });
-      addToast(`Dataset ${decision} successfully.`, "success");
+      await datasetsApi.moderateDataset(datasetId, { decision, reason });
+      addToast(`Dataset ${decision.replace("_", " ")} successfully.`, "success");
       setDatasetQueue((s) => s.filter((d) => String(d.id || d.dataset_id) !== String(datasetId)));
+      setMetrics((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          approved: decision === "approved" ? (prev.approved || 0) + 1 : prev.approved,
+          rejected: decision === "rejected" ? (prev.rejected || 0) + 1 : prev.rejected,
+          total_reviewed: (prev.total_reviewed || 0) + 1,
+        };
+      });
+      setMyReviews((prev) => [
+        {
+          dataset_id: datasetId,
+          dataset_title: selectedDataset?.title || "Dataset",
+          decision,
+          reason,
+          decided_at: new Date().toISOString(),
+        },
+        ...prev,
+      ]);
+      closeDetail();
     } catch (err) {
       addToast(err?.response?.data?.detail || err?.message || `Failed to ${decision} dataset.`, "error");
     } finally {
       setActionId(null);
     }
+  }
+
+  async function submitDecisionWithReason() {
+    if (!decisionModal || !decisionReason.trim()) return;
+    await handleDecide(decisionModal.id, decisionModal.type, decisionReason.trim());
+    setDecisionModal(null);
+    setDecisionReason("");
   }
 
   async function handleVote(type, itemId, vote, comment = "") {
@@ -227,22 +327,22 @@ export default function ReviewerDashboardPage() {
 
   return (
     <DashboardShell title="Reviewer Dashboard" subtitle="Manage pending approvals and moderation queues">
-      {/* Welcome banner with reviewer note */}
-      <div className="bg-gradient-to-r from-navy via-[#162744] to-navy text-white rounded-2xl p-6 mb-8 border border-white/10 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-fade-in-up">
-        <div className="flex items-start gap-4">
-          <div className="w-12 h-12 rounded-xl bg-gold/20 border border-gold/30 flex items-center justify-center shrink-0 mt-0.5">
-            <Shield className="w-6 h-6 text-gold" />
+      {/* Welcome banner (compact) */}
+      <div className="bg-gradient-to-r from-navy via-[#162744] to-navy text-white rounded-xl px-4 py-3 mb-5 border border-white/10 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fade-in-up">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-gold/20 border border-gold/30 flex items-center justify-center shrink-0">
+            <Shield className="w-4 h-4 text-gold" />
           </div>
-          <div>
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-gold/20 text-gold text-xs font-semibold uppercase tracking-wider mb-1.5">
-              Peer Reviewer
-            </div>
-            <h1 className="text-xl sm:text-2xl font-serif font-bold text-white">
-              Hi {getDisplayName(user)}, welcome to the Reviewer Dashboard!
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-base font-serif font-bold text-white leading-tight">
+              Hi {getDisplayName(user)}
             </h1>
-            <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-2xl leading-relaxed">
-              You are logged in as an authorized peer reviewer. Review pending research datasets, vote on content revisions, and moderate access requests below.
-            </p>
+            <span className="px-2 py-0.5 rounded-full bg-gold/20 text-gold text-[10px] font-semibold uppercase tracking-wider">
+              Peer Reviewer
+            </span>
+            <span className="hidden md:inline text-xs text-slate-300">
+              • Moderate datasets, examine sample rows & manage approvals
+            </span>
           </div>
         </div>
         <button
@@ -255,36 +355,39 @@ export default function ReviewerDashboardPage() {
         </button>
       </div>
 
-      {/* KPI cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <StatCard
-          label="PENDING ITEMS"
-          value={loading ? "…" : pendingCounts.total}
-          icon={Clock}
-          hint="Total items awaiting your review"
-          delay={50}
-        />
+      {/* Analytics stats bar */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard
           label="TOTAL REVIEWED"
-          value={loading ? "…" : (metrics?.total_reviewed ?? myReviews.length)}
+          value={loading ? "…" : reviewStats.total}
           icon={BarChart3}
-          delay={100}
+          hint="All-time decisions made"
+          delay={0}
+        />
+        <StatCard
+          label="PENDING"
+          value={loading ? "…" : reviewStats.pending}
+          icon={Clock}
+          hint="Datasets awaiting review"
+          delay={60}
         />
         <StatCard
           label="APPROVED"
-          value={loading ? "…" : (metrics?.approved ?? 0)}
+          value={loading ? "…" : reviewStats.approved}
           icon={CheckCircle2}
-          delay={150}
+          hint="Datasets approved"
+          delay={120}
         />
         <StatCard
           label="REJECTED"
-          value={loading ? "…" : (metrics?.rejected ?? 0)}
+          value={loading ? "…" : reviewStats.rejected}
           icon={XCircle}
-          delay={200}
+          hint="Datasets rejected"
+          delay={180}
         />
       </div>
 
-      {/* Tab bar */}
+      {/* Tab panel */}
       <div className="bg-white rounded-xl border border-border shadow-sm overflow-hidden animate-fade-in-up">
         <div className="flex gap-1 px-5 pt-4 border-b border-border overflow-x-auto">
           {TABS.map((tab) => (
@@ -319,46 +422,17 @@ export default function ReviewerDashboardPage() {
             </div>
           ) : (
             <>
-              {activeTab === "overview" && <OverviewTab overview={overview} metrics={metrics} pendingCounts={pendingCounts} setTab={setTab} />}
+              {activeTab === "overview" && <OverviewTab overview={overview} metrics={metrics} reviewStats={reviewStats} pendingCounts={pendingCounts} setTab={setTab} />}
+
               {activeTab === "datasets" && (
-                <QueueTable
+                <ReviewDatasetsTab
                   items={datasetQueue}
-                  emptyTitle="No pending datasets"
-                  emptyDesc="All caught up — no datasets awaiting review."
-                  columns={["Dataset Name", "Submitter", "Date", "Status"]}
-                  renderRow={(item) => (
-                    <>
-                      <td className="px-5 py-4">
-                        <p className="font-medium text-navy">{item.title || "Untitled"}</p>
-                        <p className="text-xs text-gray-500 font-mono">{item.id || item.dataset_id}</p>
-                      </td>
-                      <td className="px-5 py-4 text-gray-600">{item.owner?.email || item.owner_name || item.submitter || "—"}</td>
-                      <td className="px-5 py-4 text-gray-500">{formatDate(item.created_at || item.submitted_at || item.date)}</td>
-                      <td className="px-5 py-4"><StatusBadge status={String(item.status || "pending").toLowerCase()} /></td>
-                    </>
-                  )}
-                  renderActions={(item) => {
-                    const id = item.id || item.dataset_id;
-                    const busy = actionId === id;
-                    return (
-                      <div className="flex items-center justify-end gap-2">
-                        <Link
-                          to={`/datasets/${id}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2 transition-colors"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                          View
-                        </Link>
-                        <ActionBtn color="emerald" icon={CheckCircle2} label="Approve" busy={busy} onClick={() => handleDatasetDecide(id, "approved")} />
-                        <ActionBtn color="red" icon={XCircle} label="Reject" busy={busy} onClick={() => handleDatasetDecide(id, "rejected")} />
-                        <ActionBtn color="amber" icon={MessageSquare} label="Request Changes" busy={busy} onClick={() => handleDatasetDecide(id, "changes_requested")} />
-                      </div>
-                    );
-                  }}
+                  actionId={actionId}
+                  onView={handleViewDataset}
+                  onDecide={handleDecide}
                 />
               )}
+
               {activeTab === "content-updates" && (
                 <VoteTable
                   type="content-updates"
@@ -404,33 +478,433 @@ export default function ReviewerDashboardPage() {
         </div>
       </div>
 
-      {/* Guidelines modal */}
-      {showGuidelines && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowGuidelines(false)}>
-          <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 py-4 border-b border-border sticky top-0 bg-white rounded-t-2xl">
-              <h3 className="text-lg font-bold text-navy">Moderation Guidelines</h3>
-              <button type="button" onClick={() => setShowGuidelines(false)} className="text-gray-400 hover:text-gray-600">
+      {/* Dataset detail side-panel */}
+      {selectedDataset && (
+        <div className="fixed inset-0 z-50 flex bg-black/50" onClick={closeDetail}>
+          <div className="ml-auto w-full max-w-3xl h-full bg-white shadow-2xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-navy text-white">
+              <div>
+                <p className="text-xs text-slate-400 uppercase tracking-wider mb-0.5">Dataset Review</p>
+                <h3 className="text-base font-bold truncate max-w-lg">{datasetDetail?.title || selectedDataset.title || "Untitled Dataset"}</h3>
+              </div>
+              <button type="button" onClick={closeDetail} className="p-2 rounded-lg hover:bg-white/10 transition">
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="px-6 py-5 text-sm text-gray-700 space-y-3">
-              {guidelines ? (
-                <>
-                  {guidelines.guidelines && <p>{guidelines.guidelines}</p>}
-                  {guidelines.quorum_threshold && (
-                    <p className="text-xs text-gray-500">
-                      <strong>Quorum threshold:</strong> {guidelines.quorum_threshold} reviewer(s) required.
-                    </p>
-                  )}
-                  {typeof guidelines === "string" && <p>{guidelines}</p>}
-                  {!guidelines.guidelines && typeof guidelines !== "string" && (
-                    <pre className="bg-gray-50 rounded-lg p-4 text-xs overflow-auto">{JSON.stringify(guidelines, null, 2)}</pre>
-                  )}
-                </>
-              ) : (
-                <p className="text-gray-400">Loading…</p>
+
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {detailLoading ? (
+                <div className="flex flex-col items-center justify-center py-24">
+                  <Loader2 className="w-8 h-8 text-gold animate-spin mb-3" />
+                  <span className="text-sm font-medium text-gray-500">Fetching complete dataset details…</span>
+                </div>
+              ) : (() => {
+                const item = datasetDetail || selectedDataset;
+                const metadata = item.metadata || {};
+                const categoryName =
+                  metadata.category_name ||
+                  (typeof metadata.category === "object" ? metadata.category?.name : null) ||
+                  (typeof item.category === "object" ? item.category?.name : item.category) ||
+                  selectedDataset.category ||
+                  "—";
+                const languagesList = Array.isArray(item.languages) && item.languages.length > 0
+                  ? item.languages.join(", ")
+                  : (metadata.language?.name || "English");
+                const keywords = metadata.keywords || [];
+                const files = item.files || [];
+
+                return (
+                  <>
+                    {/* Top status & quick badges */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                      <div className="flex items-center gap-2.5">
+                        <StatusBadge status={item.status || "pending"} />
+                        <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase bg-slate-200 text-slate-700">
+                          {item.visibility || "restricted"}
+                        </span>
+                        <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                          v{item.version || 1}
+                        </span>
+                      </div>
+                      <span className="text-xs text-gray-400 font-mono select-all">ID: {item.id || selectedDataset.id}</span>
+                    </div>
+
+                    {/* Submitter & Thumbnail */}
+                    <div className="flex flex-col sm:flex-row gap-5 items-start">
+                      {(item.thumbnail_url || item.thumbnail_key) && (
+                        <div className="w-full sm:w-44 h-32 rounded-xl overflow-hidden border border-border bg-slate-100 shrink-0">
+                          <img
+                            src={item.thumbnail_url || item.thumbnail_key}
+                            alt={item.title}
+                            className="w-full h-full object-cover"
+                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                          />
+                        </div>
+                      )}
+                      <div className="flex-1 grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Author / Submitter</p>
+                          <p className="text-navy font-bold">{item.owner_name || selectedDataset.owner_name || item.owner?.email || "—"}</p>
+                          <p className="text-xs text-gray-500 mt-0.5">{item.owner?.email || (typeof item.owner === 'number' ? `User #${item.owner}` : "")}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Submitted On</p>
+                          <p className="text-navy font-medium">{formatDate(item.created_at || item.submitted_at)}</p>
+                          <p className="text-xs text-gray-500 mt-0.5">Terms: {item.terms_accepted ? `Accepted (${item.terms_version || "v1.0"})` : "No"}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Description */}
+                    <div>
+                      <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Description / Abstract</h4>
+                      <p className="text-sm text-gray-800 leading-relaxed bg-slate-50 border border-slate-100 rounded-xl p-4 whitespace-pre-line">
+                        {metadata.description || item.description || "No description provided."}
+                      </p>
+                    </div>
+
+                    {/* Category, Languages, Tags */}
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3.5">
+                      <h4 className="text-xs font-bold text-navy uppercase tracking-wider">Classification & Metadata</h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                        <div className="flex items-center justify-between p-2.5 bg-white rounded-lg border border-slate-100">
+                          <span className="text-gray-500 text-xs font-medium">Category</span>
+                          <span className="font-bold text-navy text-xs">{categoryName}</span>
+                        </div>
+                        <div className="flex items-center justify-between p-2.5 bg-white rounded-lg border border-slate-100">
+                          <span className="text-gray-500 text-xs font-medium">Languages</span>
+                          <span className="font-semibold text-navy text-xs">{languagesList}</span>
+                        </div>
+                        {metadata.license && (
+                          <div className="flex items-center justify-between p-2.5 bg-white rounded-lg border border-slate-100">
+                            <span className="text-gray-500 text-xs font-medium">License</span>
+                            <span className="font-semibold text-navy text-xs">{metadata.license}</span>
+                          </div>
+                        )}
+                        {metadata.doi_citation && (
+                          <div className="flex items-center justify-between p-2.5 bg-white rounded-lg border border-slate-100">
+                            <span className="text-gray-500 text-xs font-medium">DOI</span>
+                            <span className="font-mono text-navy text-xs truncate max-w-[150px]">{metadata.doi_citation}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Keywords */}
+                      {keywords.length > 0 && (
+                        <div>
+                          <p className="text-xs text-gray-500 mb-1.5 font-medium">Keywords</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {keywords.map((kw, i) => (
+                              <span key={i} className="px-2.5 py-1 rounded-md bg-white border border-slate-200 text-xs text-slate-700 font-medium">
+                                #{typeof kw === 'object' ? kw.name : kw}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Extended metadata fields if present */}
+                      {(metadata.sponsor_or_grant || metadata.collection_method || metadata.geographic_coverage || metadata.temporal_coverage || metadata.data_preprocessing) && (
+                        <div className="mt-3 pt-3 border-t border-slate-200 space-y-2 text-xs">
+                          {metadata.sponsor_or_grant && (
+                            <p><strong className="text-gray-600">Sponsor / Grant:</strong> <span className="text-navy">{metadata.sponsor_or_grant}</span></p>
+                          )}
+                          {metadata.collection_method && (
+                            <p><strong className="text-gray-600">Collection Method:</strong> <span className="text-navy">{metadata.collection_method}</span></p>
+                          )}
+                          {metadata.geographic_coverage && (
+                            <p><strong className="text-gray-600">Geographic Coverage:</strong> <span className="text-navy">{metadata.geographic_coverage}</span></p>
+                          )}
+                          {metadata.temporal_coverage && (
+                            <p><strong className="text-gray-600">Temporal Coverage:</strong> <span className="text-navy">{metadata.temporal_coverage}</span></p>
+                          )}
+                          {metadata.data_preprocessing && (
+                            <p><strong className="text-gray-600">Data Preprocessing:</strong> <span className="text-navy">{metadata.data_preprocessing}</span></p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Files & Live Data Preview */}
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-bold text-navy uppercase tracking-wider flex items-center gap-2">
+                          <Database className="w-4 h-4 text-gold" />
+                          Submitted Data Files ({files.length})
+                        </h4>
+                      </div>
+
+                      {files.length === 0 ? (
+                        <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl text-center text-xs text-gray-500">
+                          No file attachments detected in this dataset package.
+                        </div>
+                      ) : (
+                        files.map((file, fIdx) => (
+                          <div key={file.id || fIdx} className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
+                            {/* File info bar */}
+                            <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
+                              <div className="flex items-center gap-2.5">
+                                <span className="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 font-bold text-xs flex items-center justify-center uppercase">
+                                  {file.file_type || "CSV"}
+                                </span>
+                                <div>
+                                  <p className="text-xs font-bold text-navy">{file.name || `Data File #${fIdx + 1} (${(file.file_type || "csv").toUpperCase()})`}</p>
+                                  <p className="text-[11px] text-gray-500">
+                                    Size: {formatFileSize(file.file_size)} • Uploaded: {formatDate(file.uploaded_at)}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {file.preview_rows && file.preview_rows.length > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => downloadPreviewCsv(file, item.title)}
+                                    className="inline-flex items-center gap-1 text-xs font-semibold text-navy bg-white border border-slate-200 hover:bg-slate-100 rounded-lg px-2.5 py-1.5 transition"
+                                  >
+                                    <Download className="w-3.5 h-3.5 text-gold" />
+                                    Export CSV Preview
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Live Preview Table */}
+                            {file.preview_rows && file.preview_rows.length > 0 ? (
+                              <div className="p-3">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                                    <Table className="w-3.5 h-3.5 text-slate-400" />
+                                    Sample Data Preview ({file.preview_rows.length} rows)
+                                  </span>
+                                  <span className="text-[11px] text-gray-400 font-mono">
+                                    Checksum: {file.checksum ? file.checksum.slice(0, 16) + "…" : "—"}
+                                  </span>
+                                </div>
+                                <div className="overflow-x-auto border border-slate-200 rounded-lg max-h-56 overflow-y-auto">
+                                  <table className="w-full text-xs text-left">
+                                    <thead className="bg-slate-100 text-slate-700 font-semibold sticky top-0">
+                                      <tr>
+                                        <th className="px-3 py-2 border-b border-slate-200 w-12 text-center text-slate-400">#</th>
+                                        {file.columns && file.columns.length > 0
+                                          ? file.columns.map((col, cIdx) => (
+                                              <th key={cIdx} className="px-3 py-2 border-b border-slate-200">{col}</th>
+                                            ))
+                                          : (file.preview_rows[0] || []).map((_, cIdx) => (
+                                              <th key={cIdx} className="px-3 py-2 border-b border-slate-200">Col {cIdx + 1}</th>
+                                            ))}
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                      {file.preview_rows.map((row, rIdx) => (
+                                        <tr key={rIdx} className={rIdx % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
+                                          <td className="px-3 py-1.5 text-center text-slate-400 font-mono text-[11px]">{rIdx + 1}</td>
+                                          {(Array.isArray(row) ? row : [row]).map((val, vIdx) => (
+                                            <td key={vIdx} className="px-3 py-1.5 text-slate-700 font-mono text-[11px] whitespace-nowrap">
+                                              {String(val ?? "")}
+                                            </td>
+                                          ))}
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="p-3 text-xs text-gray-400 text-center">
+                                No preview rows generated for this file.
+                              </div>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    {/* Open full page link */}
+                    <div className="pt-2">
+                      <Link
+                        to={`/datasets/${item.id || selectedDataset.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 text-xs font-semibold text-navy hover:text-gold transition"
+                      >
+                        <ExternalLink className="w-4 h-4 text-gold" />
+                        Open complete dataset page in new tab &rarr;
+                      </Link>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+
+            {/* Action bar */}
+            <div className="px-6 py-4 border-t border-border bg-gray-50 flex flex-wrap items-center justify-between gap-3">
+              {(() => {
+                const id = selectedDataset.id || selectedDataset.dataset_id;
+                const busy = actionId === id;
+                return (
+                  <>
+                    <button
+                      type="button"
+                      disabled={downloading}
+                      onClick={() => handleDownloadDataset(id)}
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-100 rounded-xl px-4 py-2.5 transition shadow-sm"
+                    >
+                      {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4 text-gold" />}
+                      Download Dataset
+                    </button>
+
+                    <div className="flex items-center gap-2.5">
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => handleDecide(id, "changes_requested", "")}
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 bg-amber-100 hover:bg-amber-200 rounded-xl px-4 py-2.5 disabled:opacity-50 transition"
+                      >
+                        <MessageSquare className="w-4 h-4" />
+                        Request Changes
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => handleDecide(id, "rejected", "")}
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-xl px-4 py-2.5 disabled:opacity-50 transition"
+                      >
+                        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+                        Reject
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => handleDecide(id, "approved", "Approved by reviewer.")}
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl px-4 py-2.5 disabled:opacity-50 transition shadow-sm"
+                      >
+                        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                        Approve Dataset
+                      </button>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Decision reason modal (for reject / changes_requested) */}
+      {decisionModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50" onClick={() => { setDecisionModal(null); setDecisionReason(""); }}>
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-base font-bold text-navy mb-1">
+              {decisionModal.type === "rejected" ? "Reject Dataset" : "Request Changes"}
+            </h3>
+            <p className="text-sm text-gray-500 mb-4">Please provide a reason. This will be sent to the submitter.</p>
+            <textarea
+              className="w-full rounded-xl border border-slate-200 text-sm p-3 resize-none focus:outline-none focus:ring-2 focus:ring-gold"
+              rows={4}
+              placeholder="Enter reason…"
+              value={decisionReason}
+              onChange={(e) => setDecisionReason(e.target.value)}
+            />
+            <div className="flex items-center justify-end gap-3 mt-4">
+              <button type="button" onClick={() => { setDecisionModal(null); setDecisionReason(""); }} className="text-sm font-medium text-gray-500 hover:text-navy px-3 py-2">
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!decisionReason.trim() || actionId !== null}
+                onClick={submitDecisionWithReason}
+                className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-navy hover:bg-navy/90 disabled:opacity-50 rounded-xl px-4 py-2.5 transition"
+              >
+                {decisionModal.type === "rejected" ? <XCircle className="w-4 h-4" /> : <MessageSquare className="w-4 h-4" />}
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Guidelines modal */}
+      {showGuidelines && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowGuidelines(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-navy text-white">
+              <div className="flex items-center gap-2.5">
+                <BookOpen className="w-5 h-5 text-gold" />
+                <h3 className="text-base font-bold">ORDP Dataset Moderation Guidelines</h3>
+              </div>
+              <button type="button" onClick={() => setShowGuidelines(false)} className="p-1 rounded-lg text-slate-300 hover:text-white hover:bg-white/10 transition">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto text-sm text-gray-700 space-y-4">
+              {guidelines?.quorum_threshold && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 text-xs text-amber-900 flex items-center gap-2">
+                  <Info className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span><strong>Quorum Requirement:</strong> At least {guidelines.quorum_threshold} reviewer decision(s) are required before publication.</span>
+                </div>
               )}
+              {guidelines?.guidelines && (
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs text-slate-700">
+                  <p className="font-semibold text-navy mb-1">Institutional Policy:</p>
+                  <p className="leading-relaxed">{guidelines.guidelines}</p>
+                </div>
+              )}
+
+              {/* Comprehensive reviewer criteria */}
+              <div className="space-y-3">
+                <div className="border border-border rounded-xl p-3.5 bg-white">
+                  <h4 className="font-bold text-navy text-xs uppercase tracking-wider flex items-center gap-2 mb-1">
+                    <span className="w-5 h-5 rounded-full bg-blue-50 text-blue-700 text-xs font-bold flex items-center justify-center">1</span>
+                    Metadata & Classification Verification
+                  </h4>
+                  <p className="text-xs text-gray-600 leading-relaxed">
+                    Verify that the dataset title, description, category name, language, and keywords are accurate and clear. Category must be properly assigned from institutional categories (e.g. Agriculture, Computer Science, Health).
+                  </p>
+                </div>
+
+                <div className="border border-border rounded-xl p-3.5 bg-white">
+                  <h4 className="font-bold text-navy text-xs uppercase tracking-wider flex items-center gap-2 mb-1">
+                    <span className="w-5 h-5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold flex items-center justify-center">2</span>
+                    Data Integrity & File Usability
+                  </h4>
+                  <p className="text-xs text-gray-600 leading-relaxed">
+                    Examine submitted data files. Datasets must be formatted in standard non-proprietary formats (CSV, JSON, NetCDF, GeoTIFF, etc.) and be well-structured with valid checksums and sample rows.
+                  </p>
+                </div>
+
+                <div className="border border-border rounded-xl p-3.5 bg-white">
+                  <h4 className="font-bold text-navy text-xs uppercase tracking-wider flex items-center gap-2 mb-1">
+                    <span className="w-5 h-5 rounded-full bg-amber-50 text-amber-700 text-xs font-bold flex items-center justify-center">3</span>
+                    Ethical Compliance & Privacy (Anonymization)
+                  </h4>
+                  <p className="text-xs text-gray-600 leading-relaxed">
+                    Ensure the dataset does NOT expose Personally Identifiable Information (PII), confidential research participant data, or unauthorized institutional secrets without explicit consent and ethical clearance.
+                  </p>
+                </div>
+
+                <div className="border border-border rounded-xl p-3.5 bg-white">
+                  <h4 className="font-bold text-navy text-xs uppercase tracking-wider flex items-center gap-2 mb-1">
+                    <span className="w-5 h-5 rounded-full bg-purple-50 text-purple-700 text-xs font-bold flex items-center justify-center">4</span>
+                    Decision Actions
+                  </h4>
+                  <ul className="text-xs text-gray-600 space-y-1 list-disc list-inside">
+                    <li><strong className="text-emerald-700">Approve:</strong> Dataset meets all documentation, structural integrity, and ethics requirements.</li>
+                    <li><strong className="text-amber-700">Request Changes:</strong> Minor metadata gaps, missing column descriptors, or incomplete description.</li>
+                    <li><strong className="text-red-700">Reject:</strong> Irreparable flaws, severe privacy violations, or plagiarism.</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+            <div className="px-6 py-3 border-t border-border bg-gray-50 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowGuidelines(false)}
+                className="px-4 py-2 bg-navy text-white rounded-xl text-xs font-semibold hover:bg-navy/90 transition"
+              >
+                I Understand
+              </button>
             </div>
           </div>
         </div>
@@ -440,7 +914,7 @@ export default function ReviewerDashboardPage() {
 }
 
 // ── Overview tab ────────────────────────────────────────────────────────
-function OverviewTab({ overview, metrics, pendingCounts, setTab }) {
+function OverviewTab({ overview, metrics, reviewStats, pendingCounts, setTab }) {
   const sections = [
     { label: "Pending Datasets", count: pendingCounts.datasets, tab: "datasets", color: "bg-red-50 text-red-600 border-red-100" },
     { label: "Content Updates", count: pendingCounts.contentUpdates, tab: "content-updates", color: "bg-amber-50 text-amber-600 border-amber-100" },
@@ -450,9 +924,9 @@ function OverviewTab({ overview, metrics, pendingCounts, setTab }) {
 
   return (
     <div className="space-y-6">
-      {/* Pending summary cards */}
+      {/* Pending quick-nav cards */}
       <div>
-        <h3 className="text-sm font-semibold text-navy mb-3">Pending Items</h3>
+        <h3 className="text-sm font-semibold text-navy mb-3">Pending Items by Category</h3>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {sections.map((s) => (
             <button
@@ -468,69 +942,124 @@ function OverviewTab({ overview, metrics, pendingCounts, setTab }) {
         </div>
       </div>
 
-      {/* Performance metrics */}
-      {metrics && (
-        <div>
-          <h3 className="text-sm font-semibold text-navy mb-3">Your Performance</h3>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <MetricCard label="Total Reviewed" value={metrics.total_reviewed ?? 0} />
-            <MetricCard label="Approved" value={metrics.approved ?? 0} />
-            <MetricCard label="Rejected" value={metrics.rejected ?? 0} />
-            <MetricCard label="Last 30 Days" value={metrics.reviews_last_30_days ?? metrics.last_30_days ?? 0} />
-          </div>
+      {/* Personal performance */}
+      <div>
+        <h3 className="text-sm font-semibold text-navy mb-3 flex items-center gap-2">
+          <TrendingUp className="w-4 h-4 text-gold" /> Your Review Stats
+        </h3>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <MetricCard label="Total Reviewed" value={reviewStats.total} color="text-navy" />
+          <MetricCard label="Approved" value={reviewStats.approved} color="text-emerald-600" />
+          <MetricCard label="Rejected" value={reviewStats.rejected} color="text-red-600" />
+          <MetricCard label="Last 30 Days" value={metrics?.reviews_last_30_days ?? metrics?.last_30_days ?? "—"} color="text-gold" />
         </div>
-      )}
+      </div>
 
-      {/* Overview data from backend */}
-      {overview && overview.pending_datasets != null && (
-        <div>
-          <h3 className="text-sm font-semibold text-navy mb-3">Backend Overview</h3>
-          <pre className="bg-gray-50 rounded-lg p-4 text-xs text-gray-600 overflow-auto">{JSON.stringify(overview, null, 2)}</pre>
-        </div>
+      {/* Quick CTA to datasets */}
+      {pendingCounts.datasets > 0 && (
+        <button
+          type="button"
+          onClick={() => setTab("datasets")}
+          className="w-full flex items-center justify-between bg-navy text-white rounded-xl px-5 py-4 hover:bg-navy/90 transition"
+        >
+          <span className="text-sm font-semibold">
+            {pendingCounts.datasets} dataset{pendingCounts.datasets !== 1 ? "s" : ""} awaiting your review
+          </span>
+          <ChevronRight className="w-5 h-5" />
+        </button>
       )}
     </div>
   );
 }
 
-function MetricCard({ label, value }) {
+function MetricCard({ label, value, color = "text-navy" }) {
   return (
     <div className="bg-gray-50 rounded-xl border border-gray-100 px-4 py-3">
-      <p className="text-xl font-bold text-navy">{value}</p>
+      <p className={`text-xl font-bold ${color}`}>{value}</p>
       <p className="text-xs text-gray-500 mt-0.5">{label}</p>
     </div>
   );
 }
 
-// ── Generic queue table ─────────────────────────────────────────────────
-function QueueTable({ items, emptyTitle, emptyDesc, columns, renderRow, renderActions }) {
+// ── Review Datasets tab ───────────────────────────────────────────────────
+function ReviewDatasetsTab({ items, actionId, onView, onDecide }) {
   if (items.length === 0) {
-    return <EmptyState title={emptyTitle} description={emptyDesc} />;
+    return <EmptyState title="No pending datasets" description="All caught up — no datasets awaiting review." />;
   }
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead className="text-xs uppercase text-gray-500 bg-gray-50">
           <tr>
-            {columns.map((col) => (
-              <th key={col} className="px-5 py-3 text-left font-semibold">{col}</th>
-            ))}
+            <th className="px-5 py-3 text-left font-semibold">Dataset</th>
+            <th className="px-5 py-3 text-left font-semibold">Submitter</th>
+            <th className="px-5 py-3 text-left font-semibold">Date</th>
+            <th className="px-5 py-3 text-left font-semibold">Status</th>
             <th className="px-5 py-3 text-right font-semibold">Actions</th>
           </tr>
         </thead>
         <tbody>
-          {items.map((item) => (
-            <tr key={item.id || item.dataset_id || item.request_id || item.update_id} className="border-t border-gray-100 hover:bg-bg/50">
-              {renderRow(item)}
-              <td className="px-5 py-4 text-right">{renderActions(item)}</td>
-            </tr>
-          ))}
+          {items.map((item) => {
+            const id = item.id || item.dataset_id;
+            const busy = actionId === id;
+            return (
+              <tr key={id} className="border-t border-gray-100 hover:bg-bg/50">
+                <td className="px-5 py-4">
+                  <p className="font-medium text-navy">{item.title || "Untitled"}</p>
+                  <p className="text-xs text-gray-400 font-mono">{id}</p>
+                </td>
+                <td className="px-5 py-4 text-gray-600">{item.owner?.email || item.owner_name || item.submitter || "—"}</td>
+                <td className="px-5 py-4 text-gray-500">{formatDate(item.created_at || item.submitted_at)}</td>
+                <td className="px-5 py-4"><StatusBadge status={String(item.status || "pending").toLowerCase()} /></td>
+                <td className="px-5 py-4">
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onView(item)}
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-navy bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2 transition-colors"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      View Dataset
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => onDecide(id, "approved", "Approved by reviewer.")}
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg px-3 py-2 disabled:opacity-50 transition-colors"
+                    >
+                      {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                      Approve
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => onDecide(id, "rejected", "")}
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg px-3 py-2 disabled:opacity-50 transition-colors"
+                    >
+                      {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}
+                      Reject
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => onDecide(id, "changes_requested", "")}
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 bg-amber-100 hover:bg-amber-200 rounded-lg px-3 py-2 disabled:opacity-50 transition-colors"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      Changes
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
   );
 }
 
-// ── Generic vote table for content-updates, revision-requests, access-requests, deletion-requests
+// ── Generic vote table ──────────────────────────────────────────────────
 function VoteTable({ type, items, emptyTitle, emptyDesc, idKey, titleKey, descKey, actionId: currentActionId, onVote }) {
   if (items.length === 0) {
     return <EmptyState title={emptyTitle} description={emptyDesc} />;
@@ -587,7 +1116,7 @@ function MyReviewsTab({ reviews }) {
           <tr>
             <th className="px-5 py-3 text-left font-semibold">Dataset</th>
             <th className="px-5 py-3 text-left font-semibold">Decision</th>
-            <th className="px-5 py-3 text-left font-semibold">Comment</th>
+            <th className="px-5 py-3 text-left font-semibold">Reason / Comment</th>
             <th className="px-5 py-3 text-left font-semibold">Date</th>
           </tr>
         </thead>
@@ -596,7 +1125,7 @@ function MyReviewsTab({ reviews }) {
             <tr key={review.id || review.review_id} className="border-t border-gray-100 hover:bg-bg/50">
               <td className="px-5 py-3 font-medium text-navy">{review.dataset_title || review.title || "—"}</td>
               <td className="px-5 py-3"><StatusBadge status={review.decision || review.vote || review.status || "—"} /></td>
-              <td className="px-5 py-3 text-gray-500 max-w-[200px] truncate">{review.comment || review.feedback || "—"}</td>
+              <td className="px-5 py-3 text-gray-500 max-w-[200px] truncate">{review.reason || review.comment || review.feedback || "—"}</td>
               <td className="px-5 py-3 text-gray-500">{formatDate(review.decided_at || review.created_at || review.reviewed_at)}</td>
             </tr>
           ))}
@@ -606,20 +1135,19 @@ function MyReviewsTab({ reviews }) {
   );
 }
 
-// ── Action button component ─────────────────────────────────────────────
+// ── Action button ───────────────────────────────────────────────────────
 function ActionBtn({ color, icon: Icon, label, busy, onClick }) {
   const colorMap = {
     emerald: "bg-emerald-600 hover:bg-emerald-700",
     red: "bg-red-600 hover:bg-red-700",
     amber: "bg-amber-600 hover:bg-amber-700",
-    blue: "bg-blue-600 hover:bg-blue-700",
   };
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={busy}
-      className={`inline-flex items-center gap-1.5 text-xs font-semibold text-white rounded-lg px-3 py-2 disabled:opacity-50 transition-colors ${colorMap[color] || colorMap.blue}`}
+      className={`inline-flex items-center gap-1.5 text-xs font-semibold text-white rounded-lg px-3 py-2 disabled:opacity-50 transition-colors ${colorMap[color] || colorMap.emerald}`}
     >
       {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Icon className="w-3.5 h-3.5" />}
       {label}

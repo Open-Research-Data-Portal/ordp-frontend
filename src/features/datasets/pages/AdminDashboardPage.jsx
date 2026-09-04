@@ -23,15 +23,17 @@ function normalizeList(data) {
 const CHART_COLORS = ["#B8860B", "#0B1526", "#ef4444", "#10b981", "#6366f1", "#f59e0b"];
 
 const ROLE_OPTIONS = [
-  { value: "user", label: "Normal User" },
-  { value: "checker", label: "Reviewer (Checker)" },
+  { value: "public", label: "Normal User (Public)" },
+  { value: "reviewer", label: "Reviewer" },
+  { value: "admin", label: "Admin" },
 ];
 
 const roleBadge = {
-  user: "bg-gray-100 text-gray-700 border-gray-200",
-  checker: "bg-violet-50 text-violet-700 border-violet-200",
+  public: "bg-gray-100 text-gray-700 border-gray-200",
+  reviewer: "bg-violet-50 text-violet-700 border-violet-200",
   admin: "bg-gold-light text-gold border-gold/30",
   researcher: "bg-blue-50 text-blue-700 border-blue-200",
+  user: "bg-gray-100 text-gray-700 border-gray-200",
 };
 
 export default function AdminDashboardPage() {
@@ -51,7 +53,7 @@ export default function AdminDashboardPage() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newUserFullName, setNewUserFullName] = useState("");
-  const [newUserRole, setNewUserRole] = useState("user");
+  const [newUserRole, setNewUserRole] = useState("public");
   const [creatingUser, setCreatingUser] = useState(false);
   const [createError, setCreateError] = useState("");
 
@@ -168,10 +170,17 @@ export default function AdminDashboardPage() {
       ]);
       setNewUserEmail("");
       setNewUserFullName("");
-      setNewUserRole("user");
+      setNewUserRole("public");
       setShowCreateForm(false);
     } catch (err) {
-      setCreateError(err?.message || "Failed to create user.");
+      const detail =
+        err?.response?.data?.detail ||
+        err?.response?.data?.email?.[0] ||
+        err?.response?.data?.full_name?.[0] ||
+        err?.response?.data?.role?.[0] ||
+        err?.message ||
+        "Failed to create user.";
+      setCreateError(detail);
     } finally {
       setCreatingUser(false);
     }
@@ -270,7 +279,7 @@ export default function AdminDashboardPage() {
                     value={newUserEmail}
                     onChange={(e) => setNewUserEmail(e.target.value)}
                     className="w-full rounded-lg border border-slate-200 text-sm py-2 px-3"
-                    placeholder="user@example.com"
+                    placeholder="name@aastu.edu.et"
                   />
                 </div>
                 <div>
@@ -472,66 +481,63 @@ export default function AdminDashboardPage() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-            {/* Analytics charts */}
+            {/* User Role Distribution bar chart */}
             <section className="lg:col-span-2 bg-white rounded-xl border border-border shadow-sm p-6 animate-fade-in-up" style={{ animationDelay: "250ms" }}>
-              <SectionHeader title="Review Decisions" subtitle="Approved vs rejected" />
+              <SectionHeader title="User Role Distribution" subtitle="Number of users per role" />
               {loading ? (
-                <div className="h-56 flex items-center justify-center text-sm text-gray-500">Loading charts…</div>
-              ) : pieData.length === 0 ? (
-                <EmptyState title="No review data yet" description="Decisions will appear here once reviews are processed." />
-              ) : (
-                <div className="h-56">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
-                        {pieData.map((entry, idx) => (
-                          <Cell key={entry.name} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                      <Legend />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
-              {!loading && barData.length > 0 && (
-                <div className="mt-6 pt-6 border-t border-border">
-                  <SectionHeader title="Activity Trend" subtitle="Last 14 entries" />
+                <div className="h-56 flex items-center justify-center text-sm text-gray-500">Loading chart…</div>
+              ) : (() => {
+                const roleMap = { public: 0, reviewer: 0, admin: 0, researcher: 0 };
+                users.forEach((u) => {
+                  const roles = Array.isArray(u.roles) ? u.roles : (u.role ? [u.role] : ["public"]);
+                  roles.forEach((r) => { if (r in roleMap) roleMap[r]++; else roleMap["public"]++; });
+                });
+                const chartData = [
+                  { name: "Public", count: roleMap.public, fill: "#94a3b8" },
+                  { name: "Researcher", count: roleMap.researcher, fill: "#3b82f6" },
+                  { name: "Reviewer", count: roleMap.reviewer, fill: "#7c3aed" },
+                  { name: "Admin", count: roleMap.admin, fill: "#B8860B" },
+                ].filter(d => d.count > 0);
+                return chartData.length === 0 ? (
+                  <EmptyState title="No user data" description="User role data will appear here." />
+                ) : (
                   <div className="h-56">
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={barData}>
-                        <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                        <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
+                      <BarChart data={chartData} layout="vertical" margin={{ left: 20, right: 20 }}>
+                        <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12 }} />
+                        <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={80} />
                         <Tooltip />
-                        <Bar dataKey="count" fill="#B8860B" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="count" radius={[0, 4, 4, 0]}>
+                          {chartData.map((entry) => (
+                            <Cell key={entry.name} fill={entry.fill} />
+                          ))}
+                        </Bar>
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </section>
 
-            {/* Deletion queue */}
-            <section className="bg-red-50 rounded-xl border border-red-200 p-5 animate-fade-in-up" style={{ animationDelay: "300ms" }}>
-              <div className="flex items-center gap-2 mb-3">
-                <Trash2 className="w-5 h-5 text-red-600" />
-                <h2 className="text-base font-semibold text-red-800">Deletion Queue</h2>
+            {/* Review pipeline summary */}
+            <section className="bg-white rounded-xl border border-border shadow-sm p-5 animate-fade-in-up" style={{ animationDelay: "300ms" }}>
+              <div className="flex items-center gap-2 mb-4">
+                <ClipboardList className="w-5 h-5 text-gold" />
+                <h2 className="text-base font-semibold text-navy">Review Pipeline</h2>
               </div>
-              <ul className="space-y-2 mb-4">
-                {deletions.length === 0 ? (
-                  <li className="text-sm text-red-900">No pending deletions.</li>
-                ) : (
-                  deletions.map((d) => (
-                    <li key={d.id} className="text-sm text-red-900">
-                      <span className="font-mono font-semibold">{d.code || d.dataset_id}</span>
-                      <span className="text-red-700/70 ml-2 text-xs">{d.reason}</span>
-                    </li>
-                  ))
-                )}
+              <ul className="space-y-3">
+                {[
+                  { label: "Pending", value: loading ? "…" : reviewStats.pending, color: "text-amber-600" },
+                  { label: "Approved", value: loading ? "…" : reviewStats.approved, color: "text-emerald-600" },
+                  { label: "Rejected", value: loading ? "…" : reviewStats.rejected, color: "text-red-600" },
+                  { label: "Approval Rate", value: loading ? "…" : `${reviewStats.approvedPct}%`, color: "text-navy" },
+                ].map(({ label, value, color }) => (
+                  <li key={label} className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600">{label}</span>
+                    <span className={`font-bold ${color}`}>{value}</span>
+                  </li>
+                ))}
               </ul>
-              <button type="button" className="w-full bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-lg py-2.5 transition-colors">
-                Execute Deletions
-              </button>
             </section>
           </div>
 

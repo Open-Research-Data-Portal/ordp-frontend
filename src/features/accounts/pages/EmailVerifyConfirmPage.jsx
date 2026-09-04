@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Loader2, CheckCircle2 } from "lucide-react";
 import AuthSplitCard from "../components/AuthSplitCard";
 import * as authApi from "../api/authApi";
@@ -136,13 +136,27 @@ export default function EmailVerifyConfirmPage() {
 
       {status === "error" && (
         <>
-          <h1 className="text-2xl font-bold text-[#0B1526] mb-2">Verification failed</h1>
+          <h1 className="text-2xl font-bold text-[#0B1526] mb-2">Verification link error</h1>
           <p className="text-sm text-red-600 max-w-sm mb-2">{error}</p>
           {errorCode && (
             <p className="text-xs text-slate-400 mb-4">Error code: {errorCode}</p>
           )}
-          <a href="/register" className="text-sm font-semibold text-[#B8860B] hover:underline">
-            Return to registration
+
+          {token && (
+            <div className="mt-3 mb-5 p-3.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 text-left max-w-sm">
+              <p className="font-semibold text-[#0B1526] mb-1">Invited reviewer or staff account?</p>
+              <p className="mb-2 text-slate-500">If an administrator created your account, set your password below to activate and sign in:</p>
+              <Link
+                to={`/reset-password?token=${encodeURIComponent(token)}`}
+                className="inline-flex items-center gap-1 font-semibold text-[#B8860B] hover:underline"
+              >
+                Create / Set password &rarr;
+              </Link>
+            </div>
+          )}
+
+          <a href="/login" className="text-sm font-semibold text-[#B8860B] hover:underline">
+            Return to login
           </a>
         </>
       )}

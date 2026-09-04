@@ -183,12 +183,15 @@ export async function requestPasswordReset(email) {
  */
 export async function confirmPasswordReset({ uid, token, new_password, confirm_password }) {
   try {
-    const { data } = await client.post(`${BASE}/password-reset/confirm/`, {
-      uid,
+    const payload = {
       token,
       new_password,
       confirm_password,
-    });
+    };
+    if (uid) {
+      payload.uid = uid;
+    }
+    const { data } = await client.post(`${BASE}/password-reset/confirm/`, payload);
     return data;
   } catch (err) {
     throw normalizeError(err, { allowDjangoFieldErrors: true });

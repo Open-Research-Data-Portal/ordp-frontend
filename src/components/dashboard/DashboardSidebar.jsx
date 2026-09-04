@@ -47,13 +47,11 @@ const ROLE_CONFIG = {
   reviewer: {
     title: "ORDP",
     subtitle: "Academic Intelligence",
-    cta: { label: "Submit Dataset", to: "/datasets/contribute", icon: Plus },
     nav: [
       { label: "Dashboard", icon: LayoutGrid, to: "/reviewer-dashboard" },
-      { label: "Research Data", icon: Database, to: "/reviewer-dashboard" },
-      { label: "Analytics", icon: BarChart3, to: "/analytics" },
-      { label: "Publications", icon: FileText, to: "/datasets" },
-      { label: "Team", icon: Users, to: "/profile" },
+      { label: "Datasets", icon: Database, to: "/datasets" },
+      { label: "Review Datasets", icon: ClipboardCheck, to: "/reviewer-dashboard?tab=datasets" },
+      { label: "Settings", icon: Settings, to: "/profile" },
     ],
   },
   admin: {
@@ -65,7 +63,6 @@ const ROLE_CONFIG = {
       { label: "Datasets", icon: Database, to: "/admin-dashboard?tab=datasets" },
       { label: "Audit Log", icon: ScrollText, to: "/admin/audit-log" },
       { label: "Users", icon: Users, to: "/admin-dashboard?tab=users" },
-      { label: "Deletion Requests", icon: Trash2, to: "/admin-dashboard?tab=deletions" },
     ],
   },
 };

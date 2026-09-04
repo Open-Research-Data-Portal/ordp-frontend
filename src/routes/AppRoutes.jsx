@@ -68,6 +68,8 @@ export default function AppRoutes() {
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/check-email" element={<CheckEmailPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/set-password" element={<ResetPasswordPage />} />
+      <Route path="/activate" element={<ResetPasswordPage />} />
 
       {/* Public dataset browsing */}
       <Route path="/datasets" element={<BrowseDatasetsPage />} />

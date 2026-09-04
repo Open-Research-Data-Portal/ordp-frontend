@@ -127,6 +127,7 @@ export async function getDatasetDetail(datasetId) {
   const { data } = await client.get(`${DATASETS_BASE}/${datasetId}/`);
   return data;
 }
+export const getDatasetById = getDatasetDetail;
 
 export async function updateDataset(datasetId, payload) {
   const { data } = await client.patch(`${DATASETS_BASE}/${datasetId}/update/`, payload);
@@ -186,7 +187,11 @@ export async function decideDataset(datasetId, decision, reason) {
 }
 
 export async function moderateDataset(datasetId, payload) {
-  const { data } = await client.post(`/admin-panel/${datasetId}/decide/`, payload);
+  const body = {
+    decision: payload.decision,
+    reason: payload.reason || payload.comment || "",
+  };
+  const { data } = await client.post(`/admin-panel/${datasetId}/decide/`, body);
   return data;
 }
 
@@ -266,8 +271,16 @@ export async function createAdminUser(payload) {
 }
 
 export async function deleteAdminUser(userId) {
-  const { data } = await client.delete(`/admin-panel/users/${userId}/`);
-  return data;
+  try {
+    const { data } = await client.delete(`/admin-panel/users/${userId}/`);
+    return data;
+  } catch (err) {
+    if (err?.response?.status === 404 || err?.response?.status === 405) {
+      const { data } = await client.post(`/admin-panel/users/${userId}/deactivate/`);
+      return data;
+    }
+    throw err;
+  }
 }
 
 export async function getAdminQueue() {
@@ -303,5 +316,10 @@ export async function addContributor(datasetId, payload) {
 export async function listContributors(datasetId) {
   const { data } = await client.get(`${DATASETS_BASE}/${datasetId}/contributors/`);
   return data;
+}
+
+export async function getDownloadUrl(datasetId) {
+  const { data } = await client.get(`/sharing/${datasetId}/download/`);
+  return data?.download_url;
 }
 

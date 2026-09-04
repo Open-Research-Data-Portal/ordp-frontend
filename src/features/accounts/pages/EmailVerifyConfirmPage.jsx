@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { Loader2, CheckCircle2 } from "lucide-react";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Loader2, CheckCircle2, ShieldCheck, ArrowRight } from "lucide-react";
 import AuthSplitCard from "../components/AuthSplitCard";
 import * as authApi from "../api/authApi";
 import { useAuth } from "../../../context/useAuth";
@@ -11,14 +11,16 @@ import {
 
 export default function EmailVerifyConfirmPage() {
   const navigate = useNavigate();
+  const params = useParams();
   const { establishSession } = useAuth();
   const [searchParams] = useSearchParams();
 
-  // The backend sends the verification link as
-  //   {FRONTEND_URL}/verify-email?token=<uuid>
-  // (confirmed from app/accounts/views.py RegisterView), so the token is
-  // always in the `token` query param.
-  const token = searchParams.get("token") || "";
+  const token =
+    searchParams.get("token") ||
+    searchParams.get("key") ||
+    searchParams.get("t") ||
+    params.token ||
+    "";
 
   const [status, setStatus] = useState(() => (token ? "verifying" : "error")); // verifying | success | error
   const [successMessage, setSuccessMessage] = useState("");
@@ -26,7 +28,7 @@ export default function EmailVerifyConfirmPage() {
   const [error, setError] = useState(() =>
     token
       ? null
-      : "Invalid verification link. Please register again or request a new link."
+      : "Invalid verification link. Please check your email or request a new link."
   );
 
   useEffect(() => {
@@ -41,14 +43,12 @@ export default function EmailVerifyConfirmPage() {
 
         const message = data?.detail || "Email verified successfully.";
 
-        // Backend contract: a successful verification returns access/refresh
-        // JWTs (auto-login). If they're absent, keep the simple flow: tell
-        // the user to sign in — the login page's completion check handles
-        // the rest.
+        // If backend does not return tokens (e.g. newly invited reviewer needing password setup),
+        // direct them to set a password rather than an unauthenticated login page.
         if (!data?.access || !data?.refresh) {
-          navigate("/login", {
+          navigate(`/reset-password?token=${encodeURIComponent(token)}`, {
             replace: true,
-            state: { message: `${message} Please log in to continue.` },
+            state: { message: `${message} Please set your password to complete account activation.` },
           });
           return;
         }
@@ -60,8 +60,6 @@ export default function EmailVerifyConfirmPage() {
           user: data.user || null,
         });
 
-        // Route to the optional interests onboarding or the dashboard — the
-        // same decision the login page makes.
         let completed = Boolean(profile) && authApi.isProfileCompleted(profile);
         if (!completed) {
           try {
@@ -73,8 +71,7 @@ export default function EmailVerifyConfirmPage() {
               backendCompleted: authApi.isProfileCompleted(completion),
             });
           } catch {
-            // Fall back to onboarding; it re-checks completion before
-            // requiring any input and redirects to the dashboard if done.
+            // Fall back to onboarding
           }
         }
 
@@ -91,12 +88,8 @@ export default function EmailVerifyConfirmPage() {
       } catch (err) {
         if (cancelled) return;
         setStatus("error");
-        // Show the backend's own error.message verbatim so the distinct failure
-        // modes stay distinguishable (e.g. "This verification link is invalid."
-        // vs an expired-token vs an already-used-token message). Only fall back
-        // to a generic string when no message reached us at all.
         setError(
-          err?.message || "Verification failed. Please request a new link."
+          err?.message || "Verification failed. If an administrator created your account, set your password below."
         );
         setErrorCode(
           err instanceof authApi.AuthApiError && err.code ? err.code : null
@@ -115,9 +108,9 @@ export default function EmailVerifyConfirmPage() {
       {status === "verifying" && (
         <>
           <Loader2 className="w-12 h-12 text-[#B8860B] animate-spin mb-5" />
-          <h1 className="text-2xl font-bold text-[#0B1526] mb-2">Verifying your email</h1>
+          <h1 className="text-2xl font-bold text-[#0B1526] mb-2">Verifying your account</h1>
           <p className="text-sm text-slate-500 max-w-sm">
-            Please wait while we confirm your account…
+            Please wait while we confirm your credentials…
           </p>
         </>
       )}
@@ -127,7 +120,7 @@ export default function EmailVerifyConfirmPage() {
           <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mb-5">
             <CheckCircle2 className="w-9 h-9 text-green-600" strokeWidth={2} />
           </div>
-          <h1 className="text-2xl font-bold text-[#0B1526] mb-2">Email verified!</h1>
+          <h1 className="text-2xl font-bold text-[#0B1526] mb-2">Account confirmed!</h1>
           <p className="text-sm text-slate-500 max-w-sm">
             {successMessage} Redirecting you…
           </p>
@@ -136,14 +129,40 @@ export default function EmailVerifyConfirmPage() {
 
       {status === "error" && (
         <>
-          <h1 className="text-2xl font-bold text-[#0B1526] mb-2">Verification failed</h1>
-          <p className="text-sm text-red-600 max-w-sm mb-2">{error}</p>
+          <h1 className="text-2xl font-bold text-[#0B1526] mb-2">Verification Notice</h1>
+          <p className="text-sm text-red-600 max-w-sm mb-3">{error}</p>
           {errorCode && (
-            <p className="text-xs text-slate-400 mb-4">Error code: {errorCode}</p>
+            <p className="text-xs text-slate-400 mb-3">Code: {errorCode}</p>
           )}
-          <a href="/register" className="text-sm font-semibold text-[#B8860B] hover:underline">
-            Return to registration
-          </a>
+
+          {token && (
+            <div className="mt-2 mb-6 p-4 bg-amber-50/60 border border-amber-200 rounded-xl text-xs text-slate-700 text-left max-w-sm w-full">
+              <div className="flex items-center gap-2 mb-1 text-amber-900 font-semibold text-sm">
+                <ShieldCheck className="w-4 h-4 text-[#B8860B]" />
+                <span>Invited Reviewer / New Account</span>
+              </div>
+              <p className="mb-3 text-slate-600 text-xs leading-relaxed">
+                If an administrator created your reviewer or staff account, set your password below to activate:
+              </p>
+              <Link
+                to={`/reset-password?token=${encodeURIComponent(token)}`}
+                className="inline-flex items-center justify-center gap-1.5 w-full bg-[#B8860B] text-white font-medium py-2 px-3 rounded-lg text-xs hover:bg-[#9a7009] transition"
+              >
+                <span>Set Account Password</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+          )}
+
+          <div className="flex items-center gap-4 text-xs font-semibold text-[#B8860B]">
+            <Link to="/login" className="hover:underline">
+              Return to login
+            </Link>
+            <span>•</span>
+            <Link to="/forgot-password" className="hover:underline">
+              Request reset link
+            </Link>
+          </div>
         </>
       )}
     </AuthSplitCard>

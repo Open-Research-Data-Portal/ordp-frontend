@@ -139,12 +139,28 @@ export async function updateCompleteProfile(patch) {
  * @throws {AuthApiError}
  */
 export async function verifyEmail(token) {
-  try {
-    const { data } = await client.post(`${BASE}/verify-email/`, { token });
-    return data;
-  } catch (err) {
-    throw normalizeError(err);
+  const payload = { token, key: token };
+  const endpoints = [
+    `${BASE}/verify-email/`,
+    `${BASE}/verify-email/confirm/`,
+    `${BASE}/email/verify/`,
+    `${BASE}/register/verify/`,
+  ];
+
+  let lastErr = null;
+  for (const endpoint of endpoints) {
+    try {
+      const { data } = await client.post(endpoint, payload);
+      return data;
+    } catch (err) {
+      lastErr = err;
+      if (err?.response?.status === 404 || err?.response?.status === 405) {
+        continue;
+      }
+      break;
+    }
   }
+  throw normalizeError(lastErr);
 }
 
 /**
@@ -167,32 +183,78 @@ export async function submitResearcherRequest(payload) {
  * @throws {AuthApiError}
  */
 export async function requestPasswordReset(email) {
-  try {
-    const { data } = await client.post(`${BASE}/password-reset/`, { email });
-    return data;
-  } catch (err) {
-    throw normalizeError(err, { allowDjangoFieldErrors: true });
+  const endpoints = [
+    `${BASE}/password-reset/`,
+    `${BASE}/password/reset/`,
+    `${BASE}/forgot-password/`,
+    `${BASE}/reset-password/`,
+  ];
+
+  let lastErr = null;
+  for (const endpoint of endpoints) {
+    try {
+      const { data } = await client.post(endpoint, { email: email.trim() });
+      return data;
+    } catch (err) {
+      lastErr = err;
+      if (err?.response?.status === 404 || err?.response?.status === 405) {
+        continue;
+      }
+      break;
+    }
   }
+  throw normalizeError(lastErr, { allowDjangoFieldErrors: true });
 }
 
 /**
- * @param {string} token
- * @param {string} password
- * @returns {Promise<{detail: string}>}
+ * @param {object} params
+ * @param {string} [params.uid]
+ * @param {string} params.token
+ * @param {string} params.new_password
+ * @param {string} params.confirm_password
+ * @returns {Promise<{detail: string, access?: string, refresh?: string, user?: object}>}
  * @throws {AuthApiError}
  */
 export async function confirmPasswordReset({ uid, token, new_password, confirm_password }) {
-  try {
-    const { data } = await client.post(`${BASE}/password-reset/confirm/`, {
-      uid,
-      token,
-      new_password,
-      confirm_password,
-    });
-    return data;
-  } catch (err) {
-    throw normalizeError(err, { allowDjangoFieldErrors: true });
+  const cleanPassword = new_password || "";
+  const cleanConfirm = confirm_password || cleanPassword;
+  const payload = {
+    token: token || "",
+    key: token || "",
+    new_password: cleanPassword,
+    confirm_password: cleanConfirm,
+    password: cleanPassword,
+    password_confirm: cleanConfirm,
+    new_password1: cleanPassword,
+    new_password2: cleanConfirm,
+  };
+  if (uid) {
+    payload.uid = uid;
+    payload.user_id = uid;
   }
+
+  const endpoints = [
+    `${BASE}/password-reset/confirm/`,
+    `${BASE}/password/reset/confirm/`,
+    `${BASE}/reset-password/confirm/`,
+    `${BASE}/set-password/`,
+    `${BASE}/activate/`,
+  ];
+
+  let lastErr = null;
+  for (const endpoint of endpoints) {
+    try {
+      const { data } = await client.post(endpoint, payload);
+      return data;
+    } catch (err) {
+      lastErr = err;
+      if (err?.response?.status === 404 || err?.response?.status === 405) {
+        continue;
+      }
+      break;
+    }
+  }
+  throw normalizeError(lastErr, { allowDjangoFieldErrors: true });
 }
 
 /**

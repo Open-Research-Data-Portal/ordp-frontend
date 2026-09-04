@@ -85,15 +85,22 @@ function VerifyEmailRoute() {
 export default function AppRoutes() {
   return (
     <Routes>
-      {/* Public */}
+      {/* Public Auth & Activation */}
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/verify-email" element={<VerifyEmailRoute />} />
+      <Route path="/verify-email/:token" element={<EmailVerifyConfirmPage />} />
       <Route path="/verify-email/confirm" element={<EmailVerifyConfirmPage />} />
+      <Route path="/verify-email/confirm/:token" element={<EmailVerifyConfirmPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/check-email" element={<CheckEmailPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
+      <Route path="/set-password" element={<ResetPasswordPage />} />
+      <Route path="/set-password/:token" element={<ResetPasswordPage />} />
+      <Route path="/activate" element={<ResetPasswordPage />} />
+      <Route path="/activate/:token" element={<ResetPasswordPage />} />
 
       {/* Public dataset browsing */}
       <Route path="/datasets" element={<BrowseDatasetsPage />} />

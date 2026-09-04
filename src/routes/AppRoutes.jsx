@@ -21,13 +21,13 @@ import ResearcherDashboardPage from "../features/datasets/pages/ResearcherDashbo
 import AdminDashboardPage from "../features/datasets/pages/AdminDashboardPage.jsx";
 import AdminAuditLogPage from "../features/datasets/pages/AdminAuditLogPage.jsx";
 import ReviewerDashboardPage from "../features/datasets/pages/ReviewerDashboardPage.jsx";
-import UserDashboardPage from "../features/datasets/pages/UserDashboardPage.jsx";
 import DatasetDetailPage from "../features/datasets/pages/Datasetdetailpage.jsx";
 import BrowseDatasetsPage from "../pages/BrowseDatasetsPage.jsx";
 import DatasetViewPage from "../pages/DatasetViewPage";
 import BookmarksPage from "../features/datasets/pages/BookmarksPage";
 
 import { useAuth } from "../context/useAuth";
+import { isProfileComplete } from "../utils/userRoles";
 import DashboardGuard from "./DashboardGuard.jsx";
 
 function ProtectedRoute({ children }) {
@@ -43,6 +43,32 @@ function ProtectedRoute({ children }) {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  return children;
+}
+
+// Same as ProtectedRoute, plus a profile-completion check. Used for every
+// route that leads into the dataset-upload wizard, so it can't be reached
+// by direct URL, back button, or bookmark while the profile is incomplete —
+// only the button-hiding on the dashboard isn't enough on its own.
+function ProfileCompleteRoute({ children }) {
+  const { user, isAuthenticated, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#F5F5F3] text-sm text-slate-500">
+        Loading…
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!isProfileComplete(user)) {
+    return <Navigate to="/researcher-dashboard?incomplete=1" replace />;
   }
 
   return children;
@@ -82,13 +108,9 @@ export default function AppRoutes() {
       <Route path="/dashboard" element={
         <ProtectedRoute><DashboardRouter /></ProtectedRoute>
       } />
-      <Route path="/user-dashboard" element={
-        <ProtectedRoute>
-          <DashboardGuard expectedDashboard="/user-dashboard">
-            <UserDashboardPage />
-          </DashboardGuard>
-        </ProtectedRoute>
-      } />
+      {/* /user-dashboard no longer exists as its own page — redirect any
+          old links/bookmarks straight to the single dashboard. */}
+      <Route path="/user-dashboard" element={<Navigate to="/researcher-dashboard" replace />} />
       <Route path="/researcher-dashboard" element={
         <ProtectedRoute>
           <DashboardGuard expectedDashboard="/researcher-dashboard">
@@ -101,9 +123,6 @@ export default function AppRoutes() {
       } />
       <Route path="/admin-dashboard" element={
         <ProtectedRoute><AdminDashboardPage /></ProtectedRoute>
-      } />
-      <Route path="/admin/audit-log" element={
-        <ProtectedRoute><AdminAuditLogPage /></ProtectedRoute>
       } />
       <Route path="/profile" element={
         <ProtectedRoute><ProfilePage /></ProtectedRoute>
@@ -124,7 +143,7 @@ export default function AppRoutes() {
         <ProtectedRoute><DatasetManagementPage /></ProtectedRoute>
       } />
       <Route path="/datasets/contribute" element={
-        <ProtectedRoute><ContributeDatasetPage /></ProtectedRoute>
+        <ProfileCompleteRoute><ContributeDatasetPage /></ProfileCompleteRoute>
       } />
       <Route path="/datasets/contribute/success" element={
         <ProtectedRoute><SubmissionSuccessPage /></ProtectedRoute>

@@ -18,7 +18,7 @@ export default function ResetPasswordPage() {
   const [error, setError] = useState(null);
 
   function validate() {
-    if (!uid || !token) return "Invalid or missing reset link. Please request a new one.";
+    if (!token) return "Invalid or missing reset link. Please request a new one.";
     if (password.length < 8) return "Password must be at least 8 characters.";
     if (password !== confirmPassword) return "Passwords do not match.";
     return null;

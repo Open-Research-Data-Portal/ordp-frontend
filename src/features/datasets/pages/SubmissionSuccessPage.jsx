@@ -43,10 +43,10 @@ export default function SubmissionSuccessPage() {
             <div>
               <p className="text-xs text-gray-500 m-0">Access</p>
               <p className="text-sm font-semibold m-0 mt-0.5">
-                {submission.access === "institution"
-                  ? "🏛️ Institution"
+                {submission.access === "private" || submission.access === "institution"
+                  ? "🔒 Private"
                   : submission.access === "restricted"
-                  ? "🔒 Restricted"
+                  ? "🛡️ Restricted"
                   : "🌐 Public / Open"}
               </p>
             </div>

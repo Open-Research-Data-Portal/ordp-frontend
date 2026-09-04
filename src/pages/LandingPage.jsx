@@ -144,18 +144,41 @@ export default function LandingPage() {
   const [newestDatasets, setNewestDatasets] = useState([]);
   const [datasetsLoading, setDatasetsLoading] = useState(true);
   const [datasetsError, setDatasetsError] = useState(false);
+  const [portalStats, setPortalStats] = useState({
+    datasetsCount: null,
+    researchersCount: null,
+  });
 
   useEffect(() => {
     async function fetchDatasets() {
       setDatasetsLoading(true);
       setDatasetsError(false);
       try {
-        const [pop, newests] = await Promise.all([
+        const [pop, newests, allApproved] = await Promise.all([
           searchDatasets({ order_by: "popular" }),
           searchDatasets({ order_by: "newest" }),
+          searchDatasets({}),
         ]);
         setPopularDatasets(pop.slice(0, 3));
         setNewestDatasets(newests.slice(0, 3));
+
+        const list = Array.isArray(allApproved) ? allApproved : [];
+        const uniqueResearchers = new Set();
+        list.forEach((d) => {
+          if (d.owner) uniqueResearchers.add(String(d.owner));
+          else if (d.owner_name) uniqueResearchers.add(String(d.owner_name).trim().toLowerCase());
+          if (Array.isArray(d.contributors)) {
+            d.contributors.forEach((c) => {
+              if (c.user) uniqueResearchers.add(String(c.user));
+              else if (c.name) uniqueResearchers.add(String(c.name).trim().toLowerCase());
+            });
+          }
+        });
+
+        setPortalStats({
+          datasetsCount: list.length,
+          researchersCount: uniqueResearchers.size,
+        });
       } catch (err) {
         console.error("Failed to load landing page datasets:", err);
         setDatasetsError(true);
@@ -192,12 +215,22 @@ export default function LandingPage() {
             </p>
 
             <div className="mt-8 grid max-w-md grid-cols-2 gap-6 border-t border-border pt-5">
-              {STATS.map((stat) => (
-                <div key={stat.label}>
-                  <p className="font-serif text-xl font-bold text-navy">{stat.value}</p>
-                  <p className="mt-1 text-[9px] uppercase leading-snug tracking-wide text-gray-500">{stat.label}</p>
-                </div>
-              ))}
+              <div>
+                <p className="font-serif text-xl font-bold text-navy">
+                  {portalStats.datasetsCount !== null ? portalStats.datasetsCount.toLocaleString() : "…"}
+                </p>
+                <p className="mt-1 text-[9px] uppercase leading-snug tracking-wide text-gray-500">
+                  Datasets archived
+                </p>
+              </div>
+              <div>
+                <p className="font-serif text-xl font-bold text-navy">
+                  {portalStats.researchersCount !== null ? portalStats.researchersCount.toLocaleString() : "…"}
+                </p>
+                <p className="mt-1 text-[9px] uppercase leading-snug tracking-wide text-gray-500">
+                  Contributing researchers
+                </p>
+              </div>
             </div>
 
           </div>

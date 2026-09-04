@@ -25,6 +25,11 @@ export async function listSubjects() {
   return Array.isArray(data) ? data : (data?.results || data?.subjects || []);
 }
 
+export async function listLanguages() {
+  const { data } = await client.get(`${METADATA_BASE}/languages/`);
+  return Array.isArray(data) ? data : (data?.results || data?.languages || []);
+}
+
 export async function attachMetadata(datasetId, metadataPayload) {
   const { data } = await client.post(`${METADATA_BASE}/${datasetId}/attach/`, metadataPayload);
   return data;

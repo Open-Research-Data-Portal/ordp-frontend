@@ -226,7 +226,7 @@ async function uploadFileInChunks(file, sessionId, onProgress) {
       fileSize: file.size,
       fileChecksum,
     });
-    onProgress?.(Math.round(((i + 1) / totalChunks) * 100));
+    onProgress?.(Math.round(((i + 1) / totalChunks) * 100), i, totalChunks);
   }
 }
 
@@ -239,6 +239,13 @@ export default function useDatasetSubmission(draftId = null) {
   const [uploadSessionId, setUploadSessionId] = useState(() => JSON.parse(localStorage.getItem(draftKey) || "null")?.uploadSessionId || null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
+  const [uploadStage, setUploadStage] = useState({
+    stage: 1,
+    stageName: "Session Setup",
+    progress: 0,
+    message: "Initializing secure session...",
+    chunkInfo: "",
+  });
   useEffect(() => {
     if (draftId === "__new__") {
       localStorage.removeItem(draftKey);
@@ -432,6 +439,13 @@ export default function useDatasetSubmission(draftId = null) {
   const submitUpload = async (uploadData) => {
     setIsSubmitting(true);
     setSubmitError(null);
+    setUploadStage({
+      stage: 1,
+      stageName: "Session Setup",
+      progress: 10,
+      message: "Configuring dataset session and access permissions...",
+      chunkInfo: "Step 1 of 3",
+    });
     try {
       const details = formData.details || {};
       let activeDatasetId = datasetId;
@@ -442,8 +456,10 @@ export default function useDatasetSubmission(draftId = null) {
         activeDatasetId = fresh.dataset_id; activeSessionId = fresh.upload_session_id;
         setDatasetId(activeDatasetId); setUploadSessionId(activeSessionId);
       }
+      const rawAccess = uploadData.access || "restricted";
+      const visibility = rawAccess === "institution" ? "private" : rawAccess;
       try {
-        await datasetsApi.updateDataset(activeDatasetId, { visibility: uploadData.access || "restricted" });
+        await datasetsApi.updateDataset(activeDatasetId, { visibility });
       } catch (e) {
         console.warn("Visibility update deferred:", e);
       }
@@ -484,20 +500,55 @@ export default function useDatasetSubmission(draftId = null) {
             ? parseNonNegativeInt(metadata.numInstances)
             : undefined;
 
-        try {
-          await uploadFileInChunks(entry.file, activeSessionId, (progress) => {
-          setFormData((prev) => ({ ...prev, upload: { ...uploadData, files: files.map((f) => f.id === entry.id ? { ...f, status: progress === 100 ? "complete" : "uploading", progress } : f) } }));
+        setUploadStage({
+          stage: 2,
+          stageName: "Transferring Data",
+          progress: 20,
+          message: `Preparing upload for ${entry.file.name}...`,
+          chunkInfo: `File ${index + 1} of ${files.length}`,
+        });
+
+        const handleChunkProgress = (progress, chunkIndex, totalChunks) => {
+          setFormData((prev) => ({
+            ...prev,
+            upload: {
+              ...uploadData,
+              files: files.map((f) =>
+                f.id === entry.id
+                  ? { ...f, status: progress === 100 ? "complete" : "uploading", progress }
+                  : f
+              ),
+            },
+          }));
+          const stagePct = Math.min(88, Math.round(20 + progress * 0.68));
+          setUploadStage({
+            stage: 2,
+            stageName: "Transferring Data",
+            progress: stagePct,
+            message: `Uploading ${entry.file.name} (${progress}% complete)...`,
+            chunkInfo: `Chunk ${chunkIndex + 1} of ${totalChunks}`,
           });
+        };
+
+        try {
+          await uploadFileInChunks(entry.file, activeSessionId, handleChunkProgress);
         } catch (uploadError) {
           const detail = uploadError?.response?.data?.detail || uploadError?.message || "";
           if (!/unknown upload session/i.test(detail)) throw uploadError;
           const fresh = await datasetsApi.initExistingDraftUpload(activeDatasetId);
           activeSessionId = fresh.upload_session_id;
           setUploadSessionId(activeSessionId);
-          await uploadFileInChunks(entry.file, activeSessionId, (progress) => {
-            setFormData((prev) => ({ ...prev, upload: { ...uploadData, files: files.map((f) => f.id === entry.id ? { ...f, status: progress === 100 ? "complete" : "uploading", progress } : f) } }));
-          });
+          await uploadFileInChunks(entry.file, activeSessionId, handleChunkProgress);
         }
+
+        setUploadStage({
+          stage: 3,
+          stageName: "Checksum Verification & Assembly",
+          progress: 92,
+          message: `Validating SHA-256 integrity & assembling ${entry.file.name}...`,
+          chunkInfo: "Finalizing",
+        });
+
         await datasetsApi.completeUpload(activeSessionId, {
           datasetId: activeDatasetId,
           filename: entry.file.name,
@@ -510,6 +561,14 @@ export default function useDatasetSubmission(draftId = null) {
           fileChecksum: Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", await entry.file.arrayBuffer()))).map((b) => b.toString(16).padStart(2, "0")).join(""),
         });
       }
+
+      setUploadStage({
+        stage: 4,
+        stageName: "Upload Complete",
+        progress: 100,
+        message: "File assembled and verified successfully!",
+        chunkInfo: "Done",
+      });
 
       setFormData((prev) => ({ ...prev, upload: uploadData }));
       setStep(4);
@@ -585,6 +644,7 @@ export default function useDatasetSubmission(draftId = null) {
     submitFinal,
     resumeDraftUpload,
     isSubmitting, submitError,
+    uploadStage,
   };
 }
 

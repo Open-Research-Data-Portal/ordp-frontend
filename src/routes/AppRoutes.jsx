@@ -26,6 +26,7 @@ import DatasetDetailPage from "../features/datasets/pages/Datasetdetailpage.jsx"
 import BrowseDatasetsPage from "../pages/BrowseDatasetsPage.jsx";
 import DatasetViewPage from "../pages/DatasetViewPage";
 import BookmarksPage from "../features/datasets/pages/BookmarksPage";
+import NotificationsPage from "../pages/NotificationsPage";
 
 import { useAuth } from "../context/useAuth";
 import DashboardGuard from "./DashboardGuard.jsx";
@@ -133,6 +134,9 @@ export default function AppRoutes() {
       } />
       <Route path="/bookmarks" element={
         <ProtectedRoute><BookmarksPage /></ProtectedRoute>
+      } />
+      <Route path="/notifications" element={
+        <ProtectedRoute><NotificationsPage /></ProtectedRoute>
       } />
 
       {/* Catch-all — kept last on purpose */}

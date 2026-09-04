@@ -30,6 +30,7 @@ const [searchParams] = useSearchParams();
     submitFinal,
     resumeDraftUpload,
     isSubmitting, submitError,
+    uploadStage,
   } = useDatasetSubmission(searchParams.get("new") ? "__new__" : searchParams.get("draft"));
 
   useEffect(() => {
@@ -88,6 +89,7 @@ const [searchParams] = useSearchParams();
             onBack={goToPreviousStep}
             isSubmitting={isSubmitting}
             submitError={submitError}
+            uploadStage={uploadStage}
           />
         )}
         {step === 4 && (

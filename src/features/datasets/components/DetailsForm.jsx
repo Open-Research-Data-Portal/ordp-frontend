@@ -1,12 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import FormField from "../../../components/FormField";
 import TagInput from "../../../components/TagInput";
 import { useAuth } from "../../../context/useAuth";
+import * as datasetsApi from "../hooks/datasetsApi";
 
 const LANGUAGE_OPTIONS = [
-  // Language is OPTIONAL — a dataset with no textual/linguistic content
-  // can select Not Applicable. Covers English, all major Ethiopian
-  // languages, and common international research languages.
   { value: "English", label: "English" },
   { value: "Amharic", label: "Amharic — አማርኛ" },
   { value: "Afaan Oromo", label: "Afaan Oromo — Afaan Oromoo" },
@@ -21,29 +19,11 @@ const LANGUAGE_OPTIONS = [
   { value: "Gamo", label: "Gamo" },
   { value: "Gofa", label: "Gofa" },
   { value: "Silte", label: "Silte" },
-  { value: "Arsi Oromo", label: "Arsi Oromo" },
-  { value: "Boorana Oromo", label: "Boorana Oromo" },
-  { value: "Guragigna", label: "Guragigna" },
-  { value: "Harari", label: "Harari — ሐረሪ" },
-  { value: "Kafa", label: "Kafa" },
-  { value: "Shinasha", label: "Shinasha" },
-  { value: "Bench", label: "Bench — Bench Non" },
-  { value: "Sheko", label: "Sheko" },
-  { value: "Dawuro", label: "Dawuro" },
-  { value: "Konso", label: "Konso" },
-  { value: "Maji", label: "Maji" },
-  { value: "Surma", label: "Surma" },
-  { value: "Me'en", label: "Me'en" },
-  { value: "Not Applicable", label: "Not Applicable" },
   { value: "Arabic", label: "Arabic — العربية" },
   { value: "French", label: "French" },
   { value: "German", label: "German" },
   { value: "Chinese", label: "Chinese" },
-  { value: "Portuguese", label: "Portuguese" },
-  { value: "Italian", label: "Italian" },
-  { value: "Japanese", label: "Japanese" },
-  { value: "Korean", label: "Korean" },
-  { value: "Swahili", label: "Swahili — Kiswahili" },
+  { value: "Not Applicable", label: "Not Applicable" },
 ];
 
 export default function DetailsForm({ initialValues = {}, onNext, isSubmitting, submitError }) {
@@ -52,11 +32,45 @@ export default function DetailsForm({ initialValues = {}, onNext, isSubmitting, 
   const [title, setTitle] = useState(initialValues.title || "");
   const [description, setDescription] = useState(initialValues.description || "");
   const [language, setLanguage] = useState(initialValues.language || "English");
+  const [languageId, setLanguageId] = useState(initialValues.languageId || initialValues.language_id || "");
+  const [languagesList, setLanguagesList] = useState([]);
   const [coAuthors, setCoAuthors] = useState(initialValues.coAuthors || []);
   const [relatedResources, setRelatedResources] = useState(initialValues.relatedResources || []);
   const [geographicCoverage, setGeographicCoverage] = useState(initialValues.geographicCoverage || "");
   const [temporalCoverage, setTemporalCoverage] = useState(initialValues.temporalCoverage || "");
   const [localError, setLocalError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    async function loadLanguages() {
+      try {
+        const data = await datasetsApi.listLanguages();
+        if (!active) return;
+        const list = (Array.isArray(data) ? data : data?.results || []).map((l) => ({
+          id: l.id || l.uuid,
+          name: l.name || l.label || l.language,
+          code: l.code,
+        }));
+        if (list.length > 0) {
+          setLanguagesList(list);
+          const currentMatch =
+            list.find((l) => String(l.id) === String(initialValues.languageId || initialValues.language_id)) ||
+            list.find((l) => l.name?.toLowerCase() === (initialValues.language || "English").toLowerCase()) ||
+            list[0];
+          if (currentMatch) {
+            setLanguage(currentMatch.name);
+            setLanguageId(currentMatch.id);
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to fetch languages from /metadata/languages/:", err);
+      }
+    }
+    loadLanguages();
+    return () => {
+      active = false;
+    };
+  }, [initialValues.language, initialValues.languageId, initialValues.language_id]);
 
   const handleContinue = async (e) => {
     e.preventDefault();
@@ -73,6 +87,8 @@ export default function DetailsForm({ initialValues = {}, onNext, isSubmitting, 
       title,
       description,
       language,
+      languageId,
+      language_id: languageId,
       authorId: user?.id,
       coAuthors,
       relatedResources,
@@ -102,10 +118,36 @@ export default function DetailsForm({ initialValues = {}, onNext, isSubmitting, 
       </FormField>
 
       <FormField label="Language" required>
-        <select value={language} onChange={(e) => setLanguage(e.target.value)} className={inputClass}>
-          {LANGUAGE_OPTIONS.map((lang) => (
-            <option key={lang.value} value={lang.value}>{lang.label}</option>
-          ))}
+        <select
+          value={languageId || language}
+          onChange={(e) => {
+            const val = e.target.value;
+            const match = languagesList.find(
+              (l) => String(l.id) === val || l.name?.toLowerCase() === val.toLowerCase()
+            );
+            if (match) {
+              setLanguage(match.name);
+              setLanguageId(match.id);
+            } else {
+              setLanguage(val);
+              setLanguageId("");
+            }
+          }}
+          className={inputClass}
+        >
+          {languagesList.length > 0 ? (
+            languagesList.map((lang) => (
+              <option key={lang.id || lang.name} value={lang.id || lang.name}>
+                {lang.name} {lang.code ? `(${lang.code.toUpperCase()})` : ""}
+              </option>
+            ))
+          ) : (
+            LANGUAGE_OPTIONS.map((lang) => (
+              <option key={lang.value} value={lang.value}>
+                {lang.label}
+              </option>
+            ))
+          )}
         </select>
       </FormField>
 

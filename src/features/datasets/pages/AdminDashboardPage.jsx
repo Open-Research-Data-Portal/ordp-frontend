@@ -14,6 +14,7 @@ import DashboardShell from "../../../components/dashboard/DashboardShell";
 import StatCard from "../../../components/dashboard/StatCard";
 import { SectionHeader, StatusBadge, ProfileSavedNotice, EmptyState } from "../../../components/dashboard/dashboardUi";
 import * as datasetsApi from "../hooks/datasetsApi";
+import { useToast } from "../../../context/ToastContext.jsx";
 
 function normalizeList(data) {
   if (Array.isArray(data)) return data;
@@ -24,8 +25,8 @@ const CHART_COLORS = ["#B8860B", "#0B1526", "#ef4444", "#10b981", "#6366f1", "#f
 
 const ROLE_OPTIONS = [
   { value: "public", label: "Normal User (Public)" },
+  { value: "researcher", label: "Researcher" },
   { value: "reviewer", label: "Reviewer" },
-  { value: "admin", label: "Admin" },
 ];
 
 const roleBadge = {
@@ -39,6 +40,7 @@ const roleBadge = {
 export default function AdminDashboardPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { addToast } = useToast();
   const tab = searchParams.get("tab") || "overview";
 
   const [cards, setCards] = useState(null);
@@ -56,6 +58,7 @@ export default function AdminDashboardPage() {
   const [newUserRole, setNewUserRole] = useState("public");
   const [creatingUser, setCreatingUser] = useState(false);
   const [createError, setCreateError] = useState("");
+  const [successNotice, setSuccessNotice] = useState("");
 
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
@@ -156,6 +159,7 @@ export default function AdminDashboardPage() {
         full_name: newUserFullName.trim(),
         role: newUserRole,
       });
+      const name = newUserFullName.trim() || newUserEmail.trim();
       setUsers((s) => [
         {
           id: created.id || created.user_id || `new-${Date.now()}`,
@@ -163,11 +167,13 @@ export default function AdminDashboardPage() {
           full_name: newUserFullName.trim(),
           role: newUserRole,
           status: "Active",
-          initials: (newUserFullName.trim() || newUserEmail.trim()).slice(0, 2).toUpperCase(),
+          initials: name.slice(0, 2).toUpperCase(),
           ...created,
         },
         ...s,
       ]);
+      addToast(`User "${name}" created successfully. Activation email sent.`, "success");
+      setSuccessNotice(`User "${name}" (${newUserEmail.trim()}) was created successfully. An activation email has been dispatched.`);
       setNewUserEmail("");
       setNewUserFullName("");
       setNewUserRole("public");
@@ -252,12 +258,31 @@ export default function AdminDashboardPage() {
             </div>
             <button
               type="button"
-              onClick={() => setShowCreateForm((s) => !s)}
+              onClick={() => {
+                setShowCreateForm((s) => !s);
+                setSuccessNotice("");
+              }}
               className="bg-gold hover:bg-gold-dark text-white text-sm font-semibold rounded-lg px-4 py-2 transition-colors"
             >
               {showCreateForm ? "Cancel" : "+ Create User"}
             </button>
           </div>
+
+          {successNotice && (
+            <div className="mx-5 mt-4 flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-800">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-sm">✓</span>
+                <span>{successNotice}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSuccessNotice("")}
+                className="text-emerald-600 hover:text-emerald-900 text-sm font-bold ml-3"
+              >
+                ✕
+              </button>
+            </div>
+          )}
 
           {showCreateForm && (
             <form onSubmit={handleCreateUser} className="mx-5 mt-4 mb-2 rounded-xl border border-slate-200 bg-[#F8F7F4] p-5">
@@ -496,7 +521,6 @@ export default function AdminDashboardPage() {
                   { name: "Public", count: roleMap.public, fill: "#94a3b8" },
                   { name: "Researcher", count: roleMap.researcher, fill: "#3b82f6" },
                   { name: "Reviewer", count: roleMap.reviewer, fill: "#7c3aed" },
-                  { name: "Admin", count: roleMap.admin, fill: "#B8860B" },
                 ].filter(d => d.count > 0);
                 return chartData.length === 0 ? (
                   <EmptyState title="No user data" description="User role data will appear here." />

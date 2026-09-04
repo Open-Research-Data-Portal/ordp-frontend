@@ -41,7 +41,12 @@ export default function DashboardHeader({ title, subtitle }) {
       </form>
 
       <div className="flex items-center gap-2 shrink-0">
-        <button type="button" aria-label="Notifications" className="relative p-2 rounded-lg hover:bg-gray-50 text-gray-500">
+        <button
+          type="button"
+          aria-label="Notifications"
+          onClick={() => navigate("/notifications")}
+          className="relative p-2 rounded-lg hover:bg-gray-50 text-gray-500 hover:text-navy transition"
+        >
           <Bell className="w-5 h-5" />
           <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
         </button>

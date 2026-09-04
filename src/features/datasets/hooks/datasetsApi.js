@@ -328,3 +328,35 @@ export async function getDownloadUrl(datasetId) {
   return data?.download_url;
 }
 
+export async function suggestThumbnail(datasetId, payload) {
+  if (payload instanceof FormData) {
+    const { data } = await client.post(`/admin-panel/datasets/${datasetId}/thumbnail-suggestion/`, payload);
+    return data;
+  }
+  const { data } = await client.post(`/admin-panel/datasets/${datasetId}/thumbnail-suggestion/`, payload);
+  return data;
+}
+
+export async function getFallbackThumbnails(datasetId) {
+  try {
+    const { data } = await client.get(`/admin-panel/datasets/${datasetId}/fallback-thumbnails/`);
+    return data;
+  } catch {
+    return [];
+  }
+}
+
+export async function requestDatasetDeletion(datasetId, reason) {
+  try {
+    const { data } = await client.post(`/admin-panel/datasets/${datasetId}/deletion-request/`, { reason });
+    return data;
+  } catch (err) {
+    if (err?.response?.status === 404) {
+      const { data } = await client.post(`/admin-panel/deletion-requests/`, { dataset_id: datasetId, reason });
+      return data;
+    }
+    throw err;
+  }
+}
+
+

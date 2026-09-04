@@ -23,6 +23,9 @@ import {
   Table,
   Info,
   Tag,
+  Trash2,
+  Image as ImageIcon,
+  Upload,
 } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import StatCard from "../../../components/dashboard/StatCard";
@@ -105,6 +108,16 @@ export default function ReviewerDashboardPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [decisionModal, setDecisionModal] = useState(null); // { id, type } "rejected"|"changes_requested"
   const [decisionReason, setDecisionReason] = useState("");
+
+  // Reviewer thumbnail suggestion & dataset deletion request state
+  const [thumbnailModal, setThumbnailModal] = useState(null); // dataset item
+  const [thumbnailUrlInput, setThumbnailUrlInput] = useState("");
+  const [thumbnailFile, setThumbnailFile] = useState(null);
+  const [submittingThumbnail, setSubmittingThumbnail] = useState(false);
+
+  const [deletionModal, setDeletionModal] = useState(null); // dataset item
+  const [deletionReason, setDeletionReason] = useState("");
+  const [submittingDeletion, setSubmittingDeletion] = useState(false);
 
   // ── Data loading ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -286,6 +299,53 @@ export default function ReviewerDashboardPage() {
     await handleDecide(decisionModal.id, decisionModal.type, decisionReason.trim());
     setDecisionModal(null);
     setDecisionReason("");
+  }
+
+  async function handleSuggestThumbnail(e) {
+    e.preventDefault();
+    if (!thumbnailModal) return;
+    const id = thumbnailModal.id || thumbnailModal.dataset_id;
+    setSubmittingThumbnail(true);
+    try {
+      if (thumbnailFile) {
+        const formData = new FormData();
+        formData.append("thumbnail", thumbnailFile);
+        if (thumbnailUrlInput.trim()) formData.append("reason", thumbnailUrlInput.trim());
+        await datasetsApi.suggestThumbnail(id, formData);
+      } else if (thumbnailUrlInput.trim()) {
+        await datasetsApi.suggestThumbnail(id, { thumbnail_url: thumbnailUrlInput.trim() });
+      } else {
+        addToast("Please select an image file or enter a thumbnail URL.", "error");
+        setSubmittingThumbnail(false);
+        return;
+      }
+      addToast("Thumbnail suggestion submitted successfully!", "success");
+      setThumbnailModal(null);
+      setThumbnailUrlInput("");
+      setThumbnailFile(null);
+    } catch (err) {
+      addToast(err?.response?.data?.detail || err?.message || "Failed to submit thumbnail suggestion.", "error");
+    } finally {
+      setSubmittingThumbnail(false);
+    }
+  }
+
+  async function handleRequestDeletion(e) {
+    e.preventDefault();
+    if (!deletionModal || !deletionReason.trim()) return;
+    const id = deletionModal.id || deletionModal.dataset_id;
+    setSubmittingDeletion(true);
+    try {
+      await datasetsApi.requestDatasetDeletion(id, deletionReason.trim());
+      addToast("Dataset deletion request submitted to administrative queue.", "success");
+      setDeletionModal(null);
+      setDeletionReason("");
+      closeDetail();
+    } catch (err) {
+      addToast(err?.response?.data?.detail || err?.message || "Failed to submit deletion request.", "error");
+    } finally {
+      setSubmittingDeletion(false);
+    }
   }
 
   async function handleVote(type, itemId, vote, comment = "") {
@@ -821,6 +881,167 @@ export default function ReviewerDashboardPage() {
                 Confirm
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Suggest Thumbnail Modal */}
+      {thumbnailModal && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4 animate-fade-in"
+          onClick={() => {
+            setThumbnailModal(null);
+            setThumbnailUrlInput("");
+            setThumbnailFile(null);
+          }}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 animate-scale-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-border mb-4">
+              <div className="flex items-center gap-2">
+                <span className="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center text-amber-700 font-bold">
+                  🖼️
+                </span>
+                <div>
+                  <h3 className="text-base font-bold text-navy">Suggest Dataset Thumbnail</h3>
+                  <p className="text-xs text-gray-500">
+                    Propose a clearer thumbnail for &quot;{thumbnailModal.title}&quot;
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setThumbnailModal(null);
+                  setThumbnailUrlInput("");
+                  setThumbnailFile(null);
+                }}
+                className="p-1 text-gray-400 hover:text-navy rounded-lg transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSuggestThumbnail} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-1.5">
+                  Upload Image File
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setThumbnailFile(e.target.files?.[0] || null)}
+                  className="w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-gold/20 file:text-gold-dark hover:file:bg-gold/30 cursor-pointer"
+                />
+              </div>
+
+              <div className="relative flex py-1 items-center">
+                <div className="flex-grow border-t border-gray-200"></div>
+                <span className="shrink-0 mx-3 text-xs uppercase text-gray-400 font-semibold">Or enter URL</span>
+                <div className="flex-grow border-t border-gray-200"></div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-1.5">
+                  Thumbnail Image URL / Note
+                </label>
+                <input
+                  type="text"
+                  placeholder="https://example.com/images/dataset-thumbnail.png"
+                  value={thumbnailUrlInput}
+                  onChange={(e) => setThumbnailUrlInput(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 text-sm p-3 focus:outline-none focus:ring-2 focus:ring-gold"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setThumbnailModal(null);
+                    setThumbnailUrlInput("");
+                    setThumbnailFile(null);
+                  }}
+                  className="text-sm font-medium text-gray-500 hover:text-navy px-3 py-2"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingThumbnail || (!thumbnailFile && !thumbnailUrlInput.trim())}
+                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-gold hover:bg-gold-dark disabled:opacity-50 rounded-xl px-4 py-2.5 transition shadow-sm"
+                >
+                  {submittingThumbnail ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                  Submit Suggestion
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Dataset Deletion Request Modal */}
+      {deletionModal && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4 animate-fade-in"
+          onClick={() => {
+            setDeletionModal(null);
+            setDeletionReason("");
+          }}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 animate-scale-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 pb-3 border-b border-red-100 mb-4">
+              <span className="w-9 h-9 rounded-xl bg-red-50 flex items-center justify-center text-red-600">
+                <Trash2 className="w-5 h-5" />
+              </span>
+              <div>
+                <h3 className="text-base font-bold text-red-900">Request Dataset Deletion</h3>
+                <p className="text-xs text-red-700">
+                  Flag &quot;{deletionModal.title}&quot; for removal
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-gray-600 mb-3 leading-relaxed">
+              Please specify the ethical, copyright, privacy (PII), or institutional reason why this dataset should be deleted.
+            </p>
+
+            <form onSubmit={handleRequestDeletion}>
+              <textarea
+                required
+                rows={4}
+                value={deletionReason}
+                onChange={(e) => setDeletionReason(e.target.value)}
+                placeholder="Describe reason for deletion (e.g. Contains unanonymized patient data, duplicate accession, violation of university policy)..."
+                className="w-full rounded-xl border border-slate-200 text-sm p-3 resize-none focus:outline-none focus:ring-2 focus:ring-red-500 mb-4"
+              />
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeletionModal(null);
+                    setDeletionReason("");
+                  }}
+                  className="text-sm font-medium text-gray-500 hover:text-navy px-3 py-2"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingDeletion || !deletionReason.trim()}
+                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 rounded-xl px-4 py-2.5 transition shadow-sm"
+                >
+                  {submittingDeletion ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                  Submit Deletion Request
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

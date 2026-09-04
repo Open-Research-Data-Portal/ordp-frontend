@@ -7,6 +7,7 @@ import {
   Plus,
   Database,
   Download,
+  Eye,
   ChevronDown,
   X,
   MoreHorizontal,
@@ -152,60 +153,38 @@ function BookmarkButton({ bookmarked, onToggle, className = "" }) {
 }
 
 function DatasetCard({ dataset, navigate, bookmarked, onToggleBookmark }) {
-  const Icon = dataset.icon || Database;
   const image = getDatasetImage(dataset);
-  const author = dataset.author ?? dataset.owner_name ?? "Unknown";
-  const fileCount = dataset.fileCount ?? dataset.files?.length ?? 0;
-  const sizeBytes = dataset.files?.reduce((acc, f) => acc + (f.file_size || 0), 0) ?? 0;
-  const sizeStr = dataset.size ?? formatBytes(sizeBytes);
-  const fileTypes = (dataset.fileType
-    ?? [...new Set((dataset.files ?? []).map((f) => f.file_type?.toUpperCase()).filter(Boolean))].join(", "))
-    || "N/A";
-  const downloads = dataset.downloads ?? dataset.download_count ?? null;
-  const updatedStr = dataset.viewedAgo
-    ?? (dataset.updated ? `Updated ${dataset.updated}` : formatRelativeDate(dataset.updated_at));
+  const views = dataset.view_count ?? dataset.views ?? 0;
+  const downloads = dataset.downloads ?? dataset.download_count ?? 0;
+  const categoryName = dataset.category || dataset.subject_name || dataset.metadata?.category_name || "Research";
 
   return (
     <div
       onClick={() => navigate(`/datasets/${dataset.id}`)}
-      className="group bg-white rounded-xl border border-[#E3E1DA] overflow-hidden cursor-pointer transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-lg hover:border-gold/40"
+      className="group bg-white rounded-xl overflow-hidden border border-border hover:border-gold/40 hover:shadow-md cursor-pointer transition-all"
     >
-      <div className="h-48 bg-[#F0EFEA] overflow-hidden">
+      <div className="h-36 bg-navy/5 overflow-hidden relative">
         {image ? (
           <img
             src={image}
-            alt={dataset.title}
-            className="w-full h-full object-cover transition-transform duration-300 ease-out group-hover:scale-105"
+            alt=""
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
             loading="lazy"
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <Icon className="w-10 h-10 text-gray-300 transition-transform duration-300 ease-out group-hover:scale-110 group-hover:text-gold" strokeWidth={1.5} />
-          </div>
+          <div className="w-full h-full bg-gradient-to-br from-navy/10 to-gold/10" />
         )}
-      </div>
-      <div className="p-5">
-        <div className="flex items-start justify-between gap-2">
-          <p className="text-base font-semibold text-navy line-clamp-2 transition-colors group-hover:text-[#2C5AAE]">{dataset.title}</p>
-          <div className="flex items-center gap-1 shrink-0">
-            <BookmarkButton bookmarked={bookmarked} onToggle={() => onToggleBookmark(dataset.id)} />
-            <button
-              type="button"
-              onClick={(e) => e.stopPropagation()}
-              className="p-0.5 text-gray-400 hover:text-navy transition-transform hover:scale-110"
-              aria-label="More options"
-            >
-              <MoreHorizontal className="w-4 h-4" />
-            </button>
-          </div>
+        <div className="absolute top-2 right-2 flex items-center gap-1 z-10" onClick={(e) => e.stopPropagation()}>
+          <BookmarkButton bookmarked={bookmarked} onToggle={() => onToggleBookmark(dataset.id)} />
         </div>
-        <p className="text-sm text-[#2C5AAE] underline mt-1.5">{author}</p>
-        <p className="text-sm text-gray-500 mt-3">{updatedStr}</p>
-        <p className="text-sm text-gray-500 mt-1.5 flex items-center gap-1">
-          <Download className="w-3.5 h-3.5" />
-          {fileCount} File{fileCount === 1 ? "" : "s"} ({fileTypes}) · {sizeStr}
-          {downloads != null ? ` · ${downloads.toLocaleString()} downloads` : ""}
-        </p>
+      </div>
+      <div className="p-4">
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-gold">{categoryName}</span>
+        <h3 className="text-sm font-semibold text-navy mt-1 line-clamp-2 group-hover:text-gold transition-colors">{dataset.title}</h3>
+        <div className="flex items-center gap-3 mt-3 text-xs text-gray-500">
+          <span className="flex items-center gap-1"><Eye className="w-3 h-3" />{typeof views === 'number' ? views.toLocaleString() : views}</span>
+          <span className="flex items-center gap-1"><Download className="w-3 h-3" />{typeof downloads === 'number' ? downloads.toLocaleString() : downloads}</span>
+        </div>
       </div>
     </div>
   );

@@ -106,7 +106,7 @@ export default function DashboardPage() {
                     variant="gold"
                     fullWidth={false}
                     icon={ArrowRight}
-                    onClick={() => navigate("/data-upload")}
+                    onClick={() => navigate("/datasets/contribute?new=1")}
                   >
                     <span className="inline-flex items-center gap-2">
                       <Database className="w-4 h-4" />

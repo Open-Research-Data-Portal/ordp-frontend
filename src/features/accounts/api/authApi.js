@@ -344,3 +344,8 @@ export function isProfileCompleted(value) {
       value.research_interests_completed
   );
 }
+
+export async function getInterestCategories() {
+  const { data } = await client.get('/metadata/categories/interests/');
+  return Array.isArray(data) ? data : (data?.results || []);
+}

@@ -17,9 +17,35 @@ const ACTION_COLORS = {
   "User Deleted": "bg-red-50 text-red-700",
 };
 
+const ROLE_BADGES = {
+  admin: "bg-gold-light text-gold border border-gold/30",
+  reviewer: "bg-violet-50 text-violet-700 border border-violet-200",
+  researcher: "bg-blue-50 text-blue-700 border border-blue-200",
+  public: "bg-gray-100 text-gray-700 border border-gray-200",
+  user: "bg-gray-100 text-gray-700 border border-gray-200",
+};
+
+// The backend audit rows only carry the actor's full name — the role isn't
+// included. Resolve it by matching against the admin users list (which returns
+// each user's `roles` array) so the table can show the actor's role.
+function roleOf(row, roleByUser) {
+  const key = String(row.user || row.user_name || "").trim().toLowerCase();
+  if (!key) return "";
+  const matched = roleByUser.get(key);
+  if (!matched) return "";
+  return Array.isArray(matched) && matched.length ? matched[0] : "user";
+}
+
+function formatAuditDate(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  return isNaN(d.getTime()) ? null : d;
+}
+
 export default function AdminAuditLogPage() {
   const navigate = useNavigate();
   const [items, setItems] = useState([]);
+  const [roleByUser, setRoleByUser] = useState(() => new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -45,6 +71,29 @@ export default function AdminAuditLogPage() {
     }
     load();
     return () => { cancelled = true; };
+  }, []);
+
+  // Load each user's role so we can show the actor's role per audit row.
+  // Best-effort — the table still renders fine if this fails.
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const data = await datasetsApi.getAdminUsers();
+        if (!active) return;
+        const list = Array.isArray(data) ? data : (data?.results || []);
+        const map = new Map();
+        list.forEach((u) => {
+          const roles = Array.isArray(u.roles) ? u.roles : (u.role ? [u.role] : []);
+          if (u.full_name) map.set(String(u.full_name).trim().toLowerCase(), roles);
+          if (u.email) map.set(String(u.email).trim().toLowerCase(), roles);
+        });
+        setRoleByUser(map);
+      } catch {
+        // ignore — role column will just show "—"
+      }
+    })();
+    return () => { active = false; };
   }, []);
 
   const uniqueActions = useMemo(() => {
@@ -176,6 +225,7 @@ export default function AdminAuditLogPage() {
               <tr>
                 <th className="px-5 py-3 text-left font-semibold">Timestamp</th>
                 <th className="px-5 py-3 text-left font-semibold">User</th>
+                <th className="px-5 py-3 text-left font-semibold">Role</th>
                 <th className="px-5 py-3 text-left font-semibold">Action</th>
                 <th className="px-5 py-3 text-left font-semibold">Resource</th>
               </tr>
@@ -183,33 +233,60 @@ export default function AdminAuditLogPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={4} className="px-5 py-10 text-center text-sm text-gray-500">
+                  <td colSpan={5} className="px-5 py-10 text-center text-sm text-gray-500">
                     Loading audit log…
                   </td>
                 </tr>
               ) : pageItems.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-5 py-10 text-center text-sm text-gray-500">
+                  <td colSpan={5} className="px-5 py-10 text-center text-sm text-gray-500">
                     No entries match your filters.
                   </td>
                 </tr>
               ) : (
-                pageItems.map((row) => (
-                  <tr key={row.id} className="border-t border-gray-100 hover:bg-bg/50">
-                    <td className="px-5 py-3 text-gray-500 font-mono text-xs whitespace-nowrap">
-                      {row.timestamp || row.created_at || "—"}
-                    </td>
-                    <td className="px-5 py-3 font-medium text-navy">{row.user || row.user_name || "—"}</td>
-                    <td className="px-5 py-3">
-                      <span
-                        className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${ACTION_COLORS[row.action] || "bg-gray-100 text-gray-700"}`}
-                      >
-                        {row.action || "—"}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3 font-mono text-xs text-gray-600">{row.resource || row.resource_id || "—"}</td>
-                  </tr>
-                ))
+                pageItems.map((row) => {
+                  const ts = row.timestamp || row.created_at;
+                  const date = formatAuditDate(ts);
+                  const role = roleOf(row, roleByUser).toLowerCase();
+                  return (
+                    <tr key={row.id} className="border-t border-gray-100 hover:bg-bg/50">
+                      <td className="px-5 py-3 whitespace-nowrap">
+                        {date ? (
+                          <>
+                            <span className="block text-sm font-bold text-navy">
+                              {date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
+                            </span>
+                            <span className="block text-xs font-medium text-gray-500">
+                              {date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-sm font-semibold text-gray-400">{ts || "—"}</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3 font-medium text-navy">{row.user || row.user_name || "—"}</td>
+                      <td className="px-5 py-3">
+                        {role ? (
+                          <span
+                            className={`inline-block text-[10px] font-bold uppercase px-2 py-0.5 rounded ${ROLE_BADGES[role] || ROLE_BADGES.user}`}
+                          >
+                            {role}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-400">—</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3">
+                        <span
+                          className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${ACTION_COLORS[row.action] || "bg-gray-100 text-gray-700"}`}
+                        >
+                          {row.action || "—"}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3 font-mono text-xs text-gray-600">{row.resource || row.resource_id || "—"}</td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

@@ -359,4 +359,14 @@ export async function requestDatasetDeletion(datasetId, reason) {
   }
 }
 
+/**
+ * Admin executes a fully-approved deletion request (hard delete).
+ * @param {string} requestId
+ * @returns {Promise<{status: string, deleted_dataset_title?: string}>}
+ */
+export async function executeDatasetDeletion(requestId) {
+  const { data } = await client.post(`/admin-panel/deletion-requests/${requestId}/execute/`);
+  return data;
+}
+
 

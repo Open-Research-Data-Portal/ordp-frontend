@@ -20,6 +20,7 @@ import DatasetListPage from "../features/datasets/pages/DatasetListPage.jsx";
 import ResearcherDashboardPage from "../features/datasets/pages/ResearcherDashboardPage.jsx";
 import AdminDashboardPage from "../features/datasets/pages/AdminDashboardPage.jsx";
 import AdminAuditLogPage from "../features/datasets/pages/AdminAuditLogPage.jsx";
+import AdminDeletionRequestsPage from "../features/datasets/pages/AdminDeletionRequestsPage.jsx";
 import ReviewerDashboardPage from "../features/datasets/pages/ReviewerDashboardPage.jsx";
 import DatasetDetailPage from "../features/datasets/pages/Datasetdetailpage.jsx";
 import BrowseDatasetsPage from "../pages/BrowseDatasetsPage.jsx";
@@ -126,6 +127,15 @@ export default function AppRoutes() {
       } />
       <Route path="/admin-dashboard" element={
         <ProtectedRoute><AdminDashboardPage /></ProtectedRoute>
+      } />
+      {/* Dedicated admin sub-pages. These MUST stay registered — previously
+          /admin/audit-log was linked from the sidebar but had no route, so it
+          fell through to the catch-all and kicked admins back to /login. */}
+      <Route path="/admin/audit-log" element={
+        <ProtectedRoute><AdminAuditLogPage /></ProtectedRoute>
+      } />
+      <Route path="/admin/deletion-requests" element={
+        <ProtectedRoute><AdminDeletionRequestsPage /></ProtectedRoute>
       } />
       <Route path="/profile" element={
         <ProtectedRoute><ProfilePage /></ProtectedRoute>

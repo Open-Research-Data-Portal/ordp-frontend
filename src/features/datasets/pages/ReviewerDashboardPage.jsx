@@ -1,34 +1,28 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../../context/useAuth";
-import { getDisplayName } from "../../../utils/userRoles";
+import { getDisplayName, isReviewer, isAdmin, getDashboardPath } from "../../../utils/userRoles";
 import {
   Shield,
-  Clock,
   CheckCircle2,
   XCircle,
   Eye,
   AlertTriangle,
-  BarChart3,
   MessageSquare,
   Loader2,
   BookOpen,
   X,
   ExternalLink,
   ChevronRight,
-  FileText,
   TrendingUp,
   Database,
   Download,
   Table,
   Info,
-  Tag,
   Trash2,
-  Image as ImageIcon,
   Upload,
 } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
-import StatCard from "../../../components/dashboard/StatCard";
 import { StatusBadge, EmptyState } from "../../../components/dashboard/dashboardUi";
 import { useToast } from "../../../context/ToastContext.jsx";
 import * as datasetsApi from "../hooks/datasetsApi.js";
@@ -82,9 +76,19 @@ const TABS = [
 
 export default function ReviewerDashboardPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { addToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get("tab") || "overview";
+
+  // Non-reviewer / non-admin users shouldn't browse the reviewer console —
+  // send them to their own dashboard instead of waiting for API 403s. Admins
+  // remain allowed (the backend gates moderation with IsReviewerOrAdmin).
+  useEffect(() => {
+    if (user && !isReviewer(user) && !isAdmin(user)) {
+      navigate(getDashboardPath(user), { replace: true });
+    }
+  }, [user, navigate]);
 
   // ── State ────────────────────────────────────────────────────────────
   const [overview, setOverview] = useState(null);
@@ -415,38 +419,6 @@ export default function ReviewerDashboardPage() {
         </button>
       </div>
 
-      {/* Analytics stats bar */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard
-          label="TOTAL REVIEWED"
-          value={loading ? "…" : reviewStats.total}
-          icon={BarChart3}
-          hint="All-time decisions made"
-          delay={0}
-        />
-        <StatCard
-          label="PENDING"
-          value={loading ? "…" : reviewStats.pending}
-          icon={Clock}
-          hint="Datasets awaiting review"
-          delay={60}
-        />
-        <StatCard
-          label="APPROVED"
-          value={loading ? "…" : reviewStats.approved}
-          icon={CheckCircle2}
-          hint="Datasets approved"
-          delay={120}
-        />
-        <StatCard
-          label="REJECTED"
-          value={loading ? "…" : reviewStats.rejected}
-          icon={XCircle}
-          hint="Datasets rejected"
-          delay={180}
-        />
-      </div>
-
       {/* Tab panel */}
       <div className="bg-white rounded-xl border border-border shadow-sm overflow-hidden animate-fade-in-up">
         <div className="flex gap-1 px-5 pt-4 border-b border-border overflow-x-auto">
@@ -490,6 +462,10 @@ export default function ReviewerDashboardPage() {
                   actionId={actionId}
                   onView={handleViewDataset}
                   onDecide={handleDecide}
+                  onDelete={(item) => {
+                    setDeletionReason("");
+                    setDeletionModal(item);
+                  }}
                 />
               )}
 
@@ -1135,7 +1111,7 @@ export default function ReviewerDashboardPage() {
 }
 
 // ── Overview tab ────────────────────────────────────────────────────────
-function OverviewTab({ overview, metrics, reviewStats, pendingCounts, setTab }) {
+function OverviewTab({ metrics, reviewStats, pendingCounts, setTab }) {
   const sections = [
     { label: "Pending Datasets", count: pendingCounts.datasets, tab: "datasets", color: "bg-red-50 text-red-600 border-red-100" },
     { label: "Content Updates", count: pendingCounts.contentUpdates, tab: "content-updates", color: "bg-amber-50 text-amber-600 border-amber-100" },
@@ -1203,7 +1179,7 @@ function MetricCard({ label, value, color = "text-navy" }) {
 }
 
 // ── Review Datasets tab ───────────────────────────────────────────────────
-function ReviewDatasetsTab({ items, actionId, onView, onDecide }) {
+function ReviewDatasetsTab({ items, actionId, onView, onDecide, onDelete }) {
   if (items.length === 0) {
     return <EmptyState title="No pending datasets" description="All caught up — no datasets awaiting review." />;
   }
@@ -1268,6 +1244,15 @@ function ReviewDatasetsTab({ items, actionId, onView, onDecide }) {
                     >
                       <MessageSquare className="w-3.5 h-3.5" />
                       Changes
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => onDelete(item)}
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-red-600 bg-white ring-1 ring-inset ring-red-200 hover:bg-red-50 rounded-lg px-3 py-2 disabled:opacity-50 transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Delete Request
                     </button>
                   </div>
                 </td>

@@ -24,10 +24,17 @@ function normalizeList(data) {
 const CHART_COLORS = ["#B8860B", "#0B1526", "#ef4444", "#10b981", "#6366f1", "#f59e0b"];
 
 const ROLE_OPTIONS = [
-  { value: "public", label: "Normal User (Public)" },
-  { value: "researcher", label: "Researcher" },
-  { value: "reviewer", label: "Reviewer" },
+  { value: "public", label: "User" },
+  { value: "reviewer", label: "Reviewer (Checker)" },
 ];
+
+// The admin users API returns roles as an array (e.g. ["reviewer"]), while
+// freshly-created rows in this page keep a plain `role` string — resolve
+// either into the single label used in the users table.
+function displayRoleOf(user) {
+  if (Array.isArray(user?.roles) && user.roles.length) return user.roles[0];
+  return user?.role || "user";
+}
 
 const roleBadge = {
   public: "bg-gray-100 text-gray-700 border-gray-200",
@@ -391,7 +398,7 @@ export default function AdminDashboardPage() {
                         </div>
                       </td>
                       <td className="px-5 py-4">
-                        <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${roleBadge[u.role] || "bg-gray-100 text-gray-700"}`}>{u.role || "user"}</span>
+                        <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${roleBadge[displayRoleOf(u)] || "bg-gray-100 text-gray-700"}`}>{displayRoleOf(u)}</span>
                       </td>
                       <td className="px-5 py-4">
                         <StatusBadge status={u.is_active === false ? "inactive" : "active"} />
@@ -512,14 +519,13 @@ export default function AdminDashboardPage() {
               {loading ? (
                 <div className="h-56 flex items-center justify-center text-sm text-gray-500">Loading chart…</div>
               ) : (() => {
-                const roleMap = { public: 0, reviewer: 0, admin: 0, researcher: 0 };
+                const roleMap = { public: 0, reviewer: 0, admin: 0 };
                 users.forEach((u) => {
                   const roles = Array.isArray(u.roles) ? u.roles : (u.role ? [u.role] : ["public"]);
                   roles.forEach((r) => { if (r in roleMap) roleMap[r]++; else roleMap["public"]++; });
                 });
                 const chartData = [
-                  { name: "Public", count: roleMap.public, fill: "#94a3b8" },
-                  { name: "Researcher", count: roleMap.researcher, fill: "#3b82f6" },
+                  { name: "User", count: roleMap.public, fill: "#94a3b8" },
                   { name: "Reviewer", count: roleMap.reviewer, fill: "#7c3aed" },
                 ].filter(d => d.count > 0);
                 return chartData.length === 0 ? (

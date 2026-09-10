@@ -125,8 +125,19 @@ export async function submitDataset(datasetId, termsAccepted) {
 }
 
 export async function getMyDatasets(params = {}) {
-  const { data } = await client.get(`${DATASETS_BASE}/mine/`, { params });
-  return data;
+  try {
+    const { data } = await client.get(`${DATASETS_BASE}/mine/`, { params });
+    // Normalise: backend may return { results: [] } or a plain array
+    if (Array.isArray(data)) return data;
+    if (Array.isArray(data?.results)) return data.results;
+    if (Array.isArray(data?.datasets)) return data.datasets;
+    return [];
+  } catch (err) {
+    // 401/403 = not logged in or no permission → clean empty list, not an error
+    const status = err?.response?.status;
+    if (status === 401 || status === 403) return [];
+    throw err; // re-throw real errors (500, network, etc.)
+  }
 }
 
 export async function getDatasetDetail(datasetId) {

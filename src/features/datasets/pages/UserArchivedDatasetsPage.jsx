@@ -127,7 +127,7 @@ export default function UserArchivedDatasetsPage() {
             </button>
           </div>
         )}
-{!loading && !error && sorted.length > 0 && (
+        {!loading && !error && sorted.length > 0 && (
           <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {sorted.map((dataset) => {
               const request = requestsMap.get(String(dataset.id)) || null;

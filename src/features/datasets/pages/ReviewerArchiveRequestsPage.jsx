@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Archive, XCircle, Loader2, Inbox, Eye } from "lucide-react";
+import { Archive, XCircle, Loader2, Inbox, Eye, RotateCcw, CheckCircle2 } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import { SectionHeader } from "../../../components/dashboard/dashboardUi";
 import { useAuth } from "../../../context/useAuth";
@@ -191,9 +191,34 @@ export default function ReviewerArchiveRequestsPage() {
                             </button>
                           </div>
                         ) : (
-                          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-400">
-                            <Archive className="w-3.5 h-3.5" /> Resolved
-                          </span>
+                          <div className="flex items-center justify-end gap-2">
+                            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-400">
+                              Resolved ({request.status})
+                            </span>
+                            {request.status === "rejected" && (
+                              <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() => handleResolve(request, "approved")}
+                                className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg px-2.5 py-1.5 transition"
+                                title="Undo rejection and accept this archive request"
+                              >
+                                {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                                Undo / Accept
+                              </button>
+                            )}
+                            {request.status === "approved" && (
+                              <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() => handleResolve(request, "pending")}
+                                className="inline-flex items-center gap-1 text-xs font-semibold text-gray-600 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg px-2.5 py-1.5 transition"
+                                title="Undo approval and revert to pending"
+                              >
+                                <RotateCcw className="w-3.5 h-3.5" /> Revert
+                              </button>
+                            )}
+                          </div>
                         )}
                       </td>
                     </tr>

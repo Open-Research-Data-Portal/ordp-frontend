@@ -204,231 +204,231 @@ export default function DatasetListPage() {
 
   return (
     <DashboardShell title="My Datasets" subtitle="Track the status of every dataset you've submitted.">
-            <div className="p-8 lg:p-10 bg-white min-h-full rounded-2xl border border-[#E3E1DA]">
-              {/* Header */}
-              <div className="flex items-start justify-between gap-4 mb-6">
-                <div>
-                  <button
-                    type="button"
-                    onClick={() => navigate(getDashboardPath(user))}
-                    className="mb-3 inline-flex items-center text-xs font-semibold text-gray-500 hover:text-navy transition-colors"
-                  >
-                    ← Back to dashboard
-                  </button>
-                  <h1 className="text-3xl font-serif font-bold text-navy">My Datasets</h1>
-                  <p className="text-sm text-gray-500 mt-1">
-                    Track the status of every dataset you've submitted.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => navigate("/datasets/contribute?new=1")}
-                  className="flex items-center gap-2 bg-navy hover:bg-navy-dark text-white rounded-full px-5 py-2.5 text-sm font-semibold shrink-0 transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
-                  New Dataset
-                </button>
-              </div>
+      <div className="p-8 lg:p-10 bg-white min-h-full rounded-2xl border border-[#E3E1DA]">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-4 mb-6">
+          <div>
+            <button
+              type="button"
+              onClick={() => navigate(getDashboardPath(user))}
+              className="mb-3 inline-flex items-center text-xs font-semibold text-gray-500 hover:text-navy transition-colors"
+            >
+              ← Back to dashboard
+            </button>
+            <h1 className="text-3xl font-serif font-bold text-navy">My Datasets</h1>
+            <p className="text-sm text-gray-500 mt-1">
+              Track the status of every dataset you've submitted.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate("/datasets/contribute?new=1")}
+            className="flex items-center gap-2 bg-navy hover:bg-navy-dark text-white rounded-full px-5 py-2.5 text-sm font-semibold shrink-0 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            New Dataset
+          </button>
+        </div>
 
-              {/* Search */}
-              <div className="flex items-center gap-3 mb-4">
-                <div className="flex-1 flex items-center gap-2 border border-[#E3E1DA] rounded-full px-4 py-2.5">
-                  <Search className="w-4 h-4 text-gray-400 shrink-0" />
-                  <input
-                    type="text"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search datasets"
-                    className="w-full text-sm text-navy placeholder:text-gray-400 focus:outline-none"
-                  />
-                </div>
-                {/* Filtering is already live as you type (see `filtered` above),
+        {/* Search */}
+        <div className="flex items-center gap-3 mb-4">
+          <div className="flex-1 flex items-center gap-2 border border-[#E3E1DA] rounded-full px-4 py-2.5">
+            <Search className="w-4 h-4 text-gray-400 shrink-0" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search datasets"
+              className="w-full text-sm text-navy placeholder:text-gray-400 focus:outline-none"
+            />
+          </div>
+          {/* Filtering is already live as you type (see `filtered` above),
                     so this button has no onClick logic of its own — it's the
                     visible "Search" affordance in place of the old Filters
                     button, not a separate trigger. */}
-                <button
-                  type="button"
-                  className="flex items-center gap-2 bg-navy hover:bg-navy-dark text-white rounded-full px-5 py-2.5 text-sm font-semibold shrink-0 transition-colors"
-                >
-                  <Search className="w-4 h-4" />
-                  Search
-                </button>
-              </div>
+          <button
+            type="button"
+            className="flex items-center gap-2 bg-navy hover:bg-navy-dark text-white rounded-full px-5 py-2.5 text-sm font-semibold shrink-0 transition-colors"
+          >
+            <Search className="w-4 h-4" />
+            Search
+          </button>
+        </div>
 
-              {/* Status filter pills */}
-              <div className="flex flex-wrap items-center gap-2 mb-8">
-                {STATUS_FILTERS.map((f) => (
-                  <button
-                    key={f.id}
-                    type="button"
-                    onClick={() => setStatusFilter(f.id)}
-                    className={[
-                      "px-4 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-colors",
-                      statusFilter === f.id
-                        ? "bg-gold text-white"
-                        : "bg-[#F0EFEA] text-gray-600 hover:bg-[#E3E1DA]",
-                    ].join(" ")}
+        {/* Status filter pills */}
+        <div className="flex flex-wrap items-center gap-2 mb-8">
+          {STATUS_FILTERS.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => setStatusFilter(f.id)}
+              className={[
+                "px-4 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-colors",
+                statusFilter === f.id
+                  ? "bg-gold text-white"
+                  : "bg-[#F0EFEA] text-gray-600 hover:bg-[#E3E1DA]",
+              ].join(" ")}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+
+        {error && <p role="alert" className="text-danger mb-4">{error}</p>}
+        {loading && <p className="text-gray-500">Loading datasets…</p>}
+
+        {!loading && !error && totalRows === 0 && (
+          <div className="bg-[#F7F6F2] rounded-xl p-10 text-center border border-[#E3E1DA]">
+            <p className="text-gray-500 mb-4">
+              {datasets.length === 0
+                ? "You haven't uploaded any datasets yet."
+                : "No datasets match your search or filter."}
+            </p>
+            {datasets.length === 0 && (
+              <button
+                onClick={() => navigate("/datasets/contribute?new=1")}
+                className="bg-[#A67A0D] hover:bg-[#8f690b] text-white rounded-md px-4 py-2 text-sm font-semibold transition"
+              >
+                Upload your first dataset
+              </button>
+            )}
+          </div>
+        )}
+
+        {!loading && !error && totalRows > 0 && (
+          <>
+            {/* Card grid — 6 visible per page */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {pageRows.map((dataset) => {
+                const meta = STATUS_META[dataset.status] || STATUS_META.draft;
+                const size = formatFileSize(dataset.file_size);
+                const pendingArchive = requestedMap.get(String(dataset.id)) || null;
+                const archivePending = pendingArchive?.status === "pending";
+                return (
+                  <div
+                    key={dataset.id}
+                    className="bg-white rounded-xl border border-[#E3E1DA] overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
+                    // FIX: this used to navigate to /datasets/${id}, which now
+                    // resolves to the PUBLIC DatasetViewPage. This is the
+                    // researcher's own dataset list, so it needs to land on
+                    // /my-datasets/${id} -> DatasetDetailPage instead.
+                    onClick={() => navigate(dataset.status === "draft" ? `/datasets/contribute?draft=${dataset.id}` : `/my-datasets/${dataset.id}`)}
                   >
-                    {f.label}
-                  </button>
-                ))}
-              </div>
-
-              {error && <p role="alert" className="text-danger mb-4">{error}</p>}
-              {loading && <p className="text-gray-500">Loading datasets…</p>}
-
-              {!loading && !error && totalRows === 0 && (
-                <div className="bg-[#F7F6F2] rounded-xl p-10 text-center border border-[#E3E1DA]">
-                  <p className="text-gray-500 mb-4">
-                    {datasets.length === 0
-                      ? "You haven't uploaded any datasets yet."
-                      : "No datasets match your search or filter."}
-                  </p>
-                  {datasets.length === 0 && (
-                    <button
-                      onClick={() => navigate("/datasets/contribute?new=1")}
-                      className="bg-[#A67A0D] hover:bg-[#8f690b] text-white rounded-md px-4 py-2 text-sm font-semibold transition"
-                    >
-                      Upload your first dataset
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {!loading && !error && totalRows > 0 && (
-                <>
-                  {/* Card grid — 6 visible per page */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                    {pageRows.map((dataset) => {
-                      const meta = STATUS_META[dataset.status] || STATUS_META.draft;
-                      const size = formatFileSize(dataset.file_size);
-                      const pendingArchive = requestedMap.get(String(dataset.id)) || null;
-                      const archivePending = pendingArchive?.status === "pending";
-                      return (
-                        <div
-                          key={dataset.id}
-                          className="bg-white rounded-xl border border-[#E3E1DA] overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
-                          // FIX: this used to navigate to /datasets/${id}, which now
-                          // resolves to the PUBLIC DatasetViewPage. This is the
-                          // researcher's own dataset list, so it needs to land on
-                          // /my-datasets/${id} -> DatasetDetailPage instead.
-                          onClick={() => navigate(dataset.status === "draft" ? `/datasets/contribute?draft=${dataset.id}` : `/my-datasets/${dataset.id}`)}
-                        >
-                          <div className="h-40 w-full bg-gray-100 overflow-hidden">
-                            {getDatasetImage(dataset) ? (
-                              <img
-                                src={getDatasetImage(dataset)}
-                                alt={dataset.title}
-                                loading="lazy"
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-navy/10 to-gold/10">
-                                <ImageIcon className="w-8 h-8 text-navy/30" />
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="p-4">
-                            <div className="flex items-start justify-between gap-2">
-                              <p className="text-sm font-semibold text-navy line-clamp-2">{dataset.title}</p>
-                              <button
-                                type="button"
-                                onClick={(e) => { e.stopPropagation(); dataset.status === "draft" ? setConfirmDraft(dataset) : setMenuId(menuId === dataset.id ? null : dataset.id); }}
-                                className="p-1 text-gray-400 hover:text-navy shrink-0"
-                                aria-label={dataset.status === "draft" ? "Delete draft" : "More options"}
-                              >
-                                {dataset.status === "draft" ? <Trash2 className="w-4 h-4 text-red-500" /> : <MoreVertical className="w-4 h-4" />}
-                              </button>
-                              {menuId === dataset.id && dataset.status !== "draft" && (
-                                <div className="absolute right-4 mt-2 z-10 w-36 rounded-lg border border-[#E3E1DA] bg-white p-1.5 shadow-lg">
-                                  <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmDraft(dataset); setMenuId(null); }} className="w-full rounded-md px-3 py-2 text-left text-xs font-semibold text-red-600 hover:bg-red-50">Delete draft</button>
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Status under the title */}
-                            <span className={`inline-flex items-center gap-1.5 text-xs font-semibold mt-1.5 ${meta.text}`}>
-                              <span className={`w-2 h-2 rounded-full ${meta.dot}`} />
-                              {meta.label}
-                            </span>
-
-                            <p className="text-xs text-gray-500 mt-2">
-                              {dataset.category || dataset.subject_name || "Uncategorized"} · {formatDate(dataset.created_at)}
-                            </p>
-
-                            <div className="flex items-center gap-3 mt-2.5 text-xs text-gray-400">
-                              <span className="flex items-center gap-1">
-                                <FileText className="w-3.5 h-3.5" />
-                                {dataset.file_count ?? 1} File{(dataset.file_count ?? 1) !== 1 ? "s" : ""}
-                                {size ? ` · ${size}` : ""}
-                              </span>
-                              {dataset.downloads != null && (
-                                <span className="flex items-center gap-1">
-                                  <Download className="w-3.5 h-3.5" />
-                                  {dataset.downloads.toLocaleString()}
-                                </span>
-                              )}
-                            </div>
-
-                            {/* Archive request action */}
-                            <div className="mt-3 pt-2.5 border-t border-[#F0EFEA]">
-                              {archivePending ? (
-                                <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-3 py-1.5">
-                                  <Archive className="w-3.5 h-3.5" />
-                                  Request Pending Review
-                                </span>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={(e) => { e.stopPropagation(); openArchiveModal(dataset); }}
-                                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-navy bg-[#F0EFEA] hover:bg-[#E3E1DA] rounded-full px-3 py-1.5 transition-colors"
-                                >
-                                  <Archive className="w-3.5 h-3.5" />
-                                  Archive
-                                </button>
-                              )}
-                            </div>
-                          </div>
+                    <div className="h-40 w-full bg-gray-100 overflow-hidden">
+                      {getDatasetImage(dataset) ? (
+                        <img
+                          src={getDatasetImage(dataset)}
+                          alt={dataset.title}
+                          loading="lazy"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-navy/10 to-gold/10">
+                          <ImageIcon className="w-8 h-8 text-navy/30" />
                         </div>
-                      );
-                    })}
-                  </div>
+                      )}
+                    </div>
 
-                  {/* Pagination */}
-                  <div className="flex items-center justify-end gap-4 mt-8 text-sm text-gray-500">
-                    <span>Rows per page</span>
-                    <select
-                      value={rowsPerPage}
-                      onChange={(e) => setRowsPerPage(Number(e.target.value))}
-                      className="border border-[#E3E1DA] rounded-full px-3 py-1.5 text-sm bg-white focus:outline-none focus:border-navy"
-                    >
-                      {ROWS_PER_PAGE_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
-                    </select>
-                    <span>{totalRows === 0 ? "0" : pageStart + 1} to {pageEnd} of {totalRows}</span>
-                    <button
-                      type="button"
-                      disabled={!canGoPrev}
-                      onClick={() => setPage((p) => Math.max(p - 1, 0))}
-                      className="text-lg disabled:opacity-30 disabled:cursor-not-allowed hover:text-navy"
-                      aria-label="Previous page"
-                    >
-                      ‹
-                    </button>
-                    <button
-                      type="button"
-                      disabled={!canGoNext}
-                      onClick={() => setPage((p) => p + 1)}
-                      className="text-lg disabled:opacity-30 disabled:cursor-not-allowed hover:text-navy"
-                      aria-label="Next page"
-                    >
-                      ›
-                    </button>
+                    <div className="p-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-sm font-semibold text-navy line-clamp-2">{dataset.title}</p>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); dataset.status === "draft" ? setConfirmDraft(dataset) : setMenuId(menuId === dataset.id ? null : dataset.id); }}
+                          className="p-1 text-gray-400 hover:text-navy shrink-0"
+                          aria-label={dataset.status === "draft" ? "Delete draft" : "More options"}
+                        >
+                          {dataset.status === "draft" ? <Trash2 className="w-4 h-4 text-red-500" /> : <MoreVertical className="w-4 h-4" />}
+                        </button>
+                        {menuId === dataset.id && dataset.status !== "draft" && (
+                          <div className="absolute right-4 mt-2 z-10 w-36 rounded-lg border border-[#E3E1DA] bg-white p-1.5 shadow-lg">
+                            <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmDraft(dataset); setMenuId(null); }} className="w-full rounded-md px-3 py-2 text-left text-xs font-semibold text-red-600 hover:bg-red-50">Delete draft</button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Status under the title */}
+                      <span className={`inline-flex items-center gap-1.5 text-xs font-semibold mt-1.5 ${meta.text}`}>
+                        <span className={`w-2 h-2 rounded-full ${meta.dot}`} />
+                        {meta.label}
+                      </span>
+
+                      <p className="text-xs text-gray-500 mt-2">
+                        {dataset.category || dataset.subject_name || "Uncategorized"} · {formatDate(dataset.created_at)}
+                      </p>
+
+                      <div className="flex items-center gap-3 mt-2.5 text-xs text-gray-400">
+                        <span className="flex items-center gap-1">
+                          <FileText className="w-3.5 h-3.5" />
+                          {dataset.file_count ?? 1} File{(dataset.file_count ?? 1) !== 1 ? "s" : ""}
+                          {size ? ` · ${size}` : ""}
+                        </span>
+                        {dataset.downloads != null && (
+                          <span className="flex items-center gap-1">
+                            <Download className="w-3.5 h-3.5" />
+                            {dataset.downloads.toLocaleString()}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Archive request action */}
+                      <div className="mt-3 pt-2.5 border-t border-[#F0EFEA]">
+                        {archivePending ? (
+                          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-3 py-1.5">
+                            <Archive className="w-3.5 h-3.5" />
+                            Request Pending Review
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); openArchiveModal(dataset); }}
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-navy bg-[#F0EFEA] hover:bg-[#E3E1DA] rounded-full px-3 py-1.5 transition-colors"
+                          >
+                            <Archive className="w-3.5 h-3.5" />
+                            Archive
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </>
-              )}
+                );
+              })}
             </div>
-{archiveTarget && (
+
+            {/* Pagination */}
+            <div className="flex items-center justify-end gap-4 mt-8 text-sm text-gray-500">
+              <span>Rows per page</span>
+              <select
+                value={rowsPerPage}
+                onChange={(e) => setRowsPerPage(Number(e.target.value))}
+                className="border border-[#E3E1DA] rounded-full px-3 py-1.5 text-sm bg-white focus:outline-none focus:border-navy"
+              >
+                {ROWS_PER_PAGE_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+              <span>{totalRows === 0 ? "0" : pageStart + 1} to {pageEnd} of {totalRows}</span>
+              <button
+                type="button"
+                disabled={!canGoPrev}
+                onClick={() => setPage((p) => Math.max(p - 1, 0))}
+                className="text-lg disabled:opacity-30 disabled:cursor-not-allowed hover:text-navy"
+                aria-label="Previous page"
+              >
+                ‹
+              </button>
+              <button
+                type="button"
+                disabled={!canGoNext}
+                onClick={() => setPage((p) => p + 1)}
+                className="text-lg disabled:opacity-30 disabled:cursor-not-allowed hover:text-navy"
+                aria-label="Next page"
+              >
+                ›
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+      {archiveTarget && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 px-4"
           onClick={() => !archiveSubmitting && setArchiveTarget(null)}

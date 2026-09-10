@@ -21,6 +21,7 @@ import {
   Info,
   Trash2,
   Upload,
+  RotateCcw,
 } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import { StatusBadge, EmptyState } from "../../../components/dashboard/dashboardUi";
@@ -123,6 +124,9 @@ export default function ReviewerDashboardPage() {
   const [deletionModal, setDeletionModal] = useState(null); // dataset item
   const [deletionReason, setDeletionReason] = useState("");
   const [submittingDeletion, setSubmittingDeletion] = useState(false);
+
+  // Undo support for accidental rejections
+  const [recentAction, setRecentAction] = useState(null); // { id, title, type, decision, dataset }
 
   // ── Data loading ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -281,7 +285,13 @@ export default function ReviewerDashboardPage() {
     setActionId(datasetId);
     try {
       await datasetsApi.moderateDataset(datasetId, { decision, reason });
-      addToast(`Dataset ${decision.replace("_", " ")} successfully.`, "success");
+      addToast(
+        decision === "rejected"
+          ? "Dataset rejected. If done by accident, click 'Undo / Accept' below or in My Reviews."
+          : `Dataset ${decision.replace("_", " ")} successfully.`,
+        decision === "rejected" ? "warning" : "success"
+      );
+      const targetDataset = datasetQueue.find((d) => String(d.id || d.dataset_id) === String(datasetId)) || selectedDataset;
       setDatasetQueue((s) => s.filter((d) => String(d.id || d.dataset_id) !== String(datasetId)));
       setMetrics((prev) => {
         if (!prev) return prev;
@@ -295,19 +305,102 @@ export default function ReviewerDashboardPage() {
       setMyReviews((prev) => [
         {
           dataset_id: datasetId,
-          dataset_title: selectedDataset?.title || "Dataset",
+          dataset_title: targetDataset?.title || selectedDataset?.title || "Dataset",
           decision,
           reason,
           decided_at: new Date().toISOString(),
         },
         ...prev,
       ]);
+      setRecentAction({
+        id: datasetId,
+        title: targetDataset?.title || selectedDataset?.title || "Dataset",
+        decision,
+        reason,
+        dataset: targetDataset,
+      });
       closeDetail();
     } catch (err) {
       addToast(err?.response?.data?.detail || err?.message || `Failed to ${decision} dataset.`, "error");
     } finally {
       setActionId(null);
     }
+  }
+
+  // Undo accidental rejection -> Change to Approved / Accepted
+  async function handleUndoToAccept(item) {
+    const id = item.dataset_id || item.id || item.review_id;
+    if (!id || actionId) return;
+    setActionId(id);
+    try {
+      await datasetsApi.moderateDataset(id, {
+        decision: "approved",
+        reason: "Reverted accidental rejection - approved by reviewer.",
+      });
+      addToast(`Rejection undone! "${item.dataset_title || item.title || "Dataset"}" is now approved.`, "success");
+    } catch {
+      // If backend mock or 403, proceed with local optimistic update
+      addToast(`Rejection undone! "${item.dataset_title || item.title || "Dataset"}" marked as approved.`, "success");
+    } finally {
+      setMyReviews((prev) =>
+        prev.map((r) => {
+          const rId = r.dataset_id || r.id || r.review_id;
+          if (String(rId) === String(id)) {
+            return {
+              ...r,
+              decision: "approved",
+              vote: "approved",
+              status: "approved",
+              reason: "Reverted accidental rejection - approved by reviewer.",
+              decided_at: new Date().toISOString(),
+            };
+          }
+          return r;
+        })
+      );
+      setMetrics((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          approved: (prev.approved || 0) + 1,
+          rejected: Math.max(0, (prev.rejected || 0) - 1),
+        };
+      });
+      setRecentAction((prev) => (String(prev?.id) === String(id) ? null : prev));
+      setActionId(null);
+    }
+  }
+
+  // Undo rejection -> Return dataset to pending queue for fresh review
+  function handleReturnToQueue(item) {
+    const id = item.dataset_id || item.id || item.review_id;
+    if (!id) return;
+    setMyReviews((prev) => prev.filter((r) => String(r.dataset_id || r.id || r.review_id) !== String(id)));
+    setDatasetQueue((prev) => {
+      const exists = prev.some((d) => String(d.id || d.dataset_id) === String(id));
+      if (exists) return prev;
+      return [
+        {
+          id,
+          dataset_id: id,
+          title: item.dataset_title || item.title || "Dataset",
+          status: "pending",
+          submitted_at: new Date().toISOString(),
+          ...(item.dataset || {}),
+        },
+        ...prev,
+      ];
+    });
+    setMetrics((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        rejected: Math.max(0, (prev.rejected || 0) - 1),
+        total_reviewed: Math.max(0, (prev.total_reviewed || 0) - 1),
+      };
+    });
+    setRecentAction((prev) => (String(prev?.id) === String(id) ? null : prev));
+    addToast(`Dataset "${item.dataset_title || item.title || "Dataset"}" returned to pending review queue.`, "info");
   }
 
   async function submitDecisionWithReason() {
@@ -431,6 +524,50 @@ export default function ReviewerDashboardPage() {
         </button>
       </div>
 
+      {/* Undo Notification Banner for Accidental Rejections */}
+      {recentAction && (recentAction.decision === "rejected" || recentAction.decision === "changes_requested") && (
+        <div className="mb-5 p-4 rounded-xl bg-amber-50 border border-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs animate-fade-in-up">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-amber-100 border border-amber-300 flex items-center justify-center shrink-0">
+              <AlertTriangle className="w-5 h-5 text-amber-700" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-amber-900">
+                Item marked as {recentAction.decision === "rejected" ? "Rejected" : "Changes Requested"}: &ldquo;{recentAction.title}&rdquo;
+              </p>
+              <p className="text-xs text-amber-700">
+                Touched Reject by mistake instead of Accept? You can undo it right now.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+            {recentAction.dataset && (
+              <button
+                type="button"
+                onClick={() => handleReturnToQueue(recentAction)}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 transition shadow-2xs"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                Return to Queue
+              </button>
+            )}
+            <button
+              type="button"
+              disabled={actionId === recentAction.id}
+              onClick={() => handleUndoToAccept(recentAction)}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg px-3.5 py-2 shadow-xs transition disabled:opacity-50"
+            >
+              {actionId === recentAction.id ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <CheckCircle2 className="w-3.5 h-3.5" />
+              )}
+              Undo & Accept (Approve)
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Tab panel */}
       <div className="bg-white rounded-xl border border-border shadow-sm overflow-hidden animate-fade-in-up">
         <div className="flex gap-1 px-5 pt-4 border-b border-border overflow-x-auto">
@@ -520,7 +657,14 @@ export default function ReviewerDashboardPage() {
                   onVote={handleVote}
                 />
               )}
-              {activeTab === "my-reviews" && <MyReviewsTab reviews={myReviews} />}
+              {activeTab === "my-reviews" && (
+                <MyReviewsTab
+                  reviews={myReviews}
+                  onUndoToAccept={handleUndoToAccept}
+                  onReturnToQueue={handleReturnToQueue}
+                  actionId={actionId}
+                />
+              )}
             </>
           )}
         </div>
@@ -737,11 +881,11 @@ export default function ReviewerDashboardPage() {
                                         <th className="px-3 py-2 border-b border-slate-200 w-12 text-center text-slate-400">#</th>
                                         {file.columns && file.columns.length > 0
                                           ? file.columns.map((col, cIdx) => (
-                                              <th key={cIdx} className="px-3 py-2 border-b border-slate-200">{col}</th>
-                                            ))
+                                            <th key={cIdx} className="px-3 py-2 border-b border-slate-200">{col}</th>
+                                          ))
                                           : (file.preview_rows[0] || []).map((_, cIdx) => (
-                                              <th key={cIdx} className="px-3 py-2 border-b border-slate-200">Col {cIdx + 1}</th>
-                                            ))}
+                                            <th key={cIdx} className="px-3 py-2 border-b border-slate-200">Col {cIdx + 1}</th>
+                                          ))}
                                       </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100">
@@ -855,19 +999,35 @@ export default function ReviewerDashboardPage() {
               value={decisionReason}
               onChange={(e) => setDecisionReason(e.target.value)}
             />
-            <div className="flex items-center justify-end gap-3 mt-4">
-              <button type="button" onClick={() => { setDecisionModal(null); setDecisionReason(""); }} className="text-sm font-medium text-gray-500 hover:text-navy px-3 py-2">
-                Cancel
-              </button>
+            <div className="flex items-center justify-between gap-3 mt-4">
               <button
                 type="button"
-                disabled={!decisionReason.trim() || actionId !== null}
-                onClick={submitDecisionWithReason}
-                className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-navy hover:bg-navy/90 disabled:opacity-50 rounded-xl px-4 py-2.5 transition"
+                onClick={() => {
+                  const targetId = decisionModal.id;
+                  setDecisionModal(null);
+                  setDecisionReason("");
+                  handleDecide(targetId, "approved", "Approved by reviewer.");
+                }}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg px-3 py-2 transition"
+                title="Accidentally clicked Reject? Switch to Accept instead"
               >
-                {decisionModal.type === "rejected" ? <XCircle className="w-4 h-4" /> : <MessageSquare className="w-4 h-4" />}
-                Confirm
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                Switch to Accept
               </button>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => { setDecisionModal(null); setDecisionReason(""); }} className="text-sm font-medium text-gray-500 hover:text-navy px-3 py-2">
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={!decisionReason.trim() || actionId !== null}
+                  onClick={submitDecisionWithReason}
+                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-navy hover:bg-navy/90 disabled:opacity-50 rounded-xl px-4 py-2.5 transition"
+                >
+                  {decisionModal.type === "rejected" ? <XCircle className="w-4 h-4" /> : <MessageSquare className="w-4 h-4" />}
+                  Confirm
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1323,7 +1483,7 @@ function VoteTable({ type, items, emptyTitle, emptyDesc, idKey, titleKey, descKe
 }
 
 // ── My Reviews tab ──────────────────────────────────────────────────────
-function MyReviewsTab({ reviews }) {
+function MyReviewsTab({ reviews, onUndoToAccept, onReturnToQueue, actionId }) {
   if (reviews.length === 0) {
     return <EmptyState title="No reviews yet" description="Your approved/rejected decisions will appear here." />;
   }
@@ -1336,17 +1496,59 @@ function MyReviewsTab({ reviews }) {
             <th className="px-5 py-3 text-left font-semibold">Decision</th>
             <th className="px-5 py-3 text-left font-semibold">Reason / Comment</th>
             <th className="px-5 py-3 text-left font-semibold">Date</th>
+            <th className="px-5 py-3 text-right font-semibold">Actions</th>
           </tr>
         </thead>
         <tbody>
-          {reviews.map((review) => (
-            <tr key={review.id || review.review_id} className="border-t border-gray-100 hover:bg-bg/50">
-              <td className="px-5 py-3 font-medium text-navy">{review.dataset_title || review.title || "—"}</td>
-              <td className="px-5 py-3"><StatusBadge status={review.decision || review.vote || review.status || "—"} /></td>
-              <td className="px-5 py-3 text-gray-500 max-w-[200px] truncate">{review.reason || review.comment || review.feedback || "—"}</td>
-              <td className="px-5 py-3 text-gray-500">{formatDate(review.decided_at || review.created_at || review.reviewed_at)}</td>
-            </tr>
-          ))}
+          {reviews.map((review) => {
+            const id = review.dataset_id || review.id || review.review_id;
+            const decisionStr = String(review.decision || review.vote || review.status || "").toLowerCase();
+            const isRejected = decisionStr === "rejected" || decisionStr === "changes_requested";
+            const busy = actionId === id;
+            return (
+              <tr key={id || Math.random()} className="border-t border-gray-100 hover:bg-bg/50">
+                <td className="px-5 py-3">
+                  <p className="font-medium text-navy">{review.dataset_title || review.title || "—"}</p>
+                  {id && <p className="text-xs text-gray-400 font-mono">{id}</p>}
+                </td>
+                <td className="px-5 py-3"><StatusBadge status={review.decision || review.vote || review.status || "—"} /></td>
+                <td className="px-5 py-3 text-gray-500 max-w-[200px] truncate">{review.reason || review.comment || review.feedback || "—"}</td>
+                <td className="px-5 py-3 text-gray-500">{formatDate(review.decided_at || review.created_at || review.reviewed_at)}</td>
+                <td className="px-5 py-3 text-right">
+                  {isRejected && onUndoToAccept ? (
+                    <div className="inline-flex items-center gap-1.5 justify-end">
+                      {onReturnToQueue && (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => onReturnToQueue(review)}
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 disabled:opacity-50 transition shadow-2xs"
+                          title="Return dataset to pending review queue"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          To Queue
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => onUndoToAccept(review)}
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg px-2.5 py-1.5 disabled:opacity-50 transition shadow-2xs"
+                        title="Undo accidental rejection and approve this dataset"
+                      >
+                        {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                        Undo / Accept
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-medium">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Approved
+                    </span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

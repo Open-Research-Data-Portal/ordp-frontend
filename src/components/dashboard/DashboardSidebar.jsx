@@ -116,7 +116,7 @@ export default function DashboardSidebar() {
       </div>
 
       {/* Primary CTA */}
-      
+
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto min-h-0">

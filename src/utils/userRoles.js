@@ -1,3 +1,50 @@
+// Role priority used to pick a single "primary" role when a user holds
+// several (the backend's UserRole model allows multiple roles per profile,
+// e.g. ["public", "reviewer"]). Higher number wins.
+const ROLE_PRIORITY = {
+  admin: 4,
+  superadmin: 4,
+  superuser: 4,
+  staff: 4,
+  reviewer: 3,
+  researcher: 2,
+  public: 1,
+  user: 1,
+};
+
+/**
+ * Collect every role value the backend may report for a user:
+ *  - singular fields (`role`, `user_role`, `account_type`),
+ *  - the `roles` array — the authoritative source in the ORDP backend
+ *    (`/accounts/profile/` and `/accounts/profile/complete/` both return
+ *    the profile's roles as an array, e.g. `["reviewer"]`, `["public"]`),
+ *  - profile-nested equivalents.
+ * Returns normalized lowercase strings.
+ */
+export function getEffectiveRoles(user) {
+  const roles = [];
+  const add = (value) => {
+    if (value && typeof value === "string" && value.trim()) {
+      roles.push(value.trim().toLowerCase());
+    }
+  };
+  add(user?.role);
+  add(user?.user_role);
+  add(user?.account_type);
+  add(user?.profile?.role);
+  if (Array.isArray(user?.roles)) user.roles.forEach(add);
+  if (Array.isArray(user?.profile?.roles)) user.profile.roles.forEach(add);
+  return roles;
+}
+
+function pickBestRole(roles) {
+  return roles.reduce(
+    (best, r) =>
+      (ROLE_PRIORITY[r] || 0) > (ROLE_PRIORITY[best] || 0) ? r : best,
+    null
+  );
+}
+
 export function getUserRole(user) {
   if (!user) return "user";
 
@@ -14,14 +61,7 @@ export function getUserRole(user) {
     return "admin";
   }
 
-  const role =
-    user.role ||
-    user.user_role ||
-    user.account_type ||
-    user.profile?.role ||
-    "user";
-
-  return String(role).toLowerCase();
+  return pickBestRole(getEffectiveRoles(user)) || "user";
 }
 
 function looksLikeAdminAccount(user) {
@@ -106,10 +146,18 @@ export function mergeAuthUser(sessionUser, profile) {
   merged.login_identifier = sessionUser?.login_identifier || merged.login_identifier;
   if (sessionUser?.username) merged.username = sessionUser.username;
   else if (profile?.username) merged.username = profile.username;
+
+  // The backend reports roles as an array (e.g. `["public"]`, `["reviewer"]`).
+  // Normalize it and derive the single `role` field so every consumer
+  // (login routing, sidebar, notifications, guards…) sees one consistent value
+  // instead of reviewers silently falling back to "user".
+  merged.roles = getEffectiveRoles(merged);
   const inferred = getUserRole(merged);
   if (inferred === "admin" || looksLikeAdminAccount(merged)) {
     merged.role = "admin";
     merged.is_staff = true;
+  } else if (inferred !== "user") {
+    merged.role = inferred;
   } else if (!merged.role && sessionUser?.role) {
     merged.role = sessionUser.role;
   }

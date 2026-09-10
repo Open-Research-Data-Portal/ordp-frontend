@@ -8,12 +8,18 @@ import {
   Download,
   Image as ImageIcon,
   Trash2,
+  Archive,
+  X,
+  Send,
+  Loader2,
 } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import { useAuth } from "../../../context/useAuth";
 import { getDatasetImage } from "../../../utils/datasetImage";
-import { getDashboardPath } from "../../../utils/userRoles";
+import { getDashboardPath, getDisplayName } from "../../../utils/userRoles";
 import * as datasetsApi from "../hooks/datasetsApi";
+import * as archiveApi from "../../../api/archiveRequests";
+import { useToast } from "../../../context/ToastContext.jsx";
 
 const STATUS_META = {
   approved: { label: "APPROVED", dot: "bg-success", text: "text-success" },
@@ -60,8 +66,15 @@ export default function DatasetListPage() {
   const [page, setPage] = useState(0);
   const [menuId, setMenuId] = useState(null);
   const [confirmDraft, setConfirmDraft] = useState(null);
+  // Archive request state
+  const [requestedMap, setRequestedMap] = useState(() => new Map());
+  const [archiveTarget, setArchiveTarget] = useState(null);
+  const [archiveReason, setArchiveReason] = useState("");
+  const [archiveComment, setArchiveComment] = useState("");
+  const [archiveSubmitting, setArchiveSubmitting] = useState(false);
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { addToast } = useToast();
 
   async function deleteDraft(dataset) {
     setMenuId(null);
@@ -71,6 +84,69 @@ export default function DatasetListPage() {
       setDatasets((items) => items.filter((item) => item.id !== dataset.id));
     } catch (err) {
       setError(err.response?.data?.detail || "Failed to delete draft.");
+    }
+  }
+
+  function openArchiveModal(dataset) {
+    setMenuId(null);
+    setArchiveTarget(dataset);
+    setArchiveReason("");
+    setArchiveComment("");
+  }
+
+  async function submitArchiveRequestModal() {
+    if (!archiveTarget || !archiveReason) return;
+    setArchiveSubmitting(true);
+    try {
+      // Small delay so the "Sending…" state is visible.
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      const comment = archiveComment.trim();
+      const reasonText = comment || archiveApi.reasonLabel(archiveReason);
+      let entry;
+      try {
+        // Real backend first — POST /datasets/<id>/archive/.
+        const resp = await datasetsApi.archiveDataset(archiveTarget.id, {
+          reason_category: archiveReason,
+          reason: reasonText,
+        });
+        entry = {
+          id: resp?.request_id || `arch-req-${Date.now()}`,
+          dataset_id: String(archiveTarget.id),
+          dataset_title: archiveTarget.title,
+          owner_name: getDisplayName(user),
+          owner_email: user?.email,
+          reason: archiveReason,
+          comment,
+          requested_at: new Date().toISOString(),
+          status: "pending",
+          source: "api",
+        };
+        // Mirror into the local store so the reviewer/admin fallback views see it too.
+        archiveApi.mirrorSubmittedRequest(entry);
+      } catch {
+        // Backend unavailable — demo fallback to the local store.
+        entry = archiveApi.submitArchiveRequest({
+          dataset_id: archiveTarget.id,
+          dataset_title: archiveTarget.title,
+          owner_name: getDisplayName(user),
+          owner_email: user?.email,
+          reason: archiveReason,
+          comment,
+        });
+      }
+      setRequestedMap((prev) => {
+        const next = new Map(prev);
+        next.set(String(archiveTarget.id), entry);
+        return next;
+      });
+      addToast("Archive request sent to the review queue.", "success");
+      setArchiveTarget(null);
+      setArchiveReason("");
+      setArchiveComment("");
+    } catch (err) {
+      addToast(err?.message || "Failed to send archive request.", "error");
+    } finally {
+      setArchiveSubmitting(false);
     }
   }
 
@@ -89,6 +165,12 @@ export default function DatasetListPage() {
         if (isMounted) {
           const list = Array.isArray(data) ? data : data?.results || [];
           setDatasets(list);
+          const map = new Map();
+          list.forEach((d) => {
+            const req = archiveApi.getArchiveRequestsForDataset(d.id)[0];
+            if (req) map.set(String(d.id), req);
+          });
+          setRequestedMap(map);
         }
       } catch (err) {
         if (isMounted) {
@@ -220,6 +302,8 @@ export default function DatasetListPage() {
                     {pageRows.map((dataset) => {
                       const meta = STATUS_META[dataset.status] || STATUS_META.draft;
                       const size = formatFileSize(dataset.file_size);
+                      const pendingArchive = requestedMap.get(String(dataset.id)) || null;
+                      const archivePending = pendingArchive?.status === "pending";
                       return (
                         <div
                           key={dataset.id}
@@ -286,6 +370,25 @@ export default function DatasetListPage() {
                                 </span>
                               )}
                             </div>
+
+                            {/* Archive request action */}
+                            <div className="mt-3 pt-2.5 border-t border-[#F0EFEA]">
+                              {archivePending ? (
+                                <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-3 py-1.5">
+                                  <Archive className="w-3.5 h-3.5" />
+                                  Request Pending Review
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); openArchiveModal(dataset); }}
+                                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-navy bg-[#F0EFEA] hover:bg-[#E3E1DA] rounded-full px-3 py-1.5 transition-colors"
+                                >
+                                  <Archive className="w-3.5 h-3.5" />
+                                  Archive
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       );
@@ -325,7 +428,85 @@ export default function DatasetListPage() {
                 </>
               )}
             </div>
-{confirmDraft && (
+{archiveTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 px-4"
+          onClick={() => !archiveSubmitting && setArchiveTarget(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-xl border border-[#E3E1DA] bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3 mb-1">
+              <h2 className="text-base font-semibold text-navy">Request Dataset Archive</h2>
+              <button
+                type="button"
+                onClick={() => setArchiveTarget(null)}
+                className="p-1 text-gray-400 hover:text-navy rounded-lg transition"
+                aria-label="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-sm text-gray-500">
+              “{archiveTarget.title}” will be sent to the review queue for archiving.
+            </p>
+
+            <div className="mt-5 space-y-4">
+              <div>
+                <label htmlFor="archive-reason" className="block text-xs font-semibold text-gray-600 mb-1.5">
+                  Reason for archiving
+                </label>
+                <select
+                  id="archive-reason"
+                  value={archiveReason}
+                  onChange={(e) => setArchiveReason(e.target.value)}
+                  className="w-full rounded-lg border border-[#E3E1DA] text-sm py-2.5 px-3 bg-white focus:outline-none focus:border-navy"
+                >
+                  <option value="">Select a reason…</option>
+                  {archiveApi.ARCHIVE_REASONS.map((r) => (
+                    <option key={r.value} value={r.value}>{r.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="archive-comment" className="block text-xs font-semibold text-gray-600 mb-1.5">
+                  Comment <span className="font-normal text-gray-400">(optional)</span>
+                </label>
+                <textarea
+                  id="archive-comment"
+                  rows={3}
+                  value={archiveComment}
+                  onChange={(e) => setArchiveComment(e.target.value)}
+                  placeholder="Add any additional details for the reviewer…"
+                  className="w-full rounded-lg border border-[#E3E1DA] text-sm py-2.5 px-3 bg-white focus:outline-none focus:border-navy resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setArchiveTarget(null)}
+                className="rounded-md border border-[#E3E1DA] px-4 py-2 text-sm font-medium text-gray-600 hover:bg-[#F7F6F2] transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!archiveReason || archiveSubmitting}
+                onClick={submitArchiveRequestModal}
+                className="inline-flex items-center gap-2 rounded-md bg-[#A67A0D] hover:bg-[#8f690b] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed transition"
+              >
+                {archiveSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                {archiveSubmitting ? "Sending…" : "Send Archive Request"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {confirmDraft && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 px-4" onClick={() => setConfirmDraft(null)}>
           <div className="w-full max-w-sm rounded-xl border border-[#E3E1DA] bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-base font-semibold text-navy">Delete draft?</h2>

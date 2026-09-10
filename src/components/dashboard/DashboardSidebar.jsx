@@ -12,9 +12,9 @@ import {
   Bookmark,
   Plus,
   Shield,
-  Trash2,
   ScrollText,
   Bell,
+  Archive,
 } from "lucide-react";
 import { useAuth } from "../../context/useAuth";
 import { getDashboardPath, isAdmin, isReviewer, isResearcher } from "../../utils/userRoles";
@@ -28,6 +28,7 @@ const ROLE_CONFIG = {
     nav: [
       { label: "Dashboard", icon: LayoutGrid, to: "/user-dashboard" },
       { label: "Other Datasets", icon: Database, to: "/datasets" },
+      { label: "Archived Datasets", icon: Archive, to: "/archived-datasets" },
       { label: "Bookmarks", icon: Bookmark, to: "/bookmarks" },
       { label: "Notifications", icon: Bell, to: "/notifications" },
       { label: "Settings", icon: Settings, to: "/profile" },
@@ -39,6 +40,7 @@ const ROLE_CONFIG = {
     nav: [
       { label: "Dashboard", icon: LayoutGrid, to: "/researcher-dashboard" },
       { label: "My Datasets", icon: FolderKanban, to: "/my-datasets" },
+      { label: "Archived Datasets", icon: Archive, to: "/archived-datasets" },
       { label: "Other Datasets", icon: Database, to: "/datasets" },
       { label: "Bookmarks", icon: Bookmark, to: "/bookmarks" },
       { label: "Notifications", icon: Bell, to: "/notifications" },
@@ -52,6 +54,7 @@ const ROLE_CONFIG = {
       { label: "Dashboard", icon: LayoutGrid, to: "/reviewer-dashboard" },
       { label: "Datasets", icon: Database, to: "/datasets" },
       { label: "Review Datasets", icon: ClipboardCheck, to: "/reviewer-dashboard?tab=datasets" },
+      { label: "Archive Requests", icon: Archive, to: "/reviewer/archive-requests" },
       { label: "Notifications", icon: Bell, to: "/notifications" },
       { label: "Settings", icon: Settings, to: "/profile" },
     ],
@@ -64,7 +67,7 @@ const ROLE_CONFIG = {
       { label: "Overview", icon: LayoutGrid, to: "/admin-dashboard" },
       { label: "Datasets", icon: Database, to: "/admin-dashboard?tab=datasets" },
       { label: "Audit Log", icon: ScrollText, to: "/admin/audit-log" },
-      { label: "Deletion Requests", icon: Trash2, to: "/admin/deletion-requests" },
+      { label: "Archived Datasets", icon: Archive, to: "/admin/archived-datasets" },
       { label: "Users", icon: Users, to: "/admin-dashboard?tab=users" },
       { label: "Notifications", icon: Bell, to: "/notifications" },
     ],

@@ -20,8 +20,10 @@ import DatasetListPage from "../features/datasets/pages/DatasetListPage.jsx";
 import ResearcherDashboardPage from "../features/datasets/pages/ResearcherDashboardPage.jsx";
 import AdminDashboardPage from "../features/datasets/pages/AdminDashboardPage.jsx";
 import AdminAuditLogPage from "../features/datasets/pages/AdminAuditLogPage.jsx";
-import AdminDeletionRequestsPage from "../features/datasets/pages/AdminDeletionRequestsPage.jsx";
+import AdminArchivedDatasetsPage from "../features/datasets/pages/AdminArchivedDatasetsPage.jsx";
 import ReviewerDashboardPage from "../features/datasets/pages/ReviewerDashboardPage.jsx";
+import ReviewerArchiveRequestsPage from "../features/datasets/pages/ReviewerArchiveRequestsPage.jsx";
+import UserArchivedDatasetsPage from "../features/datasets/pages/UserArchivedDatasetsPage.jsx";
 import DatasetDetailPage from "../features/datasets/pages/Datasetdetailpage.jsx";
 import BrowseDatasetsPage from "../pages/BrowseDatasetsPage.jsx";
 import DatasetViewPage from "../pages/DatasetViewPage";
@@ -134,8 +136,19 @@ export default function AppRoutes() {
       <Route path="/admin/audit-log" element={
         <ProtectedRoute><AdminAuditLogPage /></ProtectedRoute>
       } />
+      {/* Archive requests — renamed & re-purposed from the old deletion
+          workflow. Old /admin/deletion-requests keeps redirecting here. */}
+      <Route path="/admin/archived-datasets" element={
+        <ProtectedRoute><AdminArchivedDatasetsPage /></ProtectedRoute>
+      } />
       <Route path="/admin/deletion-requests" element={
-        <ProtectedRoute><AdminDeletionRequestsPage /></ProtectedRoute>
+        <Navigate to="/admin/archived-datasets" replace />
+      } />
+      <Route path="/archived-datasets" element={
+        <ProtectedRoute><UserArchivedDatasetsPage /></ProtectedRoute>
+      } />
+      <Route path="/reviewer/archive-requests" element={
+        <ProtectedRoute><ReviewerArchiveRequestsPage /></ProtectedRoute>
       } />
       <Route path="/profile" element={
         <ProtectedRoute><ProfilePage /></ProtectedRoute>

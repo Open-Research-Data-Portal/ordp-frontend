@@ -26,6 +26,7 @@ import DashboardShell from "../../../components/dashboard/DashboardShell";
 import { StatusBadge, EmptyState } from "../../../components/dashboard/dashboardUi";
 import { useToast } from "../../../context/ToastContext.jsx";
 import * as datasetsApi from "../hooks/datasetsApi.js";
+import { fetchAllDatasets } from "../../../api/datasetsHub";
 
 function normalizeList(data) {
   if (Array.isArray(data)) return data;
@@ -164,6 +165,17 @@ export default function ReviewerDashboardPage() {
           return !s || s === "pending" || s === "submitted" || s === "in_review";
         });
         setDatasetQueue(pendingOnly.length > 0 ? pendingOnly : merged);
+
+        // If the reviewer queue is empty, surface the full directory so the
+        // "Review Datasets" tab is never blank.
+        if (active && pendingOnly.length === 0 && merged.length === 0) {
+          try {
+            const all = await fetchAllDatasets();
+            if (active && all.length > 0) setDatasetQueue(all);
+          } catch {
+            // keep empty — not critical
+          }
+        }
 
         if (results[3].status === "fulfilled") setContentUpdates(normalizeList(results[3].value));
         if (results[4].status === "fulfilled") setRevisionRequests(normalizeList(results[4].value));

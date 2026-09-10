@@ -14,6 +14,7 @@ import DashboardShell from "../../../components/dashboard/DashboardShell";
 import StatCard from "../../../components/dashboard/StatCard";
 import { SectionHeader, StatusBadge, ProfileSavedNotice, EmptyState } from "../../../components/dashboard/dashboardUi";
 import * as datasetsApi from "../hooks/datasetsApi";
+import { fetchAllDatasets } from "../../../api/datasetsHub";
 import { useToast } from "../../../context/ToastContext.jsx";
 
 function normalizeList(data) {
@@ -89,6 +90,17 @@ export default function AdminDashboardPage() {
       if (usersRes.status === "fulfilled") setUsers(normalizeList(usersRes.value));
       if (queueRes.status === "fulfilled") setQueue(normalizeList(queueRes.value));
       if (reviewsRes.status === "fulfilled") setReviews(normalizeList(reviewsRes.value));
+
+      // The moderation queue can be empty/unavailable even when datasets
+      // exist — fall back to the full directory so the datasets tab always
+      // shows what's actually in the portal.
+      if (active && normalizeList(queueRes.value ?? []).length === 0) {
+        try {
+          setQueue(await fetchAllDatasets());
+        } catch {
+          // keep empty queue — not critical
+        }
+      }
       setLoading(false);
     }
     load();

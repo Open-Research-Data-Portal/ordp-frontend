@@ -1,35 +1,13 @@
 import client from "./client";
-import { fetchAllDatasets } from "./datasetsHub";
-
-function normalizeList(data) {
-  if (Array.isArray(data)) return data;
-  return data?.results || data?.datasets || [];
-}
 
 export async function searchDatasets(params) {
-  // Primary source — the public dataset directory.
-  try {
-    const response = await client.get("/search/datasets/", { params });
-    const data = response.data;
-    const list = normalizeList(data);
-    if (list.length > 0) return list;
-  } catch (err) {
-    // fall through to the resilient hub below
-    console.warn("searchDatasets primary failed, falling back:", err?.message);
-  }
-  // The public endpoint can 500 / be unavailable. Pull everything we can from
-  // the other dataset sources so browse & search never look broken.
-  return fetchAllDatasets();
+  const response = await client.get("/search/datasets/", { params });
+  const data = response.data;
+  return Array.isArray(data) ? data : (data?.results || data?.datasets || []);
 }
 
 export async function getDiscoverFeed() {
-  try {
-    const response = await client.get("/search/discover/");
-    const data = response.data;
-    const list = normalizeList(data);
-    if (list.length > 0) return list;
-  } catch (err) {
-    console.warn("getDiscoverFeed failed, falling back:", err?.message);
-  }
-  return fetchAllDatasets();
+  const response = await client.get("/search/discover/");
+  const data = response.data;
+  return Array.isArray(data) ? data : (data?.results || data?.datasets || []);
 }

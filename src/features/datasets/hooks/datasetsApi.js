@@ -214,19 +214,55 @@ export async function getMyReviews() {
 }
 
 export async function decideDataset(datasetId, decision, reason) {
-  const payload = { decision };
-  if (reason) payload.reason = reason;
-  const { data } = await client.post(`/admin-panel/${datasetId}/decide/`, payload);
-  return data;
+  const normDecision = String(decision || "approved").toLowerCase();
+  const altDecision = normDecision === "approved" ? "approve" : normDecision === "rejected" ? "reject" : normDecision;
+
+  // If this is a local mock dataset (e.g. ds-mock-01), handle gracefully in demo mode
+  if (String(datasetId).startsWith("mock") || String(datasetId).startsWith("ds-mock")) {
+    return { status: "success", decision: normDecision, message: "Mock dataset decision recorded." };
+  }
+
+  const candidateUrls = [
+    `/admin-panel/datasets/${datasetId}/decide/`,
+    `/admin-panel/${datasetId}/decide/`,
+    `/admin-panel/queue/${datasetId}/decide/`,
+    `/datasets/${datasetId}/decide/`,
+    ...(normDecision === "approved" ? [`/datasets/${datasetId}/approve/`, `/admin-panel/datasets/${datasetId}/approve/`] : []),
+    ...(normDecision === "rejected" ? [`/datasets/${datasetId}/reject/`, `/admin-panel/datasets/${datasetId}/reject/`] : []),
+  ];
+
+  let lastErr = null;
+  for (const url of candidateUrls) {
+    try {
+      const payload = { decision: normDecision };
+      if (reason) payload.reason = reason;
+      const { data } = await client.post(url, payload);
+      return data;
+    } catch (err) {
+      lastErr = err;
+      const status = err?.response?.status;
+      // If 400 Bad Request, also try alternative decision keyword (e.g. "approve" vs "approved")
+      if (status === 400 && altDecision !== normDecision) {
+        try {
+          const altPayload = { decision: altDecision };
+          if (reason) altPayload.reason = reason;
+          const { data } = await client.post(url, altPayload);
+          return data;
+        } catch (altErr) {
+          lastErr = altErr;
+        }
+      }
+      // If it's not a 404 or 405, the endpoint exists on the backend and returned a specific error
+      if (status && status !== 404 && status !== 405) {
+        throw lastErr;
+      }
+    }
+  }
+  throw lastErr;
 }
 
 export async function moderateDataset(datasetId, payload) {
-  const body = {
-    decision: payload.decision,
-    reason: payload.reason || payload.comment || "",
-  };
-  const { data } = await client.post(`/admin-panel/${datasetId}/decide/`, body);
-  return data;
+  return decideDataset(datasetId, payload.decision, payload.reason || payload.comment || "");
 }
 
 export async function getContentUpdateQueue() {

@@ -223,7 +223,16 @@ export default function ReviewDatasetPage() {
       );
       navigate("/reviewer/review-queue");
     } catch (err) {
-      addToast(err?.response?.data?.detail || "Failed to submit decision.", "error");
+      console.error("Decision submission error:", err);
+      const serverMsg =
+        err?.response?.data?.detail ||
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        (typeof err?.response?.data === "string" ? err.response.data : null) ||
+        (err?.response?.data ? JSON.stringify(err.response.data) : null) ||
+        err?.message ||
+        "Failed to submit decision.";
+      addToast(serverMsg, "error");
     } finally {
       setSubmitting(false);
     }

@@ -97,26 +97,32 @@ export default function ReviewerQueuePage() {
         const merged = [];
         for (const item of [...reviewerQ, ...adminPending]) {
           const id = String(item.id || item.dataset_id);
-          if (!seen.has(id)) { seen.add(id); merged.push(item); }
+          if (id && !seen.has(id)) { seen.add(id); merged.push(item); }
         }
+
+        // Also check if any datasets in the repository are in pending/submitted/in_review status
+        if (merged.length === 0) {
+          try {
+            const myData = await datasetsApi.getMyDatasets();
+            const myList = Array.isArray(myData) ? myData : (myData?.results || []);
+            for (const item of myList) {
+              const s = String(item.status || "").toLowerCase();
+              const id = String(item.id || item.dataset_id);
+              if (id && (s === "pending" || s === "submitted" || s === "in_review") && !seen.has(id)) {
+                seen.add(id);
+                merged.push(item);
+              }
+            }
+          } catch {
+            // non-fatal
+          }
+        }
+
         const pendingOnly = merged.filter((d) => {
           const s = String(d.status || "").toLowerCase();
           return !s || s === "pending" || s === "submitted" || s === "in_review";
         });
-        setDatasetQueue(pendingOnly.length > 0 ? pendingOnly : merged);
-
-        // If the reviewer queue is empty, fallback to non-archived catalog items so the review queue can be tested
-        if (active && pendingOnly.length === 0 && merged.length === 0) {
-          try {
-            const all = await fetchAllDatasets();
-            if (active && all.length > 0) {
-              const pendingOrSample = all.filter((d) => String(d.status || "").toLowerCase() !== "archived");
-              setDatasetQueue(pendingOrSample);
-            }
-          } catch {
-            // keep empty
-          }
-        }
+        setDatasetQueue(pendingOnly);
 
         if (results[1].status === "fulfilled") setContentUpdates(normalizeList(results[1].value));
         if (results[2].status === "fulfilled") setRevisionRequests(normalizeList(results[2].value));

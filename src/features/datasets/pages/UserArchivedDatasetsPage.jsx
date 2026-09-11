@@ -18,8 +18,8 @@ function formatDate(value) {
 function RequestBadge({ request }) {
   if (!request) {
     return (
-      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-1">
-        <CheckCircle2 className="w-3.5 h-3.5" /> Active
+      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-600 bg-gray-100 border border-gray-200 rounded-full px-2.5 py-1">
+        <Archive className="w-3.5 h-3.5" /> Archived
       </span>
     );
   }
@@ -80,18 +80,25 @@ export default function UserArchivedDatasetsPage() {
     return () => { active = false; };
   }, []);
 
-  const sorted = useMemo(
-    () => datasets.slice().sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
-    [datasets]
-  );
-
-  const pendingCount = useMemo(
-    () => sorted.filter((d) => requestsMap.get(String(d.id))?.status === "pending").length,
-    [sorted, requestsMap]
-  );
+  // SPEC: Add a frontend filter: only show items where status === "archived" (or archive_status === "archived" or approved archive request)
+  const sortedArchived = useMemo(() => {
+    return datasets
+      .filter((d) => {
+        const s = String(d.status || "").toLowerCase();
+        const archS = String(d.archive_status || "").toLowerCase();
+        const req = requestsMap.get(String(d.id));
+        return (
+          s === "archived" ||
+          archS === "archived" ||
+          d.is_archived === true ||
+          req?.status === "approved"
+        );
+      })
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }, [datasets, requestsMap]);
 
   return (
-    <DashboardShell title="Archived Datasets" subtitle="Track archive requests for your datasets">
+    <DashboardShell title="Archived Datasets" subtitle="Browse datasets that have been archived.">
       <div className="p-8 lg:p-10 bg-white min-h-full rounded-2xl border border-[#E3E1DA]">
         <button
           type="button"
@@ -104,32 +111,34 @@ export default function UserArchivedDatasetsPage() {
           <div>
             <h1 className="text-3xl font-serif font-bold text-navy">Archived Datasets</h1>
             <p className="text-sm text-gray-500 mt-1">
-              {pendingCount > 0
-                ? `${pendingCount} dataset${pendingCount > 1 ? "s" : ""} awaiting review.`
-                : "Request archiving from My Datasets — requests are reviewed by the moderation team."}
+              Archived datasets are preserved for institutional research records and are withdrawn from active discovery.
             </p>
           </div>
         </div>
 
         {error && <p role="alert" className="text-danger mt-4">{error}</p>}
-        {loading && <p className="text-gray-500 mt-6">Loading datasets…</p>}
+        {loading && <p className="text-gray-500 mt-6">Loading archived datasets…</p>}
 
-        {!loading && !error && sorted.length === 0 && (
+        {!loading && !error && sortedArchived.length === 0 && (
           <div className="mt-8 bg-[#F7F6F2] rounded-xl p-10 text-center border border-[#E3E1DA]">
             <Inbox className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-500 mb-4">You haven't uploaded any datasets yet.</p>
+            <h3 className="text-base font-semibold text-navy mb-1">No Archived Datasets</h3>
+            <p className="text-gray-500 mb-4 max-w-md mx-auto text-sm">
+              You do not have any archived datasets. You can request archiving for eligible published datasets from My Datasets.
+            </p>
             <button
               type="button"
-              onClick={() => navigate("/datasets/contribute?new=1")}
-              className="bg-[#A67A0D] hover:bg-[#8f690b] text-white rounded-md px-4 py-2 text-sm font-semibold transition"
+              onClick={() => navigate("/my-datasets")}
+              className="bg-navy hover:bg-navy-dark text-white rounded-md px-4 py-2 text-sm font-semibold transition"
             >
-              Upload your first dataset
+              View My Datasets
             </button>
           </div>
         )}
-        {!loading && !error && sorted.length > 0 && (
+
+        {!loading && !error && sortedArchived.length > 0 && (
           <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {sorted.map((dataset) => {
+            {sortedArchived.map((dataset) => {
               const request = requestsMap.get(String(dataset.id)) || null;
               return (
                 <div

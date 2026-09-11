@@ -53,7 +53,7 @@ const ROLE_CONFIG = {
     nav: [
       { label: "Dashboard", icon: LayoutGrid, to: "/reviewer-dashboard" },
       { label: "Datasets", icon: Database, to: "/datasets" },
-      { label: "Review Datasets", icon: ClipboardCheck, to: "/reviewer-dashboard?tab=datasets" },
+      { label: "Review Datasets", icon: ClipboardCheck, to: "/reviewer/review-queue" },
       { label: "Archive Requests", icon: Archive, to: "/reviewer/archive-requests" },
       { label: "Notifications", icon: Bell, to: "/notifications" },
       { label: "Settings", icon: Settings, to: "/profile" },
@@ -83,6 +83,7 @@ function getRoleKey(user) {
 
 function isNavActive(to, pathname, search) {
   const [path, query] = to.split("?");
+  if (to === "/reviewer/review-queue" && pathname.startsWith("/reviewer/review")) return true;
   if (pathname !== path) return false;
   if (!query) return !search;
   return search === `?${query}`;
@@ -141,7 +142,7 @@ export default function DashboardSidebar() {
 
         {isReviewer(user) && roleKey !== "reviewer" && (
           <Link
-            to="/reviewer-dashboard"
+            to="/reviewer/review-queue"
             className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:bg-white/5 hover:text-white transition"
           >
             <ClipboardCheck className="w-4 h-4" />

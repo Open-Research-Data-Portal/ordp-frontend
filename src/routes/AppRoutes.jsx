@@ -22,6 +22,8 @@ import AdminDashboardPage from "../features/datasets/pages/AdminDashboardPage.js
 import AdminAuditLogPage from "../features/datasets/pages/AdminAuditLogPage.jsx";
 import AdminArchivedDatasetsPage from "../features/datasets/pages/AdminArchivedDatasetsPage.jsx";
 import ReviewerDashboardPage from "../features/datasets/pages/ReviewerDashboardPage.jsx";
+import ReviewerQueuePage from "../features/datasets/pages/ReviewerQueuePage.jsx";
+import ReviewDatasetPage from "../features/datasets/pages/ReviewDatasetPage.jsx";
 import ReviewerArchiveRequestsPage from "../features/datasets/pages/ReviewerArchiveRequestsPage.jsx";
 import UserArchivedDatasetsPage from "../features/datasets/pages/UserArchivedDatasetsPage.jsx";
 import DatasetDetailPage from "../features/datasets/pages/Datasetdetailpage.jsx";
@@ -126,6 +128,12 @@ export default function AppRoutes() {
       } />
       <Route path="/reviewer-dashboard" element={
         <ProtectedRoute><ReviewerDashboardPage /></ProtectedRoute>
+      } />
+      <Route path="/reviewer/review-queue" element={
+        <ProtectedRoute><ReviewerQueuePage /></ProtectedRoute>
+      } />
+      <Route path="/reviewer/review/:datasetId" element={
+        <ProtectedRoute><ReviewDatasetPage /></ProtectedRoute>
       } />
       <Route path="/admin-dashboard" element={
         <ProtectedRoute><AdminDashboardPage /></ProtectedRoute>

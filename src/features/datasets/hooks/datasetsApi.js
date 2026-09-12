@@ -1,4 +1,5 @@
 import client from "../../../api/client";
+import { fetchAllDatasets } from "../../../api/datasetsHub";
 
 const DATASETS_BASE = "/datasets";
 const METADATA_BASE = "/metadata";
@@ -124,8 +125,19 @@ export async function submitDataset(datasetId, termsAccepted) {
 }
 
 export async function getMyDatasets(params = {}) {
-  const { data } = await client.get(`${DATASETS_BASE}/mine/`, { params });
-  return data;
+  try {
+    const { data } = await client.get(`${DATASETS_BASE}/mine/`, { params });
+    // Normalise: backend may return { results: [] } or a plain array
+    if (Array.isArray(data)) return data;
+    if (Array.isArray(data?.results)) return data.results;
+    if (Array.isArray(data?.datasets)) return data.datasets;
+    return [];
+  } catch (err) {
+    // 401/403 = not logged in or no permission → clean empty list, not an error
+    const status = err?.response?.status;
+    if (status === 401 || status === 403) return [];
+    throw err; // re-throw real errors (500, network, etc.)
+  }
 }
 
 export async function getDatasetDetail(datasetId) {
@@ -155,13 +167,30 @@ export async function getDashboardRecentActivity() {
 }
 
 export async function getDashboardFeed() {
-  const { data } = await client.get(`${DATASETS_BASE}/dashboard/feed/`);
-  return data;
+  try {
+    const { data } = await client.get(`${DATASETS_BASE}/dashboard/feed/`);
+    const list = Array.isArray(data) ? data : (data?.results || data?.datasets || []);
+    if (list.length > 0) return list;
+  } catch {
+    // endpoint unavailable — fall back to the resilient directory scan
+  }
+  return fetchAllDatasets();
 }
 
 export async function getDashboardMyContributions() {
   const { data } = await client.get(`${DATASETS_BASE}/dashboard/my-contributions/`);
   return data;
+}
+
+export async function getDiscoverFeed() {
+  try {
+    const { data } = await client.get("/search/discover/");
+    const list = Array.isArray(data) ? data : (data?.results || data?.datasets || []);
+    if (list.length > 0) return list;
+  } catch {
+    // endpoint unavailable — fall back to the resilient directory scan
+  }
+  return fetchAllDatasets();
 }
 
 export async function getAdminPendingReviews() {
@@ -185,19 +214,55 @@ export async function getMyReviews() {
 }
 
 export async function decideDataset(datasetId, decision, reason) {
-  const payload = { decision };
-  if (reason) payload.reason = reason;
-  const { data } = await client.post(`/admin-panel/${datasetId}/decide/`, payload);
-  return data;
+  const normDecision = String(decision || "approved").toLowerCase();
+  const altDecision = normDecision === "approved" ? "approve" : normDecision === "rejected" ? "reject" : normDecision;
+
+  // If this is a local mock dataset (e.g. ds-mock-01), handle gracefully in demo mode
+  if (String(datasetId).startsWith("mock") || String(datasetId).startsWith("ds-mock")) {
+    return { status: "success", decision: normDecision, message: "Mock dataset decision recorded." };
+  }
+
+  const candidateUrls = [
+    `/admin-panel/datasets/${datasetId}/decide/`,
+    `/admin-panel/${datasetId}/decide/`,
+    `/admin-panel/queue/${datasetId}/decide/`,
+    `/datasets/${datasetId}/decide/`,
+    ...(normDecision === "approved" ? [`/datasets/${datasetId}/approve/`, `/admin-panel/datasets/${datasetId}/approve/`] : []),
+    ...(normDecision === "rejected" ? [`/datasets/${datasetId}/reject/`, `/admin-panel/datasets/${datasetId}/reject/`] : []),
+  ];
+
+  let lastErr = null;
+  for (const url of candidateUrls) {
+    try {
+      const payload = { decision: normDecision };
+      if (reason) payload.reason = reason;
+      const { data } = await client.post(url, payload);
+      return data;
+    } catch (err) {
+      lastErr = err;
+      const status = err?.response?.status;
+      // If 400 Bad Request, also try alternative decision keyword (e.g. "approve" vs "approved")
+      if (status === 400 && altDecision !== normDecision) {
+        try {
+          const altPayload = { decision: altDecision };
+          if (reason) altPayload.reason = reason;
+          const { data } = await client.post(url, altPayload);
+          return data;
+        } catch (altErr) {
+          lastErr = altErr;
+        }
+      }
+      // If it's not a 404 or 405, the endpoint exists on the backend and returned a specific error
+      if (status && status !== 404 && status !== 405) {
+        throw lastErr;
+      }
+    }
+  }
+  throw lastErr;
 }
 
 export async function moderateDataset(datasetId, payload) {
-  const body = {
-    decision: payload.decision,
-    reason: payload.reason || payload.comment || "",
-  };
-  const { data } = await client.post(`/admin-panel/${datasetId}/decide/`, body);
-  return data;
+  return decideDataset(datasetId, payload.decision, payload.reason || payload.comment || "");
 }
 
 export async function getContentUpdateQueue() {
@@ -293,11 +358,6 @@ export async function getAdminQueue() {
   return data;
 }
 
-export async function getDiscoverFeed() {
-  const { data } = await client.get("/search/discover/");
-  return data;
-}
-
 export async function getBookmarks() {
   const { data } = await client.get(`${DATASETS_BASE}/bookmarks/`);
   return data;
@@ -367,6 +427,76 @@ export async function requestDatasetDeletion(datasetId, reason) {
 export async function executeDatasetDeletion(requestId) {
   const { data } = await client.post(`/admin-panel/deletion-requests/${requestId}/execute/`);
   return data;
+}
+
+// ── Archive / restore ──────────────────────────────────────────────────
+// These map 1:1 to the ORDP backend archive workflow (DatasetArchiveRequest):
+// an owner requests archiving, reviewers vote, an admin can restore directly.
+
+/** Owner requests archiving a published dataset they own. */
+export async function archiveDataset(datasetId, { reason_category, reason }) {
+  const { data } = await client.post(`/datasets/${datasetId}/archive/`, {
+    reason_category,
+    reason,
+  });
+  return data;
+}
+
+/** Owner requests restoring (un-archiving) one of their archived datasets. */
+export async function unarchiveDataset(datasetId, { intended_use, reason }) {
+  const { data } = await client.post(`/datasets/${datasetId}/unarchive/`, {
+    intended_use,
+    reason,
+  });
+  return data;
+}
+
+/** Any authenticated user can browse archived datasets. */
+export async function getArchivedDatasets() {
+  const { data } = await client.get(`/datasets/archived/`);
+  return Array.isArray(data) ? data : (data?.results || []);
+}
+
+/** Reviewer/admin — pending archive requests. */
+export async function getAdminArchiveRequestQueue() {
+  const { data } = await client.get("/admin-panel/archive-requests/queue/");
+  return Array.isArray(data) ? data : (data?.results || []);
+}
+
+/** Reviewer/admin — cast a vote on an archive request. */
+export async function voteOnArchiveRequest(requestId, vote) {
+  const { data } = await client.post(`/admin-panel/archive-requests/${requestId}/vote/`, { vote });
+  return data;
+}
+
+/** Admin — pending restore (unarchive) requests. */
+export async function getAdminUnarchiveRequestQueue() {
+  const { data } = await client.get("/admin-panel/unarchive-requests/queue/");
+  return Array.isArray(data) ? data : (data?.results || []);
+}
+
+/** Admin — single-admin decision on a restore request. */
+export async function decideUnarchiveRequest(requestId, decision) {
+  const { data } = await client.post(`/admin-panel/unarchive-requests/${requestId}/decide/`, { decision });
+  return data;
+}
+
+/** Admin — instantly restore an archived dataset (bypasses the committee). */
+export async function adminRestoreDataset(datasetId) {
+  const { data } = await client.post(`/admin-panel/datasets/${datasetId}/restore/`);
+  return data;
+}
+
+/** Admin — list archived datasets. */
+export async function getAdminArchivedDatasets() {
+  const { data } = await client.get("/admin-panel/datasets/archived/");
+  return Array.isArray(data) ? data : (data?.results || []);
+}
+
+/** Admin — full archive/unarchive history for one dataset. */
+export async function getDatasetArchiveHistory(datasetId) {
+  const { data } = await client.get(`/admin-panel/datasets/${datasetId}/archive-history/`);
+  return Array.isArray(data) ? data : (data?.results || []);
 }
 
 

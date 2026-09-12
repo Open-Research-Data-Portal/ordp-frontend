@@ -143,9 +143,8 @@ function BookmarkButton({ bookmarked, onToggle, className = "" }) {
       }}
       aria-label={bookmarked ? "Remove bookmark" : "Add bookmark"}
       aria-pressed={bookmarked}
-      className={`shrink-0 transition-transform hover:scale-110 ${
-        bookmarked ? "text-amber-700" : "text-gray-400 hover:text-amber-700"
-      } ${className}`}
+      className={`shrink-0 transition-transform hover:scale-110 ${bookmarked ? "text-amber-700" : "text-gray-400 hover:text-amber-700"
+        } ${className}`}
     >
       <Bookmark className="w-4 h-4" fill={bookmarked ? "currentColor" : "none"} />
     </button>
@@ -223,7 +222,7 @@ export default function BrowseDatasetsPage() {
   const [query, setQuery] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState("All datasets");
-  
+
   // Backend filter states
   const [orderBy, setOrderBy] = useState("");
   const [visibility, setVisibility] = useState("");
@@ -455,54 +454,54 @@ export default function BrowseDatasetsPage() {
         <button
           onClick={() => navigate("/datasets/contribute?new=1")}
           className="flex items-center gap-2 bg-[#A67A0D] hover:bg-[#8f690b] text-white rounded-full px-5 py-2.5 text-sm font-semibold transition-all duration-200 hover:shadow-md hover:scale-[1.03] active:scale-[0.98] shrink-0"
-          >
-            <Plus className="w-4 h-4" /> New Dataset
-          </button>
+        >
+          <Plus className="w-4 h-4" /> New Dataset
+        </button>
+      </div>
+
+      {/* Search + Filters trigger */}
+      <div className="relative flex items-center gap-3 mb-4">
+        <div className="relative flex-1">
+          <Search className="w-4 h-4 text-gray-400 absolute left-4 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search datasets"
+            className="w-full bg-white border border-[#E3E1DA] rounded-full pl-11 pr-4 py-3 text-sm transition-colors focus:outline-none focus:border-[#A67A0D] focus:shadow-sm"
+          />
         </div>
+        <button
+          ref={filterButtonRef}
+          type="button"
+          onClick={openFilters}
+          className="flex items-center gap-2 bg-white border border-[#E3E1DA] hover:border-[#A67A0D] rounded-full px-5 py-3 text-sm font-semibold text-navy shrink-0 transition-all duration-200 hover:shadow-sm active:scale-[0.97]"
+        >
+          <SlidersHorizontal className="w-4 h-4" />
+          Filters
+          {activeFilterCount > 0 && (
+            <span className="bg-[#A67A0D] text-white text-[11px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+              {activeFilterCount}
+            </span>
+          )}
+        </button>
 
-        {/* Search + Filters trigger */}
-        <div className="relative flex items-center gap-3 mb-4">
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 text-gray-400 absolute left-4 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search datasets"
-              className="w-full bg-white border border-[#E3E1DA] rounded-full pl-11 pr-4 py-3 text-sm transition-colors focus:outline-none focus:border-[#A67A0D] focus:shadow-sm"
-            />
-          </div>
-          <button
-            ref={filterButtonRef}
-            type="button"
-            onClick={openFilters}
-            className="flex items-center gap-2 bg-white border border-[#E3E1DA] hover:border-[#A67A0D] rounded-full px-5 py-3 text-sm font-semibold text-navy shrink-0 transition-all duration-200 hover:shadow-sm active:scale-[0.97]"
-          >
-            <SlidersHorizontal className="w-4 h-4" />
-            Filters
-            {activeFilterCount > 0 && (
-              <span className="bg-[#A67A0D] text-white text-[11px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
-
-          {/* Filters popup — rendered via portal so no ancestor transform (e.g. the
+        {/* Filters popup — rendered via portal so no ancestor transform (e.g. the
               fade-in animation on this row) can hijack its fixed positioning */}
-          {filtersOpen && createPortal(
-            <>
-              {/* Backdrop */}
-              <div
-                className="fixed inset-0 bg-black/10 z-[90]"
-                aria-hidden="true"
-                onClick={() => setFiltersOpen(false)}
-              />
+        {filtersOpen && createPortal(
+          <>
+            {/* Backdrop */}
+            <div
+              className="fixed inset-0 bg-black/10 z-[90]"
+              aria-hidden="true"
+              onClick={() => setFiltersOpen(false)}
+            />
 
-              <div
-                ref={filterPanelRef}
-                style={{ top: panelPos.top, right: panelPos.right }}
-                className="fixed w-[92vw] sm:w-[420px] bg-white border border-[#E3E1DA] rounded-xl shadow-2xl p-6 z-[100] max-h-[75vh] overflow-y-auto animate-fade-in-up origin-top"
-              >
+            <div
+              ref={filterPanelRef}
+              style={{ top: panelPos.top, right: panelPos.right }}
+              className="fixed w-[92vw] sm:w-[420px] bg-white border border-[#E3E1DA] rounded-xl shadow-2xl p-6 z-[100] max-h-[75vh] overflow-y-auto animate-fade-in-up origin-top"
+            >
               <button
                 type="button"
                 onClick={() => setFiltersOpen(false)}
@@ -524,11 +523,10 @@ export default function BrowseDatasetsPage() {
                     key={item.value}
                     type="button"
                     onClick={() => setOrderBy(orderBy === item.value ? "" : item.value)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
-                      orderBy === item.value
+                    className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${orderBy === item.value
                         ? "bg-navy text-white"
                         : "bg-[#F7F6F2] text-gray-700 hover:bg-gray-200"
-                    }`}
+                      }`}
                   >
                     {item.label}
                   </button>
@@ -546,11 +544,10 @@ export default function BrowseDatasetsPage() {
                     key={item.value}
                     type="button"
                     onClick={() => setVisibility(visibility === item.value ? "" : item.value)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
-                      visibility === item.value
+                    className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${visibility === item.value
                         ? "bg-navy text-white"
                         : "bg-[#F7F6F2] text-gray-700 hover:bg-gray-200"
-                    }`}
+                      }`}
                   >
                     {item.label}
                   </button>
@@ -568,11 +565,10 @@ export default function BrowseDatasetsPage() {
                     key={item.value}
                     type="button"
                     onClick={() => setFileSize(fileSize === item.value ? "" : item.value)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
-                      fileSize === item.value
+                    className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${fileSize === item.value
                         ? "bg-navy text-white"
                         : "bg-[#F7F6F2] text-gray-700 hover:bg-gray-200"
-                    }`}
+                      }`}
                   >
                     {item.label}
                   </button>
@@ -750,145 +746,145 @@ export default function BrowseDatasetsPage() {
                   Apply
                 </button>
               </div>
-              </div>
-            </>,
-            document.body
-          )}
-        </div>
-
-        {/* Quick category pills */}
-        <div className="flex flex-wrap gap-2 mb-10 animate-fade-in-up" style={{ animationDelay: "120ms" }}>
-          {QUICK_CATEGORIES.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setActiveCategory(cat)}
-              className={[
-                "px-4 py-2 rounded-full text-sm border transition-all duration-150 active:scale-95",
-                activeCategory === cat
-                  ? "bg-[#A67A0D] text-white border-[#A67A0D] scale-[1.03]"
-                  : "bg-white text-navy border-[#E3E1DA] hover:border-[#A67A0D] hover:scale-[1.03]",
-              ].join(" ")}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
-
-        {isSearching ? (
-          /* Search / filtered results */
-          <section>
-            {searchLoading && (
-              <p className="text-sm text-gray-500 mb-4">Searching…</p>
-            )}
-            {!searchLoading && results.length === 0 && (
-              <p className="text-gray-500 text-sm">No datasets match your search or filters.</p>
-            )}
-            {results.length > 0 && (
-              <div className="bg-white border border-[#E3E1DA] rounded-xl overflow-hidden">
-                {results.map((dataset, i) => {
-                  const isOpen = expandedId === dataset.id;
-                  const thumb = getDatasetImage(dataset);
-                  const authorName = dataset.author ?? dataset.owner_name ?? "Unknown";
-                  const desc = dataset.metadata?.description ?? dataset.description ?? "";
-                  const fCount = dataset.fileCount ?? dataset.files?.length ?? 0;
-                  const fType = (dataset.fileType
-                    ?? [...new Set((dataset.files ?? []).map((f) => f.file_type?.toUpperCase()).filter(Boolean))].join(", "))
-                    || "N/A";
-                  const sz = dataset.size ?? formatBytes(dataset.files?.reduce((a, f) => a + (f.file_size || 0), 0) ?? 0);
-                  return (
-                    <div
-                      key={dataset.id}
-                      className={i !== results.length - 1 ? "border-b border-[#E3E1DA]" : ""}
-                    >
-                      <div
-                        onClick={() => setExpandedId(isOpen ? null : dataset.id)}
-                        role="button"
-                        tabIndex={0}
-                        aria-expanded={isOpen}
-                        className="flex items-center gap-4 px-5 py-4 cursor-pointer hover:bg-[#F7F6F2] transition-colors duration-150"
-                      >
-                        <div className="w-14 h-14 rounded-md bg-[#F0EFEA] overflow-hidden shrink-0">
-                          {thumb ? (
-                            <img src={thumb} alt={dataset.title} className="w-full h-full object-cover" loading="lazy" />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center">
-                              <Database className="w-5 h-5 text-gray-300" />
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="text-base font-serif font-bold text-navy truncate">{dataset.title}</p>
-                          </div>
-                          <p className="text-xs text-gray-500 mt-0.5">
-                            <span className="text-[#2C5AAE] underline">{authorName}</span> · {formatRelativeDate(dataset.updated_at) || dataset.updated || ""}
-                          </p>
-                          <p className="text-xs text-gray-500 mt-1">
-                            {dataset.visibility ?? dataset.access} · {fCount} File{fCount === 1 ? "" : "s"} ({fType}) · {sz}
-                          </p>
-                        </div>
-                        <BookmarkButton
-                          bookmarked={bookmarkedIds.has(dataset.id)}
-                          onToggle={() => toggleBookmark(dataset.id)}
-                        />
-                        <ChevronDown
-                          className={`w-4 h-4 text-gray-400 shrink-0 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
-                        />
-                      </div>
-
-                      {isOpen && (
-                        <div className="px-5 pb-5 pl-[4.75rem] animate-fade-in-up" style={{ animationDuration: "150ms" }}>
-                          <p className="text-sm text-gray-600 leading-relaxed">{desc}</p>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigate(`/datasets/${dataset.id}`);
-                            }}
-                            className="mt-3 text-sm font-semibold text-[#A67A0D] hover:text-[#8f690b] transition-colors"
-                          >
-                            View full dataset →
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-        ) : (
-          /* Curated discovery sections — powered by real backend data */
-          <>
-            <CuratedSection
-              icon={TrendingUp}
-              title="Trending Datasets"
-              datasets={trendingDatasets}
-              navigate={navigate}
-              onSeeAll={() => navigate("/datasets?sort=newest")}
-              bookmarkedIds={bookmarkedIds}
-              onToggleBookmark={toggleBookmark}
-            />
-            <CuratedSection
-              icon={Star}
-              title="Popular Datasets"
-              datasets={popularDatasets}
-              navigate={navigate}
-              onSeeAll={() => navigate("/datasets?sort=popular")}
-              bookmarkedIds={bookmarkedIds}
-              onToggleBookmark={toggleBookmark}
-            />
-            <CuratedSection
-              icon={History}
-              title="Discover More"
-              datasets={discoverDatasets}
-              navigate={navigate}
-              onSeeAll={() => navigate("/datasets")}
-              bookmarkedIds={bookmarkedIds}
-              onToggleBookmark={toggleBookmark}
-            />
-          </>
+            </div>
+          </>,
+          document.body
         )}
-      </DashboardAwareLayout>
+      </div>
+
+      {/* Quick category pills */}
+      <div className="flex flex-wrap gap-2 mb-10 animate-fade-in-up" style={{ animationDelay: "120ms" }}>
+        {QUICK_CATEGORIES.map((cat) => (
+          <button
+            key={cat}
+            onClick={() => setActiveCategory(cat)}
+            className={[
+              "px-4 py-2 rounded-full text-sm border transition-all duration-150 active:scale-95",
+              activeCategory === cat
+                ? "bg-[#A67A0D] text-white border-[#A67A0D] scale-[1.03]"
+                : "bg-white text-navy border-[#E3E1DA] hover:border-[#A67A0D] hover:scale-[1.03]",
+            ].join(" ")}
+          >
+            {cat}
+          </button>
+        ))}
+      </div>
+
+      {isSearching ? (
+        /* Search / filtered results */
+        <section>
+          {searchLoading && (
+            <p className="text-sm text-gray-500 mb-4">Searching…</p>
+          )}
+          {!searchLoading && results.length === 0 && (
+            <p className="text-gray-500 text-sm">No datasets match your search or filters.</p>
+          )}
+          {results.length > 0 && (
+            <div className="bg-white border border-[#E3E1DA] rounded-xl overflow-hidden">
+              {results.map((dataset, i) => {
+                const isOpen = expandedId === dataset.id;
+                const thumb = getDatasetImage(dataset);
+                const authorName = dataset.author ?? dataset.owner_name ?? "Unknown";
+                const desc = dataset.metadata?.description ?? dataset.description ?? "";
+                const fCount = dataset.fileCount ?? dataset.files?.length ?? 0;
+                const fType = (dataset.fileType
+                  ?? [...new Set((dataset.files ?? []).map((f) => f.file_type?.toUpperCase()).filter(Boolean))].join(", "))
+                  || "N/A";
+                const sz = dataset.size ?? formatBytes(dataset.files?.reduce((a, f) => a + (f.file_size || 0), 0) ?? 0);
+                return (
+                  <div
+                    key={dataset.id}
+                    className={i !== results.length - 1 ? "border-b border-[#E3E1DA]" : ""}
+                  >
+                    <div
+                      onClick={() => setExpandedId(isOpen ? null : dataset.id)}
+                      role="button"
+                      tabIndex={0}
+                      aria-expanded={isOpen}
+                      className="flex items-center gap-4 px-5 py-4 cursor-pointer hover:bg-[#F7F6F2] transition-colors duration-150"
+                    >
+                      <div className="w-14 h-14 rounded-md bg-[#F0EFEA] overflow-hidden shrink-0">
+                        {thumb ? (
+                          <img src={thumb} alt={dataset.title} className="w-full h-full object-cover" loading="lazy" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Database className="w-5 h-5 text-gray-300" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-base font-serif font-bold text-navy truncate">{dataset.title}</p>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          <span className="text-[#2C5AAE] underline">{authorName}</span> · {formatRelativeDate(dataset.updated_at) || dataset.updated || ""}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {dataset.visibility ?? dataset.access} · {fCount} File{fCount === 1 ? "" : "s"} ({fType}) · {sz}
+                        </p>
+                      </div>
+                      <BookmarkButton
+                        bookmarked={bookmarkedIds.has(dataset.id)}
+                        onToggle={() => toggleBookmark(dataset.id)}
+                      />
+                      <ChevronDown
+                        className={`w-4 h-4 text-gray-400 shrink-0 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+                      />
+                    </div>
+
+                    {isOpen && (
+                      <div className="px-5 pb-5 pl-[4.75rem] animate-fade-in-up" style={{ animationDuration: "150ms" }}>
+                        <p className="text-sm text-gray-600 leading-relaxed">{desc}</p>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/datasets/${dataset.id}`);
+                          }}
+                          className="mt-3 text-sm font-semibold text-[#A67A0D] hover:text-[#8f690b] transition-colors"
+                        >
+                          View full dataset →
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      ) : (
+        /* Curated discovery sections — powered by real backend data */
+        <>
+          <CuratedSection
+            icon={TrendingUp}
+            title="Trending Datasets"
+            datasets={trendingDatasets}
+            navigate={navigate}
+            onSeeAll={() => navigate("/datasets?sort=newest")}
+            bookmarkedIds={bookmarkedIds}
+            onToggleBookmark={toggleBookmark}
+          />
+          <CuratedSection
+            icon={Star}
+            title="Popular Datasets"
+            datasets={popularDatasets}
+            navigate={navigate}
+            onSeeAll={() => navigate("/datasets?sort=popular")}
+            bookmarkedIds={bookmarkedIds}
+            onToggleBookmark={toggleBookmark}
+          />
+          <CuratedSection
+            icon={History}
+            title="Discover More"
+            datasets={discoverDatasets}
+            navigate={navigate}
+            onSeeAll={() => navigate("/datasets")}
+            bookmarkedIds={bookmarkedIds}
+            onToggleBookmark={toggleBookmark}
+          />
+        </>
+      )}
+    </DashboardAwareLayout>
   );
 }

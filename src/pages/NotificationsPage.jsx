@@ -192,11 +192,10 @@ export default function NotificationsPage() {
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition whitespace-nowrap ${
-                  activeTab === tab.id
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition whitespace-nowrap ${activeTab === tab.id
                     ? "bg-navy text-white shadow-xs"
                     : "text-slate-600 hover:bg-slate-100"
-                }`}
+                  }`}
               >
                 {tab.label}
               </button>
@@ -237,11 +236,10 @@ export default function NotificationsPage() {
             filteredNotifications.map((n) => (
               <div
                 key={n.id}
-                className={`group flex items-start gap-4 p-4.5 rounded-2xl border transition-all duration-200 ${
-                  n.is_read
+                className={`group flex items-start gap-4 p-4.5 rounded-2xl border transition-all duration-200 ${n.is_read
                     ? "bg-white border-slate-200/80 hover:border-slate-300"
                     : "bg-[#FDFBF7] border-gold/40 shadow-xs hover:border-gold"
-                }`}
+                  }`}
               >
                 <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0 mt-0.5">
                   {getIconForType(n.type)}
@@ -251,9 +249,8 @@ export default function NotificationsPage() {
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <h2
-                        className={`text-sm leading-snug font-semibold ${
-                          n.is_read ? "text-navy" : "text-navy font-bold"
-                        }`}
+                        className={`text-sm leading-snug font-semibold ${n.is_read ? "text-navy" : "text-navy font-bold"
+                          }`}
                       >
                         {n.title}
                       </h2>

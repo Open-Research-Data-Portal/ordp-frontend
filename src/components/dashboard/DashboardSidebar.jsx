@@ -12,9 +12,9 @@ import {
   Bookmark,
   Plus,
   Shield,
-  Trash2,
   ScrollText,
   Bell,
+  Archive,
 } from "lucide-react";
 import { useAuth } from "../../context/useAuth";
 import { getDashboardPath, isAdmin, isReviewer, isResearcher } from "../../utils/userRoles";
@@ -28,6 +28,7 @@ const ROLE_CONFIG = {
     nav: [
       { label: "Dashboard", icon: LayoutGrid, to: "/user-dashboard" },
       { label: "Other Datasets", icon: Database, to: "/datasets" },
+      { label: "Archived Datasets", icon: Archive, to: "/archived-datasets" },
       { label: "Bookmarks", icon: Bookmark, to: "/bookmarks" },
       { label: "Notifications", icon: Bell, to: "/notifications" },
       { label: "Settings", icon: Settings, to: "/profile" },
@@ -39,6 +40,7 @@ const ROLE_CONFIG = {
     nav: [
       { label: "Dashboard", icon: LayoutGrid, to: "/researcher-dashboard" },
       { label: "My Datasets", icon: FolderKanban, to: "/my-datasets" },
+      { label: "Archived Datasets", icon: Archive, to: "/archived-datasets" },
       { label: "Other Datasets", icon: Database, to: "/datasets" },
       { label: "Bookmarks", icon: Bookmark, to: "/bookmarks" },
       { label: "Notifications", icon: Bell, to: "/notifications" },
@@ -51,7 +53,8 @@ const ROLE_CONFIG = {
     nav: [
       { label: "Dashboard", icon: LayoutGrid, to: "/reviewer-dashboard" },
       { label: "Datasets", icon: Database, to: "/datasets" },
-      { label: "Review Datasets", icon: ClipboardCheck, to: "/reviewer-dashboard?tab=datasets" },
+      { label: "Review Datasets", icon: ClipboardCheck, to: "/reviewer/review-queue" },
+      { label: "Archive Requests", icon: Archive, to: "/reviewer/archive-requests" },
       { label: "Notifications", icon: Bell, to: "/notifications" },
       { label: "Settings", icon: Settings, to: "/profile" },
     ],
@@ -64,7 +67,7 @@ const ROLE_CONFIG = {
       { label: "Overview", icon: LayoutGrid, to: "/admin-dashboard" },
       { label: "Datasets", icon: Database, to: "/admin-dashboard?tab=datasets" },
       { label: "Audit Log", icon: ScrollText, to: "/admin/audit-log" },
-      { label: "Deletion Requests", icon: Trash2, to: "/admin/deletion-requests" },
+      { label: "Archived Datasets", icon: Archive, to: "/admin/archived-datasets" },
       { label: "Users", icon: Users, to: "/admin-dashboard?tab=users" },
       { label: "Notifications", icon: Bell, to: "/notifications" },
     ],
@@ -80,6 +83,7 @@ function getRoleKey(user) {
 
 function isNavActive(to, pathname, search) {
   const [path, query] = to.split("?");
+  if (to === "/reviewer/review-queue" && pathname.startsWith("/reviewer/review")) return true;
   if (pathname !== path) return false;
   if (!query) return !search;
   return search === `?${query}`;
@@ -113,7 +117,7 @@ export default function DashboardSidebar() {
       </div>
 
       {/* Primary CTA */}
-      
+
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto min-h-0">
@@ -138,7 +142,7 @@ export default function DashboardSidebar() {
 
         {isReviewer(user) && roleKey !== "reviewer" && (
           <Link
-            to="/reviewer-dashboard"
+            to="/reviewer/review-queue"
             className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:bg-white/5 hover:text-white transition"
           >
             <ClipboardCheck className="w-4 h-4" />

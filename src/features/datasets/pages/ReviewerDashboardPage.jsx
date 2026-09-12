@@ -21,6 +21,7 @@ import {
   Info,
   Trash2,
   Upload,
+  FileText,
 } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import { StatusBadge, EmptyState } from "../../../components/dashboard/dashboardUi";
@@ -45,6 +46,26 @@ function formatFileSize(bytes) {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
+function parseArchiveReason(rawReason) {
+  if (!rawReason) return { impact: "—", preservation: "—", contact: "—", reason: "—" };
+  const impactMatch = rawReason.match(/\[Impact:\s*([^\]]+)\]/);
+  const preservationMatch = rawReason.match(/\[Preservation:\s*([^\]]+)\]/);
+  const contactMatch = rawReason.match(/\[Contact:\s*([^\]]+)\]/);
+
+  let cleanReason = rawReason
+    .replace(/\[Impact:\s*[^\]]+\]/, "")
+    .replace(/\[Preservation:\s*[^\]]+\]/, "")
+    .replace(/\[Contact:\s*[^\]]+\]/, "")
+    .trim();
+
+  return {
+    impact: impactMatch ? impactMatch[1].trim() : "—",
+    preservation: preservationMatch ? preservationMatch[1].trim() : "—",
+    contact: contactMatch ? contactMatch[1].trim() : "—",
+    reason: cleanReason || "No justification provided."
+  };
+}
+
 
 function downloadPreviewCsv(file, datasetTitle) {
   if (!file?.preview_rows || !file.preview_rows.length) return;
@@ -68,6 +89,7 @@ function downloadPreviewCsv(file, datasetTitle) {
 const TABS = [
   { id: "overview", label: "Overview" },
   { id: "datasets", label: "Review Datasets" },
+  { id: "archive-requests", label: "Archive Requests" },
   { id: "content-updates", label: "Content Updates" },
   { id: "revision-requests", label: "Revision Requests" },
   { id: "access-requests", label: "Access Requests" },
@@ -97,6 +119,7 @@ export default function ReviewerDashboardPage() {
   const [showGuidelines, setShowGuidelines] = useState(false);
 
   const [datasetQueue, setDatasetQueue] = useState([]);
+  const [archiveRequests, setArchiveRequests] = useState([]);
   const [contentUpdates, setContentUpdates] = useState([]);
   const [revisionRequests, setRevisionRequests] = useState([]);
   const [accessRequests, setAccessRequests] = useState([]);
@@ -139,6 +162,7 @@ export default function ReviewerDashboardPage() {
           datasetsApi.getAccessRequestsQueue(), // 5
           datasetsApi.getMyReviews(),          // 6 — /admin-panel/my-reviews/
           datasetsApi.getAdminPendingReviews(), // 7 fallback
+          datasetsApi.getArchiveRequestsQueue(), // 8
         ]);
         if (!active) return;
 
@@ -152,23 +176,22 @@ export default function ReviewerDashboardPage() {
         if (results[1].status === "fulfilled") setMetrics(results[1].value);
 
         const reviewerQ = results[2].status === "fulfilled" ? normalizeList(results[2].value) : [];
-        const adminPending = results[7].status === "fulfilled" ? normalizeList(results[7].value) : [];
-        const seen = new Set();
-        const merged = [];
-        for (const item of [...reviewerQ, ...adminPending]) {
-          const id = String(item.id || item.dataset_id);
-          if (!seen.has(id)) { seen.add(id); merged.push(item); }
-        }
-        const pendingOnly = merged.filter((d) => {
+        const myReviewsList = results[6].status === "fulfilled" ? normalizeList(results[6].value) : [];
+        const reviewedIds = new Set(myReviewsList.map((r) => String(r.dataset_id || r.id || r.review_id)));
+
+        const pendingOnly = reviewerQ.filter((d) => {
+          const id = String(d.id || d.dataset_id);
           const s = String(d.status || "").toLowerCase();
-          return !s || s === "pending" || s === "submitted" || s === "in_review";
+          const isPending = !s || s === "pending" || s === "submitted" || s === "in_review";
+          return isPending && !reviewedIds.has(id);
         });
-        setDatasetQueue(pendingOnly.length > 0 ? pendingOnly : merged);
+        setDatasetQueue(pendingOnly);
 
         if (results[3].status === "fulfilled") setContentUpdates(normalizeList(results[3].value));
         if (results[4].status === "fulfilled") setRevisionRequests(normalizeList(results[4].value));
         if (results[5].status === "fulfilled") setAccessRequests(normalizeList(results[5].value));
         if (results[6].status === "fulfilled") setMyReviews(normalizeList(results[6].value));
+        if (results[8].status === "fulfilled") setArchiveRequests(normalizeList(results[8].value));
       } catch {
         addToast("Failed to load reviewer dashboard.", "error");
       } finally {
@@ -197,6 +220,8 @@ export default function ReviewerDashboardPage() {
     revisionRequests: revisionRequests.length,
     accessRequests: accessRequests.length,
     total: datasetQueue.length + contentUpdates.length + revisionRequests.length + accessRequests.length,
+    archiveRequests: overview?.archive_requests_awaiting_my_vote ?? archiveRequests.length,
+
   }), [datasetQueue, contentUpdates, revisionRequests, accessRequests]);
 
   const reviewStats = useMemo(() => {
@@ -355,6 +380,8 @@ export default function ReviewerDashboardPage() {
   async function handleVote(type, itemId, vote, comment = "") {
     setActionId(itemId);
     const voterMap = {
+      "archive-requests": { fn: (id, { vote: v }) => datasetsApi.voteArchiveRequest(id, v), setter: setArchiveRequests },
+
       "content-updates": { fn: datasetsApi.voteContentUpdate, setter: setContentUpdates },
       "revision-requests": { fn: datasetsApi.voteRevisionRequest, setter: setRevisionRequests },
       "access-requests": { fn: datasetsApi.voteAccessRequest, setter: setAccessRequests },
@@ -436,6 +463,10 @@ export default function ReviewerDashboardPage() {
               {tab.id === "datasets" && pendingCounts.datasets > 0 && (
                 <span className="ml-1.5 bg-red-500 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5">{pendingCounts.datasets}</span>
               )}
+              {tab.id === "archive-requests" && pendingCounts.archiveRequests > 0 && (
+                <span className="ml-1.5 bg-purple-600 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5">{pendingCounts.archiveRequests}</span>
+              )}
+
               {tab.id === "content-updates" && pendingCounts.contentUpdates > 0 && (
                 <span className="ml-1.5 bg-amber-500 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5">{pendingCounts.contentUpdates}</span>
               )}
@@ -469,6 +500,25 @@ export default function ReviewerDashboardPage() {
                 />
               )}
 
+              {activeTab === "archive-requests" && (
+                <VoteTable
+                  type="archive-requests"
+                  items={archiveRequests}
+                  emptyTitle="No pending archive requests"
+                  emptyDesc="No dataset archival requests awaiting review."
+                  idKey="id"
+                  titleKey="dataset_title"
+                  descKey="reason"
+                  actionId={actionId}
+                  onVote={handleVote}
+                  onView={(item) => handleViewDataset({
+                    ...item,
+                    id: item.dataset_id || item.id,
+                    title: item.dataset_title || item.title
+                  })}
+                />
+              )}
+
               {activeTab === "content-updates" && (
                 <VoteTable
                   type="content-updates"
@@ -480,6 +530,15 @@ export default function ReviewerDashboardPage() {
                   descKey="summary"
                   actionId={actionId}
                   onVote={handleVote}
+                  onView={(item) => handleViewDataset({ id: item.dataset_id || item.id, title: item.dataset_title || item.title })}
+                  criteriaInfo={{
+                    title: "Content Update Evaluation Criteria",
+                    color: "bg-amber-50 border-amber-200 text-amber-900",
+                    points: [
+                      "Data Integrity & Structure: Check that updated files maintain expected schema and checksums.",
+                      "Metadata Clarity: Ensure summary and revision notes accurately describe the updates made."
+                    ]
+                  }}
                 />
               )}
               {activeTab === "revision-requests" && (
@@ -493,6 +552,15 @@ export default function ReviewerDashboardPage() {
                   descKey="reason"
                   actionId={actionId}
                   onVote={handleVote}
+                  onView={(item) => handleViewDataset({ id: item.dataset_id || item.id, title: item.dataset_title || item.title })}
+                  criteriaInfo={{
+                    title: "Revision Request Evaluation Criteria",
+                    color: "bg-blue-50 border-blue-200 text-blue-900",
+                    points: [
+                      "Justification Check: Verify valid academic or scientific reason for requesting dataset revision rights.",
+                      "Ownership / Author Status: Confirm requester is author or contributor."
+                    ]
+                  }}
                 />
               )}
               {activeTab === "access-requests" && (
@@ -506,6 +574,15 @@ export default function ReviewerDashboardPage() {
                   descKey="reason"
                   actionId={actionId}
                   onVote={handleVote}
+                  onView={(item) => handleViewDataset({ id: item.dataset_id || item.id, title: item.dataset_title || item.title })}
+                  criteriaInfo={{
+                    title: "Access Request Evaluation Criteria",
+                    color: "bg-violet-50 border-violet-200 text-violet-900",
+                    points: [
+                      "Intended Use & Ethics: Verify that the researcher's intended use complies with institutional ethics guidelines.",
+                      "Data Confidentiality: Ensure restricted/confidential data is handled securely by authorized personnel."
+                    ]
+                  }}
                 />
               )}
               {activeTab === "my-reviews" && <MyReviewsTab reviews={myReviews} />}
@@ -553,6 +630,66 @@ export default function ReviewerDashboardPage() {
 
                 return (
                   <>
+                    {/* Archive Request Form Details Section */}
+                    {(selectedDataset.reason || selectedDataset.reason_category) && (() => {
+                      const parsed = parseArchiveReason(selectedDataset.reason);
+                      return (
+                        <div className="bg-white border border-border rounded-2xl p-5 shadow-sm space-y-4">
+                          <div className="flex items-center justify-between border-b border-border pb-3">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center font-bold">
+                                <FileText className="w-4 h-4" />
+                              </div>
+                              <div>
+                                <h4 className="text-sm font-bold text-navy">Dataset Archival Request Form</h4>
+                                <p className="text-xs text-gray-500">Submitted details for archiving this dataset</p>
+                              </div>
+                            </div>
+                            <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-800 uppercase tracking-wide">
+                              {selectedDataset.status || "Pending Review"}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                            <div className="space-y-1">
+                              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider block">Reason Category</label>
+                              <div className="px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-navy font-medium capitalize">
+                                {selectedDataset.reason_category?.replace(/_/g, " ") || "—"}
+                              </div>
+                            </div>
+
+                            <div className="space-y-1">
+                              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider block">Requested By / Contact</label>
+                              <div className="px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-navy font-medium">
+                                {selectedDataset.requester?.email || selectedDataset.requested_by || parsed.contact || "—"}
+                              </div>
+                            </div>
+
+                            <div className="space-y-1">
+                              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider block">Research Impact Assessment</label>
+                              <div className="px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-navy font-medium capitalize">
+                                {parsed.impact.replace(/_/g, " ")}
+                              </div>
+                            </div>
+
+                            <div className="space-y-1">
+                              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider block">Data Preservation Plan</label>
+                              <div className="px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-navy font-medium">
+                                {parsed.preservation}
+                              </div>
+                            </div>
+
+                            <div className="sm:col-span-2 space-y-1">
+                              <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider block">Detailed Reason & Justification</label>
+                              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-navy leading-relaxed min-h-[70px]">
+                                {parsed.reason}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
                     {/* Top status & quick badges */}
                     <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-slate-50 border border-slate-200 rounded-xl">
                       <div className="flex items-center gap-2.5">
@@ -777,50 +914,54 @@ export default function ReviewerDashboardPage() {
             {/* Action bar */}
             <div className="px-6 py-4 border-t border-border bg-gray-50 flex flex-wrap items-center justify-between gap-3">
               {(() => {
-                const id = selectedDataset.id || selectedDataset.dataset_id;
-                const busy = actionId === id;
+                const isArchiveReq = Boolean(selectedDataset.reason || selectedDataset.reason_category || selectedDataset.dataset_id);
+                const reqId = selectedDataset.id;
+                const datasetIdForDecide = selectedDataset.dataset_id || selectedDataset.id;
+                const busy = actionId === reqId || actionId === datasetIdForDecide;
+
+                async function handleDrawerAction(voteOrDecision) {
+                  setActionId(reqId);
+                  try {
+                    if (isArchiveReq) {
+                      const foundReq = archiveRequests.find((r) => String(r.id || r.request_id || r.dataset_id) === String(reqId) || String(r.dataset_id) === String(datasetIdForDecide));
+                      const actualReqId = foundReq?.id || reqId;
+                      await datasetsApi.voteArchiveRequest(actualReqId, voteOrDecision === "approved" ? "approve" : "reject");
+                      addToast(`Archive request vote recorded: ${voteOrDecision === "approved" ? "approve" : "reject"}`, "success");
+                      setArchiveRequests((prev) => prev.filter((item) => String(item.id || item.request_id) !== String(actualReqId)));
+                    } else {
+                      await datasetsApi.decideDataset(datasetIdForDecide, voteOrDecision, voteOrDecision === "approved" ? "Approved by reviewer." : "");
+                      addToast(`Dataset ${voteOrDecision === "approved" ? "approved" : "rejected"}.`, "success");
+                      setDatasetQueue((prev) => prev.filter((d) => String(d.id || d.dataset_id) !== String(datasetIdForDecide)));
+                    }
+                    closeDetail();
+                  } catch (err) {
+                    addToast(err?.response?.data?.detail || err?.message || "Failed to submit decision.", "error");
+                  } finally {
+                    setActionId(null);
+                  }
+                }
+
                 return (
-                  <>
+                  <div className="flex items-center justify-end w-full gap-2.5">
                     <button
                       type="button"
-                      disabled={downloading}
-                      onClick={() => handleDownloadDataset(id)}
-                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-100 rounded-xl px-4 py-2.5 transition shadow-sm"
+                      disabled={busy}
+                      onClick={() => handleDrawerAction("rejected")}
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-xl px-4 py-2.5 disabled:opacity-50 transition"
                     >
-                      {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4 text-gold" />}
-                      Download Dataset
+                      {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+                      {isArchiveReq ? "Reject Request" : "Reject"}
                     </button>
-
-                    <div className="flex items-center gap-2.5">
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => handleDecide(id, "changes_requested", "")}
-                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 bg-amber-100 hover:bg-amber-200 rounded-xl px-4 py-2.5 disabled:opacity-50 transition"
-                      >
-                        <MessageSquare className="w-4 h-4" />
-                        Request Changes
-                      </button>
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => handleDecide(id, "rejected", "")}
-                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-xl px-4 py-2.5 disabled:opacity-50 transition"
-                      >
-                        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
-                        Reject
-                      </button>
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => handleDecide(id, "approved", "Approved by reviewer.")}
-                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl px-4 py-2.5 disabled:opacity-50 transition shadow-sm"
-                      >
-                        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                        Approve Dataset
-                      </button>
-                    </div>
-                  </>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => handleDrawerAction("approved")}
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl px-4 py-2.5 disabled:opacity-50 transition shadow-sm"
+                    >
+                      {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                      {isArchiveReq ? "Approve Request" : "Approve Dataset"}
+                    </button>
+                  </div>
                 );
               })()}
             </div>
@@ -1114,6 +1255,7 @@ export default function ReviewerDashboardPage() {
 function OverviewTab({ metrics, reviewStats, pendingCounts, setTab }) {
   const sections = [
     { label: "Pending Datasets", count: pendingCounts.datasets, tab: "datasets", color: "bg-red-50 text-red-600 border-red-100" },
+    { label: "Archive Requests", count: pendingCounts.archiveRequests, tab: "archive-requests", color: "bg-purple-50 text-purple-600 border-purple-100" },
     { label: "Content Updates", count: pendingCounts.contentUpdates, tab: "content-updates", color: "bg-amber-50 text-amber-600 border-amber-100" },
     { label: "Revision Requests", count: pendingCounts.revisionRequests, tab: "revision-requests", color: "bg-blue-50 text-blue-600 border-blue-100" },
     { label: "Access Requests", count: pendingCounts.accessRequests, tab: "access-requests", color: "bg-violet-50 text-violet-600 border-violet-100" },
@@ -1124,7 +1266,7 @@ function OverviewTab({ metrics, reviewStats, pendingCounts, setTab }) {
       {/* Pending quick-nav cards */}
       <div>
         <h3 className="text-sm font-semibold text-navy mb-3">Pending Items by Category</h3>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           {sections.map((s) => (
             <button
               key={s.tab}
@@ -1239,15 +1381,6 @@ function ReviewDatasetsTab({ items, actionId, onView, onDecide, onDelete }) {
                     <button
                       type="button"
                       disabled={busy}
-                      onClick={() => onDecide(id, "changes_requested", "")}
-                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 bg-amber-100 hover:bg-amber-200 rounded-lg px-3 py-2 disabled:opacity-50 transition-colors"
-                    >
-                      <MessageSquare className="w-3.5 h-3.5" />
-                      Changes
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busy}
                       onClick={() => onDelete(item)}
                       className="inline-flex items-center gap-1.5 text-xs font-semibold text-red-600 bg-white ring-1 ring-inset ring-red-200 hover:bg-red-50 rounded-lg px-3 py-2 disabled:opacity-50 transition-colors"
                     >
@@ -1266,46 +1399,71 @@ function ReviewDatasetsTab({ items, actionId, onView, onDecide, onDelete }) {
 }
 
 // ── Generic vote table ──────────────────────────────────────────────────
-function VoteTable({ type, items, emptyTitle, emptyDesc, idKey, titleKey, descKey, actionId: currentActionId, onVote }) {
+function VoteTable({ type, items, emptyTitle, emptyDesc, idKey, titleKey, descKey, actionId: currentActionId, onVote, onView, criteriaInfo }) {
   if (items.length === 0) {
     return <EmptyState title={emptyTitle} description={emptyDesc} />;
   }
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead className="text-xs uppercase text-gray-500 bg-gray-50">
-          <tr>
-            <th className="px-5 py-3 text-left font-semibold">Title / Dataset</th>
-            <th className="px-5 py-3 text-left font-semibold">Description</th>
-            <th className="px-5 py-3 text-left font-semibold">Requester</th>
-            <th className="px-5 py-3 text-left font-semibold">Date</th>
-            <th className="px-5 py-3 text-right font-semibold">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((item) => {
-            const id = item[idKey] || item.id;
-            const busy = currentActionId === id;
-            return (
-              <tr key={id} className="border-t border-gray-100 hover:bg-bg/50">
-                <td className="px-5 py-4">
-                  <p className="font-medium text-navy">{item[titleKey] || item.title || item.dataset?.title || "—"}</p>
-                  <p className="text-xs text-gray-500 font-mono">{id}</p>
-                </td>
-                <td className="px-5 py-4 text-gray-600 max-w-[200px] truncate">{item[descKey] || item.description || "—"}</td>
-                <td className="px-5 py-4 text-gray-500">{item.requester?.email || item.requested_by || item.user?.email || "—"}</td>
-                <td className="px-5 py-4 text-gray-500">{formatDate(item.created_at || item.requested_at)}</td>
-                <td className="px-5 py-4 text-right">
-                  <div className="flex items-center justify-end gap-2">
-                    <ActionBtn color="emerald" icon={CheckCircle2} label="Approve" busy={busy} onClick={() => onVote(type, id, "approved")} />
-                    <ActionBtn color="red" icon={XCircle} label="Reject" busy={busy} onClick={() => onVote(type, id, "rejected")} />
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+    <div className="space-y-4">
+      {criteriaInfo && (
+        <div className={`border rounded-xl p-4 text-xs flex items-start gap-3 ${criteriaInfo.color || "bg-purple-50 border-purple-200 text-purple-900"}`}>
+          <Shield className="w-5 h-5 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-bold mb-1">{criteriaInfo.title}</p>
+            <ul className="list-disc list-inside space-y-1">
+              {criteriaInfo.points.map((pt, i) => (
+                <li key={i}>{pt}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="text-xs uppercase text-gray-500 bg-gray-50">
+            <tr>
+              <th className="px-5 py-3 text-left font-semibold">Title / Dataset</th>
+              <th className="px-5 py-3 text-left font-semibold">Description</th>
+              <th className="px-5 py-3 text-left font-semibold">Requester</th>
+              <th className="px-5 py-3 text-left font-semibold">Date</th>
+              <th className="px-5 py-3 text-right font-semibold">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((item) => {
+              const id = item[idKey] || item.id;
+              const busy = currentActionId === id;
+              return (
+                <tr key={id} className="border-t border-gray-100 hover:bg-bg/50">
+                  <td className="px-5 py-4">
+                    <p className="font-medium text-navy">{item[titleKey] || item.title || item.dataset?.title || "—"}</p>
+                    <p className="text-xs text-gray-500 font-mono">{id}</p>
+                  </td>
+                  <td className="px-5 py-4 text-gray-600 max-w-[200px] truncate">{item[descKey] || item.description || "—"}</td>
+                  <td className="px-5 py-4 text-gray-500">{item.requester?.email || item.requested_by || item.user?.email || "—"}</td>
+                  <td className="px-5 py-4 text-gray-500">{formatDate(item.created_at || item.requested_at)}</td>
+                  <td className="px-5 py-4 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      {onView && (
+                        <button
+                          type="button"
+                          onClick={() => onView(item)}
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-navy bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2 transition-colors"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          View Dataset
+                        </button>
+                      )}
+                      <ActionBtn color="emerald" icon={CheckCircle2} label="Approve" busy={busy} onClick={() => onVote(type, id, "approved")} />
+                      <ActionBtn color="red" icon={XCircle} label="Reject" busy={busy} onClick={() => onVote(type, id, "rejected")} />
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

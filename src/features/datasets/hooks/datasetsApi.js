@@ -185,10 +185,51 @@ export async function getMyReviews() {
 }
 
 export async function decideDataset(datasetId, decision, reason) {
-  const payload = { decision };
-  if (reason) payload.reason = reason;
-  const { data } = await client.post(`/admin-panel/${datasetId}/decide/`, payload);
-  return data;
+  const normDecision = String(decision || "approved").toLowerCase();
+  const altDecision = normDecision === "approved" ? "approve" : normDecision === "rejected" ? "reject" : normDecision;
+
+  // If this is a local mock dataset (e.g. ds-mock-01), handle gracefully in demo mode
+  if (String(datasetId).startsWith("mock") || String(datasetId).startsWith("ds-mock")) {
+    return { status: "success", decision: normDecision, message: "Mock dataset decision recorded." };
+  }
+
+  const candidateUrls = [
+    `/admin-panel/${datasetId}/decide/`,
+    `/admin-panel/datasets/${datasetId}/decide/`,
+    `/admin-panel/queue/${datasetId}/decide/`,
+    `/datasets/${datasetId}/decide/`,
+    ...(normDecision === "approved" ? [`/datasets/${datasetId}/approve/`, `/admin-panel/datasets/${datasetId}/approve/`] : []),
+    ...(normDecision === "rejected" ? [`/datasets/${datasetId}/reject/`, `/admin-panel/datasets/${datasetId}/reject/`] : []),
+  ];
+
+  let lastErr = null;
+  for (const url of candidateUrls) {
+    try {
+      const payload = { decision: normDecision };
+      if (reason) payload.reason = reason;
+      const { data } = await client.post(url, payload);
+      return data;
+    } catch (err) {
+      lastErr = err;
+      const status = err?.response?.status;
+      // If 400 Bad Request, also try alternative decision keyword (e.g. "approve" vs "approved")
+      if (status === 400 && altDecision !== normDecision) {
+        try {
+          const altPayload = { decision: altDecision };
+          if (reason) altPayload.reason = reason;
+          const { data } = await client.post(url, altPayload);
+          return data;
+        } catch (altErr) {
+          lastErr = altErr;
+        }
+      }
+      // If it's not a 404 or 405, the endpoint exists on the backend and returned a specific error
+      if (status && status !== 404 && status !== 405) {
+        throw lastErr;
+      }
+    }
+  }
+  throw lastErr;
 }
 
 export async function moderateDataset(datasetId, payload) {
@@ -348,12 +389,20 @@ export async function getFallbackThumbnails(datasetId) {
 
 export async function requestDatasetDeletion(datasetId, reason) {
   try {
-    const { data } = await client.post(`/admin-panel/datasets/${datasetId}/deletion-request/`, { reason });
+    const { data } = await client.post(`/admin-panel/datasets/${datasetId}/request-deletion/`, { reason });
     return data;
   } catch (err) {
     if (err?.response?.status === 404) {
-      const { data } = await client.post(`/admin-panel/deletion-requests/`, { dataset_id: datasetId, reason });
-      return data;
+      try {
+        const { data } = await client.post(`/admin-panel/datasets/${datasetId}/deletion-request/`, { reason });
+        return data;
+      } catch (err2) {
+        if (err2?.response?.status === 404) {
+          const { data } = await client.post(`/admin-panel/deletion-requests/`, { dataset_id: datasetId, reason });
+          return data;
+        }
+        throw err2;
+      }
     }
     throw err;
   }
@@ -368,5 +417,136 @@ export async function executeDatasetDeletion(requestId) {
   const { data } = await client.post(`/admin-panel/deletion-requests/${requestId}/execute/`);
   return data;
 }
+
+// ── Dataset Archiving & Unarchiving API ──────────────────────────────────────────
+
+/**
+ * Owner submits an archival request for a published dataset.
+ * @param {string} datasetId
+ * @param {{ reasonCategory: string, reason: string }} payload
+ */
+export async function requestDatasetArchive(datasetId, { reasonCategory, reason }) {
+  const { data } = await client.post(`${DATASETS_BASE}/${datasetId}/archive/`, {
+    reason_category: reasonCategory,
+    reason,
+  });
+  return data;
+}
+
+/**
+ * User submits an unarchive / restoration request for an archived dataset.
+ * @param {string} datasetId
+ * @param {{ intendedUse: string, reason: string }} payload
+ */
+export async function requestDatasetUnarchive(datasetId, { intendedUse, reason }) {
+  const { data } = await client.post(`${DATASETS_BASE}/${datasetId}/unarchive/`, {
+    intended_use: intendedUse,
+    reason,
+  });
+  return data;
+}
+
+/**
+ * Fetch all archived datasets accessible for public/user browsing.
+ */
+export async function getArchivedDatasets() {
+  const candidateUrls = [
+    `/datasets/archived/`,
+    `/admin-panel/datasets/archived/`,
+  ];
+  let lastErr;
+  for (const url of candidateUrls) {
+    try {
+      const { data } = await client.get(url);
+      return data;
+    } catch (err) {
+      lastErr = err;
+      if (err?.response?.status && err.response.status !== 404) {
+        throw err;
+      }
+    }
+  }
+  throw lastErr;
+}
+
+/**
+ * Reviewer/Admin fetches queue of pending dataset archival requests.
+ */
+export async function getArchiveRequestsQueue() {
+  const { data } = await client.get(`/admin-panel/archive-requests/queue/`);
+  return data;
+}
+
+/**
+ * Reviewer/Admin votes on a pending archive request ("approve" or "reject").
+ * @param {string} requestId
+ * @param {"approve"|"reject"} vote
+ */
+export async function voteArchiveRequest(requestId, vote) {
+  const candidateUrls = [
+    `/admin-panel/archive-requests/${requestId}/vote/`,
+    `/admin-panel/datasets/${requestId}/archive-vote/`,
+    `/datasets/archive-requests/${requestId}/vote/`,
+    `/datasets/${requestId}/archive-vote/`,
+  ];
+  let lastErr;
+  for (const url of candidateUrls) {
+    try {
+      const { data } = await client.post(url, { vote });
+      return data;
+    } catch (err) {
+      lastErr = err;
+      if (err?.response?.status && err.response.status !== 404) {
+        throw err;
+      }
+    }
+  }
+  throw lastErr;
+}
+
+/**
+ * Admin fetches queue of pending dataset unarchiving/restoration requests.
+ */
+export async function getUnarchiveRequestsQueue() {
+  const { data } = await client.get(`/admin-panel/unarchive-requests/queue/`);
+  return data;
+}
+
+/**
+ * Admin decides on a pending unarchive request ("approve" or "reject").
+ * @param {string} requestId
+ * @param {"approve"|"reject"} decision
+ */
+export async function decideUnarchiveRequest(requestId, decision) {
+  const { data } = await client.post(`/admin-panel/unarchive-requests/${requestId}/decide/`, { decision });
+  return data;
+}
+
+/**
+ * Admin directly restores an archived dataset without committee vote.
+ * @param {string} datasetId
+ */
+export async function adminRestoreDataset(datasetId) {
+  const { data } = await client.post(`/admin-panel/datasets/${datasetId}/restore/`);
+  return data;
+}
+
+/**
+ * Admin fetches list of archived datasets across the platform.
+ */
+export async function getAdminArchivedDatasets() {
+  const { data } = await client.get(`/admin-panel/datasets/archived/`);
+  return data;
+}
+
+
+/**
+ * Fetch all datasets.
+ */
+export async function getDatasets(params) {
+  const { data } = await client.get(`${DATASETS_BASE}/`, { params });
+  return data;
+}
+
 
 

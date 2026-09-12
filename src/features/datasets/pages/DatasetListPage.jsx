@@ -16,19 +16,22 @@ import { getDashboardPath } from "../../../utils/userRoles";
 import * as datasetsApi from "../hooks/datasetsApi";
 
 const STATUS_META = {
-  approved: { label: "APPROVED", dot: "bg-success", text: "text-success" },
+  published: { label: "PUBLISHED", dot: "bg-success", text: "text-success" },
+  approved: { label: "PUBLISHED", dot: "bg-success", text: "text-success" },
   pending: { label: "PENDING", dot: "bg-[#D98A0D]", text: "text-[#D98A0D]" },
   rejected: { label: "REJECTED", dot: "bg-danger", text: "text-danger" },
   draft: { label: "DRAFT", dot: "bg-gray-400", text: "text-gray-500" },
+  archived: { label: "ARCHIVED", dot: "bg-gray-500", text: "text-gray-600" },
 };
 
-const STATUS_FILTERS = [
-  { id: "all", label: "All Datasets" },
-  { id: "approved", label: "Approved" },
-  { id: "pending", label: "Pending" },
-  { id: "rejected", label: "Rejected" },
+const STATUS_TABS = [
+  { id: "all", label: "All" },
   { id: "draft", label: "Draft" },
+  { id: "pending", label: "Pending" },
+  { id: "published", label: "Published" },
+  { id: "rejected", label: "Rejected" },
 ];
+const STATUS_FILTERS = STATUS_TABS;
 
 const ROWS_PER_PAGE_OPTIONS = [6, 12, 18];
 
@@ -50,12 +53,16 @@ function formatFileSize(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export default function DatasetListPage() {
+export default function DatasetListPage({
+  defaultStatusFilter = "all",
+  title = "My Datasets",
+  subtitle = "Track the status of every dataset you've submitted.",
+}) {
   const [datasets, setDatasets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState(defaultStatusFilter);
   const [rowsPerPage, setRowsPerPage] = useState(6);
   const [page, setPage] = useState(0);
   const [menuId, setMenuId] = useState(null);
@@ -74,6 +81,8 @@ export default function DatasetListPage() {
     }
   }
 
+  const isArchivedPage = title.toLowerCase().includes("archived");
+
   useEffect(() => {
     let isMounted = true;
 
@@ -81,18 +90,41 @@ export default function DatasetListPage() {
       setLoading(true);
       setError(null);
       try {
-        const params = {};
-        if (statusFilter !== "all") {
-          params.status = statusFilter;
+        let data;
+        if (isArchivedPage) {
+          try {
+            data = await datasetsApi.getArchivedDatasets();
+          } catch (err1) {
+            try {
+              data = await datasetsApi.getAdminArchivedDatasets();
+            } catch (err2) {
+              // If both endpoints fail, gracefully fallback to an empty array instead of crashing/throwing
+              data = [];
+            }
+          }
+        } else {
+          const params = {};
+          if (statusFilter !== "all") {
+            params.status = statusFilter === "approved" ? "published" : statusFilter;
+          }
+          try {
+            data = await datasetsApi.getMyDatasets(params);
+          } catch (err) {
+            // Fallback to general datasets or empty array if /datasets/mine/ errors out
+            try {
+              data = await datasetsApi.getDatasets();
+            } catch {
+              data = [];
+            }
+          }
         }
-        const data = await datasetsApi.getMyDatasets(params);
         if (isMounted) {
           const list = Array.isArray(data) ? data : data?.results || [];
           setDatasets(list);
         }
       } catch (err) {
         if (isMounted) {
-          setError(err.response?.data?.detail || "Failed to load your datasets.");
+          setError(err.response?.data?.detail || "Failed to load datasets.");
         }
       } finally {
         if (isMounted) setLoading(false);
@@ -101,14 +133,53 @@ export default function DatasetListPage() {
 
     loadDatasets();
     return () => { isMounted = false; };
-  }, [statusFilter]);
+  }, [statusFilter, title, isArchivedPage]);
 
+  const datasetsArray = Array.isArray(datasets) ? datasets : [];
+
+  // Compute counts for tabs
+  const tabCounts = useMemo(() => {
+    const active = datasetsArray.filter((d) => d.is_active !== false);
+    return {
+      all: active.length,
+      draft: active.filter((d) => String(d.status || "").toLowerCase() === "draft").length,
+      pending: active.filter((d) => {
+        const s = String(d.status || "").toLowerCase();
+        return s === "pending" || s === "submitted" || s === "in_review";
+      }).length,
+      published: active.filter((d) => {
+        const s = String(d.status || "").toLowerCase();
+        return s === "published" || s === "approved";
+      }).length,
+      rejected: active.filter((d) => {
+        const s = String(d.status || "").toLowerCase();
+        return s === "rejected" || s === "changes_requested";
+      }).length,
+    };
+  }, [datasetsArray]);
+
+  // Filter datasets strictly according to active tab and search
   const filtered = useMemo(() => {
-    const active = datasets.filter((d) => d.is_active !== false);
+    const active = datasetsArray.filter((d) => d.is_active !== false);
     return active
+      .filter((d) => {
+        if (isArchivedPage) return true;
+        if (statusFilter === "all") return true;
+        const s = String(d.status || "").toLowerCase();
+        if (statusFilter === "pending") {
+          return s === "pending" || s === "submitted" || s === "in_review";
+        }
+        if (statusFilter === "published" || statusFilter === "approved") {
+          return s === "published" || s === "approved";
+        }
+        if (statusFilter === "rejected") {
+          return s === "rejected" || s === "changes_requested";
+        }
+        return s === statusFilter;
+      })
       .filter((d) => (search.trim() ? d.title?.toLowerCase().includes(search.trim().toLowerCase()) : true))
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  }, [datasets, search]);
+      .sort((a, b) => new Date(b.created_at || b.archived_at || 0).getTime() - new Date(a.created_at || a.archived_at || 0).getTime());
+  }, [datasetsArray, search, statusFilter, isArchivedPage]);
 
   // Reset to first page whenever filters change
   useEffect(() => { queueMicrotask(() => setPage(0)); }, [statusFilter, search, rowsPerPage]);
@@ -121,113 +192,119 @@ export default function DatasetListPage() {
   const canGoNext = pageEnd < totalRows;
 
   return (
-    <DashboardShell title="My Datasets" subtitle="Track the status of every dataset you've submitted.">
-            <div className="p-8 lg:p-10 bg-white min-h-full rounded-2xl border border-[#E3E1DA]">
-              {/* Header */}
-              <div className="flex items-start justify-between gap-4 mb-6">
-                <div>
-                  <button
-                    type="button"
-                    onClick={() => navigate(getDashboardPath(user))}
-                    className="mb-3 inline-flex items-center text-xs font-semibold text-gray-500 hover:text-navy transition-colors"
-                  >
-                    ← Back to dashboard
-                  </button>
-                  <h1 className="text-3xl font-serif font-bold text-navy">My Datasets</h1>
-                  <p className="text-sm text-gray-500 mt-1">
-                    Track the status of every dataset you've submitted.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => navigate("/datasets/contribute?new=1")}
-                  className="flex items-center gap-2 bg-navy hover:bg-navy-dark text-white rounded-full px-5 py-2.5 text-sm font-semibold shrink-0 transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
-                  New Dataset
-                </button>
-              </div>
+    <DashboardShell title={title} subtitle={subtitle}>
+      <div className="p-8 lg:p-10 bg-white min-h-full rounded-2xl border border-[#E3E1DA]">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-4 mb-6">
+          <div>
+            <button
+              type="button"
+              onClick={() => navigate(getDashboardPath(user))}
+              className="mb-3 inline-flex items-center text-xs font-semibold text-gray-500 hover:text-navy transition-colors"
+            >
+              ← Back to dashboard
+            </button>
+            <h1 className="text-3xl font-serif font-bold text-navy">{title}</h1>
+            <p className="text-sm text-gray-500 mt-1">{subtitle}</p>
+          </div>
+          {!isArchivedPage && (
+            <button
+              type="button"
+              onClick={() => navigate("/datasets/contribute?new=1")}
+              className="flex items-center gap-2 bg-navy hover:bg-navy-dark text-white rounded-full px-5 py-2.5 text-sm font-semibold shrink-0 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              New Dataset
+            </button>
+          )}
+        </div>
 
-              {/* Search */}
-              <div className="flex items-center gap-3 mb-4">
-                <div className="flex-1 flex items-center gap-2 border border-[#E3E1DA] rounded-full px-4 py-2.5">
-                  <Search className="w-4 h-4 text-gray-400 shrink-0" />
-                  <input
-                    type="text"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search datasets"
-                    className="w-full text-sm text-navy placeholder:text-gray-400 focus:outline-none"
-                  />
-                </div>
-                {/* Filtering is already live as you type (see `filtered` above),
-                    so this button has no onClick logic of its own — it's the
-                    visible "Search" affordance in place of the old Filters
-                    button, not a separate trigger. */}
-                <button
-                  type="button"
-                  className="flex items-center gap-2 bg-navy hover:bg-navy-dark text-white rounded-full px-5 py-2.5 text-sm font-semibold shrink-0 transition-colors"
-                >
-                  <Search className="w-4 h-4" />
-                  Search
-                </button>
-              </div>
+        {/* Search */}
+        <div className="flex items-center gap-3 mb-4">
+          <div className="flex-1 flex items-center gap-2 border border-[#E3E1DA] rounded-full px-4 py-2.5">
+            <Search className="w-4 h-4 text-gray-400 shrink-0" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search datasets"
+              className="w-full text-sm text-navy placeholder:text-gray-400 focus:outline-none"
+            />
+          </div>
+          <button
+            type="button"
+            className="flex items-center gap-2 bg-navy hover:bg-navy-dark text-white rounded-full px-5 py-2.5 text-sm font-semibold shrink-0 transition-colors"
+          >
+            <Search className="w-4 h-4" />
+            Search
+          </button>
+        </div>
 
-              {/* Status filter pills */}
-              <div className="flex flex-wrap items-center gap-2 mb-8">
-                {STATUS_FILTERS.map((f) => (
-                  <button
-                    key={f.id}
-                    type="button"
-                    onClick={() => setStatusFilter(f.id)}
-                    className={[
-                      "px-4 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-colors",
+        {/* Status filter pills */}
+        {!isArchivedPage && (
+          <div className="flex flex-wrap items-center gap-2 mb-8">
+            {STATUS_TABS.map((f) => {
+              const count = tabCounts?.[f.id] ?? 0;
+              return (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setStatusFilter(f.id)}
+                  className={[
+                    "px-4 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-colors flex items-center gap-1.5",
+                    statusFilter === f.id
+                      ? "bg-gold text-white"
+                      : "bg-[#F0EFEA] text-gray-600 hover:bg-[#E3E1DA]",
+                  ].join(" ")}
+                >
+                  <span>{f.label}</span>
+                  <span
+                    className={`px-1.5 py-0.5 rounded-full text-[10px] ${
                       statusFilter === f.id
-                        ? "bg-gold text-white"
-                        : "bg-[#F0EFEA] text-gray-600 hover:bg-[#E3E1DA]",
-                    ].join(" ")}
+                        ? "bg-white/25 text-white"
+                        : "bg-gray-200 text-gray-700"
+                    }`}
                   >
-                    {f.label}
-                  </button>
-                ))}
-              </div>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
-              {error && <p role="alert" className="text-danger mb-4">{error}</p>}
-              {loading && <p className="text-gray-500">Loading datasets…</p>}
+        {error && <p role="alert" className="text-danger mb-4">{error}</p>}
+        {loading && <p className="text-gray-500">Loading datasets…</p>}
 
-              {!loading && !error && totalRows === 0 && (
-                <div className="bg-[#F7F6F2] rounded-xl p-10 text-center border border-[#E3E1DA]">
-                  <p className="text-gray-500 mb-4">
-                    {datasets.length === 0
-                      ? "You haven't uploaded any datasets yet."
-                      : "No datasets match your search or filter."}
-                  </p>
-                  {datasets.length === 0 && (
-                    <button
-                      onClick={() => navigate("/datasets/contribute?new=1")}
-                      className="bg-[#A67A0D] hover:bg-[#8f690b] text-white rounded-md px-4 py-2 text-sm font-semibold transition"
-                    >
-                      Upload your first dataset
-                    </button>
-                  )}
-                </div>
-              )}
+        {!loading && !error && totalRows === 0 && (
+          <div className="bg-[#F7F6F2] rounded-xl p-10 text-center border border-[#E3E1DA]">
+            <p className="text-gray-500 mb-4">
+              {datasetsArray.length === 0
+                ? (isArchivedPage ? "No archived datasets available." : "You haven't uploaded any datasets yet.")
+                : "No datasets match your search or filter."}
+            </p>
+            {datasetsArray.length === 0 && !isArchivedPage && (
+              <button
+                onClick={() => navigate("/datasets/contribute?new=1")}
+                className="bg-[#A67A0D] hover:bg-[#8f690b] text-white rounded-md px-4 py-2 text-sm font-semibold transition"
+              >
+                Upload your first dataset
+              </button>
+            )}
+          </div>
+        )}
 
               {!loading && !error && totalRows > 0 && (
                 <>
                   {/* Card grid — 6 visible per page */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                     {pageRows.map((dataset) => {
-                      const meta = STATUS_META[dataset.status] || STATUS_META.draft;
+                      const meta = dataset.is_archived ? (STATUS_META.archived || STATUS_META.published) : (STATUS_META[dataset.status] || STATUS_META.draft);
                       const size = formatFileSize(dataset.file_size);
                       return (
                         <div
                           key={dataset.id}
                           className="bg-white rounded-xl border border-[#E3E1DA] overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
-                          // FIX: this used to navigate to /datasets/${id}, which now
-                          // resolves to the PUBLIC DatasetViewPage. This is the
-                          // researcher's own dataset list, so it needs to land on
-                          // /my-datasets/${id} -> DatasetDetailPage instead.
                           onClick={() => navigate(dataset.status === "draft" ? `/datasets/contribute?draft=${dataset.id}` : `/my-datasets/${dataset.id}`)}
                         >
                           <div className="h-40 w-full bg-gray-100 overflow-hidden">

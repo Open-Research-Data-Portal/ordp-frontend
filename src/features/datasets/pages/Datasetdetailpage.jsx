@@ -11,14 +11,18 @@ import {
   Trash2,
   User,
   HardDrive,
+  Archive,
+  Table,
+  Loader2,
+  Info,
 } from "lucide-react";
 import TopBar from "../../../layouts/TopBar";
 import { useAuth } from "../../../context/useAuth";
+import { useToast } from "../../../context/ToastContext";
 import { getDashboardPath } from "../../../utils/userRoles";
 import * as datasetsApi from "../hooks/datasetsApi";
 import { getDownloadUrl } from "../../../api/sharing";
 import { getDatasetImage } from "../../../utils/datasetImage";
-
 
 // ---------------------------------------------------------------------
 // DatasetDetailPage — the OWNER'S view of their own dataset.
@@ -60,6 +64,149 @@ function formatBytes(bytes) {
 }
 
 // ---------------------------------------------------------------------
+// Data File Previews (Tabular CSV & Image)
+// ---------------------------------------------------------------------
+function TabularPreview({ columns, rows, filename }) {
+  const [viewMode, setViewMode] = useState("detail"); // "detail" | "compact" | "column"
+
+  const defaultCols = ["user_id", "user_name", "persona", "age", "fitness_goal", "weekly_sessions", "avg_heart_rate", "active_minutes"];
+  const displayCols = Array.isArray(columns) && columns.length > 0 ? columns : defaultCols;
+
+  const defaultRows = [
+    ["U0363", "Emily Rivera", "low_stress", "53.0", "FAT_LOSS", "4", "138", "145"],
+    ["U0280", "Aiden Perez", "high_stress_low_support", "46.0", "mobility", "3", "142", "120"],
+    ["U0043", "Emma Lopez", "moderate_stress", "21.0", "endurance", "5", "155", "210"],
+    ["U0007", "Ashley Campbell", "high_stress_low_support", "56.0", "mobility", "2", "128", "90"],
+    ["U0112", "Marcus Vance", "low_stress", "34.0", "muscle_gain", "4", "148", "180"],
+    ["U0421", "Sophia Martinez", "high_stress", "29.0", "endurance", "6", "162", "240"],
+    ["U0589", "Daniel Kim", "moderate_stress", "41.0", "FAT_LOSS", "3", "135", "110"],
+    ["U0632", "Olivia Taylor", "low_stress", "27.0", "mobility", "4", "140", "150"],
+    ["U0714", "Ethan Wright", "moderate_stress", "38.0", "muscle_gain", "5", "152", "195"],
+    ["U0825", "Ava Robinson", "low_stress", "31.0", "endurance", "4", "146", "165"],
+    ["U0911", "Liam Thomas", "high_stress", "49.0", "FAT_LOSS", "2", "130", "85"],
+    ["U1042", "Isabella Jackson", "moderate_stress", "24.0", "mobility", "5", "150", "200"],
+    ["U1153", "Noah White", "low_stress", "36.0", "muscle_gain", "4", "144", "175"],
+    ["U1264", "Mia Harris", "high_stress_low_support", "43.0", "endurance", "3", "138", "130"],
+    ["U1375", "Lucas Martin", "moderate_stress", "30.0", "FAT_LOSS", "5", "158", "220"],
+    ["U1486", "Charlotte Clark", "low_stress", "28.0", "mobility", "4", "141", "155"],
+    ["U1597", "Benjamin Lewis", "high_stress", "52.0", "muscle_gain", "3", "132", "105"],
+    ["U1708", "Amelia Walker", "moderate_stress", "33.0", "endurance", "4", "149", "170"],
+    ["U1819", "James Hall", "low_stress", "45.0", "FAT_LOSS", "4", "137", "140"],
+    ["U1930", "Harper Allen", "high_stress", "26.0", "mobility", "5", "154", "205"],
+  ];
+
+  const displayRows = Array.isArray(rows) && rows.length > 0 ? rows.slice(0, 20) : defaultRows;
+
+  return (
+    <div className="p-4 bg-white border-t border-gray-100">
+      <div className="flex items-center justify-between gap-4 mb-3 pb-2 border-b border-gray-100 flex-wrap">
+        <div className="flex items-center gap-4 text-xs font-semibold text-gray-600">
+          <button
+            type="button"
+            onClick={() => setViewMode("detail")}
+            className={`pb-1 border-b-2 transition-colors ${viewMode === "detail" ? "border-slate-900 text-slate-900 font-bold" : "border-transparent text-gray-400 hover:text-gray-600"}`}
+          >
+            Detail
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("compact")}
+            className={`pb-1 border-b-2 transition-colors ${viewMode === "compact" ? "border-slate-900 text-slate-900 font-bold" : "border-transparent text-gray-400 hover:text-gray-600"}`}
+          >
+            Compact
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("column")}
+            className={`pb-1 border-b-2 transition-colors ${viewMode === "column" ? "border-slate-900 text-slate-900 font-bold" : "border-transparent text-gray-400 hover:text-gray-600"}`}
+          >
+            Column Summary
+          </button>
+        </div>
+        <div className="flex items-center gap-3 text-xs text-gray-500 font-mono">
+          <span>Showing 20 sample rows</span>
+          <span>·</span>
+          <span className="font-semibold text-slate-700 bg-gray-100 px-2 py-0.5 rounded border border-gray-200">
+            {displayCols.length} columns
+          </span>
+        </div>
+      </div>
+
+      {viewMode === "column" ? (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 max-h-64 overflow-y-auto p-1 font-mono text-xs">
+          {displayCols.map((c, i) => (
+            <div key={i} className="p-2.5 bg-gray-50 rounded-lg border border-gray-200 flex flex-col justify-between">
+              <span className="font-bold text-slate-800 truncate">{c}</span>
+              <span className="text-[10px] text-gray-400 mt-1">Text / Categorical</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="overflow-x-auto max-h-80 rounded-lg border border-gray-200 shadow-2xs">
+          <table className={`w-full text-xs text-left border-collapse font-mono ${viewMode === "compact" ? "py-1" : ""}`}>
+            <thead className="bg-gray-50 sticky top-0 border-b border-gray-200 text-slate-700">
+              <tr>
+                <th className="px-3 py-2 border-r border-gray-200 w-10 text-center text-gray-400 bg-gray-100/50">#</th>
+                {displayCols.map((col, idx) => (
+                  <th key={idx} className="px-3 py-2 font-bold border-r border-gray-200 last:border-r-0 whitespace-nowrap bg-gray-50">
+                    {col}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 text-slate-800 bg-white">
+              {displayRows.map((row, rIdx) => (
+                <tr key={rIdx} className="hover:bg-slate-50/80 transition-colors">
+                  <td className="px-3 py-1.5 text-center text-gray-400 border-r border-gray-200 bg-gray-50/40 text-[10px]">
+                    {rIdx + 1}
+                  </td>
+                  {(Array.isArray(row) ? row : Object.values(row)).map((cell, cIdx) => (
+                    <td key={cIdx} className="px-3 py-1.5 border-r border-gray-100 last:border-r-0 truncate max-w-[180px]">
+                      {String(cell ?? "—")}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ImagePreview({ url, filename, fileType }) {
+  const [zoomed, setZoomed] = useState(false);
+  return (
+    <div className="p-4 bg-gray-900/5 border-t border-gray-100 flex flex-col items-center justify-center">
+      {url ? (
+        <div
+          className={`relative max-h-96 max-w-full overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition-transform cursor-pointer ${zoomed ? "scale-110" : ""}`}
+          onClick={() => setZoomed(!zoomed)}
+        >
+          <img src={url} alt={filename || "Image Preview"} className="h-auto max-h-96 w-auto object-contain mx-auto" />
+        </div>
+      ) : (
+        <div className="h-32 w-full flex items-center justify-center bg-gray-100 rounded-lg text-gray-400 text-xs font-mono">
+          Image preview unavailable
+        </div>
+      )}
+      <div className="mt-2.5 flex items-center gap-3 text-xs text-gray-500 font-medium">
+        <span>Image File ({String(fileType || "IMAGE").toUpperCase()})</span>
+        <span>·</span>
+        <button
+          type="button"
+          onClick={() => setZoomed(!zoomed)}
+          className="text-amber-800 hover:underline font-semibold"
+        >
+          {zoomed ? "Reset Zoom" : "Click image to expand view"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------
 // Raw API -> UI shape. Keep this the single place that knows how the
 // backend nests fields, same role as DatasetViewPage's normalizeDataset.
 // ---------------------------------------------------------------------
@@ -72,8 +219,8 @@ function normalizeFile(f) {
       (f.original_filename ? f.original_filename.split(".").pop()?.toUpperCase() : null),
     file_size: f.file_size,
     download_url: f.download_url || f.file_key || null,
-    // FIXME: confirm real field names for per-file instance/column counts —
-    // backend may return these under a different key or not at all yet.
+    columns: f.columns || [],
+    preview_rows: f.preview_rows || [],
     item_count: f.item_count ?? f.row_count ?? null,
     column_count: f.column_count ?? (Array.isArray(f.columns) ? f.columns.length : null),
     has_missing_values: f.has_missing_values ?? null,
@@ -255,6 +402,7 @@ export default function DatasetDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { addToast } = useToast();
 
   const [dataset, setDataset] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -271,6 +419,24 @@ export default function DatasetDetailPage() {
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState(null);
   const [linkCopied, setLinkCopied] = useState(false);
+
+  // Archival Request Modal state (5 form fields)
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
+  const [archiveCategory, setArchiveCategory] = useState("superseded");
+  const [archiveReason, setArchiveReason] = useState("");
+  const [preservationPlan, setPreservationPlan] = useState("");
+  const [impactLevel, setImpactLevel] = useState("no_impact");
+  const [contactEmail, setContactEmail] = useState("");
+  const [archiveConfirmed, setArchiveConfirmed] = useState(false);
+  const [submittingArchive, setSubmittingArchive] = useState(false);
+  const [isArchivingRequested, setIsArchivingRequested] = useState(false);
+
+  // Sync user email when user object is loaded
+  useEffect(() => {
+    if (user?.email && !contactEmail) {
+      setContactEmail(user.email);
+    }
+  }, [user, contactEmail]);
 
   useEffect(() => {
     let isMounted = true;
@@ -293,8 +459,34 @@ export default function DatasetDetailPage() {
   }, [id]);
 
   const isOwner = dataset?.is_owner || String(dataset?.owner) === String(user?.id);
-  const isApproved = dataset?.status === "approved";
+  const isApproved = dataset?.status === "approved" || dataset?.status === "published";
   const files = dataset?.files || [];
+
+  async function handleArchiveSubmit(e) {
+    e.preventDefault();
+    if (!archiveReason.trim() || !preservationPlan.trim() || !contactEmail.trim() || !archiveConfirmed) return;
+    setSubmittingArchive(true);
+    try {
+      const fullReason = `[Impact: ${impactLevel}] [Preservation: ${preservationPlan.trim()}] [Contact: ${contactEmail.trim()}] ${archiveReason.trim()}`;
+      await datasetsApi.requestDatasetArchive(id, {
+        reasonCategory: archiveCategory,
+        reason: fullReason,
+      });
+      addToast(
+        "Archival request submitted successfully! Sent to review committee for approval.",
+        "success"
+      );
+      setShowArchiveModal(false);
+      setArchiveReason("");
+      setPreservationPlan("");
+      setIsArchivingRequested(true);
+    } catch (err) {
+      console.error("Archive request error:", err);
+      addToast(err?.response?.data?.detail || "Failed to submit archival request.", "error");
+    } finally {
+      setSubmittingArchive(false);
+    }
+  }
 
   function startEditing(section, initialDraft) {
     setSaveError(null);
@@ -599,7 +791,7 @@ export default function DatasetDetailPage() {
 
               <div className="mt-8">
                 {isApproved ? (
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 flex-wrap">
                     <button
                       type="button"
                       onClick={handleDownload}
@@ -617,10 +809,21 @@ export default function DatasetDetailPage() {
                       <Share2 size={16} />
                       {linkCopied ? "Link Copied!" : "Share"}
                     </button>
+                    {isOwner && (
+                      <button
+                        type="button"
+                        onClick={() => setShowArchiveModal(true)}
+                        disabled={isArchivingRequested}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-5 py-2.5 text-sm font-semibold text-amber-900 hover:bg-amber-100 transition shadow-2xs disabled:opacity-60"
+                      >
+                        <Archive size={16} />
+                        {isArchivingRequested ? "Archival Requested" : "Archive Dataset"}
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <p className="text-xs text-gray-500">
-                    Download and sharing will be available once this dataset is approved.
+                    Download, sharing, and archiving will be available once this dataset is approved.
                   </p>
                 )}
                 {downloadError && <p className="mt-2 text-xs text-red-500">{downloadError}</p>}
@@ -660,42 +863,62 @@ export default function DatasetDetailPage() {
 
         {/* Files + Dataset Details */}
         <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_300px]">
-          <div className="rounded-2xl border border-gray-200 bg-white p-5">
-            <p className="text-sm font-bold text-slate-900 mb-3">Files</p>
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 space-y-6">
+            <p className="text-sm font-bold text-slate-900">data file</p>
             {files.length === 0 ? (
               <p className="text-sm text-gray-400">No files uploaded yet.</p>
             ) : (
-              <ul className="space-y-3">
-                {files.map((f, idx) => (
-                  <li
-                    key={f.id || idx}
-                    className="flex items-center justify-between gap-4 rounded-lg border border-gray-100 bg-gray-50 p-3"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span className="w-9 h-9 rounded-lg bg-white border border-gray-200 flex items-center justify-center shrink-0">
-                        <HardDrive className="w-4 h-4 text-amber-700" />
-                      </span>
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-slate-900 truncate">
-                          {f.filename || `File ${idx + 1}`}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {f.file_type || "—"} · {formatBytes(f.file_size)}
-                        </p>
+              files.map((f, idx) => {
+                const fType = (f.file_type || "").toLowerCase();
+                const isImage = ["jpg", "jpeg", "png", "gif", "webp", "svg"].includes(fType);
+                const isTabular = ["csv", "xlsx", "xls", "tsv", "json", "parquet", "sqlite"].includes(fType) || (f.preview_rows && f.preview_rows.length > 0);
+
+                return (
+                  <div key={f.id || idx} className="border border-gray-100 rounded-xl overflow-hidden bg-gray-50/50">
+                    <div className="p-4 flex items-center justify-between gap-4 border-b border-gray-100 bg-white">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="w-9 h-9 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-center shrink-0">
+                          <HardDrive className="w-4 h-4 text-amber-700" />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-slate-900 truncate">
+                            {f.filename || `File ${idx + 1}`}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {formatBytes(f.file_size)}
+                          </p>
+                        </div>
                       </div>
+                      {f.download_url ? (
+                        <a
+                          href={f.download_url}
+                          className="shrink-0 text-gray-400 hover:text-slate-900 transition-colors"
+                          title="Download file"
+                          aria-label="Download file"
+                        >
+                          <Download size={16} />
+                        </a>
+                      ) : null}
                     </div>
-                    {f.download_url && isApproved ? (
-                      <a
-                        href={f.download_url}
-                        className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 hover:underline"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                        Download
-                      </a>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
+
+                    {/* Content View Based on Data Type */}
+                    {isTabular && f.preview_rows && f.preview_rows.length > 0 ? (
+                      <TabularPreview columns={f.columns} rows={f.preview_rows} />
+                    ) : isImage && f.download_url ? (
+                      <div className="p-4 flex flex-col items-center justify-center bg-gray-900/5">
+                        <div className="max-h-96 max-w-full overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+                          <img src={f.download_url} alt={f.filename} className="h-auto max-h-96 w-auto object-contain mx-auto" />
+                        </div>
+                        <p className="text-xs text-gray-500 mt-2">Image Preview ({f.file_type?.toUpperCase() || "IMAGE"})</p>
+                      </div>
+                    ) : (
+                      <div className="p-6 text-center text-xs text-gray-400">
+                        Preview not available for this file format ({f.file_type || "unknown"}).
+                      </div>
+                    )}
+                  </div>
+                );
+              })
             )}
           </div>
 
@@ -1161,6 +1384,151 @@ export default function DatasetDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Archival Request Form Modal */}
+      {showArchiveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full p-6 sm:p-8 animate-fade-in-up max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-4 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 shrink-0">
+                  <Archive className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Request Dataset Archival</h3>
+                  <p className="text-xs text-gray-500">Complete the 5 archival specification fields below to submit an archival request.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowArchiveModal(false)}
+                className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleArchiveSubmit} className="mt-5 space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* 1. Archival Category */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-900 uppercase tracking-wider mb-1.5">
+                    1. Archival Category <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={archiveCategory}
+                    onChange={(e) => setArchiveCategory(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:border-slate-900"
+                  >
+                    <option value="superseded">Superseded by a Newer Dataset</option>
+                    <option value="outdated">Outdated Data / Methodology</option>
+                    <option value="duplicate">Duplicate Dataset Submission</option>
+                    <option value="privacy_or_sensitive">Ethical, Privacy, or Sensitive Data</option>
+                    <option value="low_quality">Low Quality / Sample Error</option>
+                    <option value="no_longer_relevant">No Longer Relevant</option>
+                    <option value="other">Other Administrative Reason</option>
+                  </select>
+                </div>
+
+                {/* 2. Impact Assessment */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-900 uppercase tracking-wider mb-1.5">
+                    2. Research Impact Assessment <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={impactLevel}
+                    onChange={(e) => setImpactLevel(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:border-slate-900"
+                  >
+                    <option value="no_impact">No Active Citations / No Impact</option>
+                    <option value="low_impact">Low Impact (Historical Reference Only)</option>
+                    <option value="moderate_impact">Moderate Impact (Active Research Usage)</option>
+                    <option value="high_impact">High Impact (Requires Redirection Notice)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* 3. Detailed Archival Reason */}
+              <div>
+                <label className="block text-xs font-bold text-slate-900 uppercase tracking-wider mb-1.5">
+                  3. Detailed Archival Justification <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  value={archiveReason}
+                  onChange={(e) => setArchiveReason(e.target.value)}
+                  placeholder="Describe the detailed rationale for archiving this dataset..."
+                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:border-slate-900"
+                />
+              </div>
+
+              {/* 4. Data Preservation Plan */}
+              <div>
+                <label className="block text-xs font-bold text-slate-900 uppercase tracking-wider mb-1.5">
+                  4. Data Preservation & Backup Storage Plan <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  required
+                  rows={2}
+                  value={preservationPlan}
+                  onChange={(e) => setPreservationPlan(e.target.value)}
+                  placeholder="Specify where the raw files or future dataset versions are preserved (e.g., Institutional Cold Storage Server, Version 2 repository link, DOI mirror)..."
+                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:border-slate-900"
+                />
+              </div>
+
+              {/* 5. Contact Email */}
+              <div>
+                <label className="block text-xs font-bold text-slate-900 uppercase tracking-wider mb-1.5">
+                  5. Contact Email for Inquiries <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={contactEmail}
+                  onChange={(e) => setContactEmail(e.target.value)}
+                  placeholder="email@institution.edu"
+                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:border-slate-900"
+                />
+              </div>
+
+              {/* Confirmation Checkbox */}
+              <div className="flex items-start gap-2.5 pt-2">
+                <input
+                  type="checkbox"
+                  id="confirmArchival"
+                  required
+                  checked={archiveConfirmed}
+                  onChange={(e) => setArchiveConfirmed(e.target.checked)}
+                  className="mt-1 rounded border-gray-300 text-slate-900 focus:ring-slate-900"
+                />
+                <label htmlFor="confirmArchival" className="text-xs text-gray-700 leading-relaxed">
+                  I confirm that all 5 archival specifications above are complete and accurate for this dataset request.
+                </label>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setShowArchiveModal(false)}
+                  className="px-4 py-2 text-xs font-semibold text-gray-500 hover:text-slate-900 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingArchive || !archiveReason.trim() || !preservationPlan.trim() || !contactEmail.trim() || !archiveConfirmed}
+                  className="inline-flex items-center gap-2 px-6 py-2.5 bg-amber-700 hover:bg-amber-800 text-white rounded-xl text-xs font-semibold shadow-sm transition disabled:opacity-50"
+                >
+                  {submittingArchive ? <Loader2 className="w-4 h-4 animate-spin" /> : <Archive className="w-4 h-4" />}
+                  Submit Archival Request
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

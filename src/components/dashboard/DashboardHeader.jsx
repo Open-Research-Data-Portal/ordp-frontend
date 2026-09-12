@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, Bell, HelpCircle, ChevronDown } from "lucide-react";
+import { Search, Bell, HelpCircle, ChevronDown, Menu } from "lucide-react";
 import { useAuth } from "../../context/useAuth";
 import { getDisplayName, getMediaUrl } from "../../utils/userRoles";
 
-export default function DashboardHeader({ title, subtitle }) {
+export default function DashboardHeader({ title, subtitle, onToggleMobileMenu, isCollapsed, onToggleCollapse }) {
   const [query, setQuery] = useState("");
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -17,8 +17,33 @@ export default function DashboardHeader({ title, subtitle }) {
   }
 
   return (
-    <header className="sticky top-0 z-20 bg-white border-b border-border px-4 sm:px-6 h-[4.25rem] flex items-center gap-4 lg:gap-6">
-      <div className="hidden xl:block shrink-0 w-[160px]">
+    <header className="sticky top-0 z-20 bg-white border-b border-border px-4 sm:px-6 h-[4.25rem] flex items-center gap-3 lg:gap-6">
+      {/* Mobile Menu Toggle Button */}
+      {onToggleMobileMenu && (
+        <button
+          type="button"
+          onClick={onToggleMobileMenu}
+          className="lg:hidden p-2 rounded-lg text-navy hover:bg-gray-100 transition shrink-0"
+          aria-label="Toggle Navigation Menu"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+      )}
+
+      {/* Desktop Sidebar Collapse Button */}
+      {onToggleCollapse && (
+        <button
+          type="button"
+          onClick={onToggleCollapse}
+          className="hidden lg:flex p-2 rounded-lg text-gray-500 hover:text-navy hover:bg-gray-100 transition shrink-0"
+          title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+      )}
+
+      <div className="hidden xl:block shrink-0 min-w-[140px]">
         {title && (
           <>
             <h1 className="text-sm font-bold text-navy leading-tight truncate">{title}</h1>
@@ -27,7 +52,7 @@ export default function DashboardHeader({ title, subtitle }) {
         )}
       </div>
 
-      <form onSubmit={handleSearch} className="flex-1 min-w-0 max-w-none mx-4 lg:mx-8">
+      <form onSubmit={handleSearch} className="flex-1 min-w-0 max-w-none mx-2 sm:mx-4 lg:mx-6">
         <div className="relative">
           <Search className="w-4 h-4 text-gray-400 absolute left-4 top-1/2 -translate-y-1/2" />
           <input

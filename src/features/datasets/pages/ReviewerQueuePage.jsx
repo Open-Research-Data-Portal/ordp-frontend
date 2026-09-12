@@ -18,7 +18,6 @@ import DashboardShell from "../../../components/dashboard/DashboardShell";
 import { StatusBadge, EmptyState } from "../../../components/dashboard/dashboardUi";
 import { useToast } from "../../../context/ToastContext.jsx";
 import * as datasetsApi from "../hooks/datasetsApi.js";
-import { fetchAllDatasets } from "../../../api/datasetsHub";
 
 function normalizeList(data) {
   if (Array.isArray(data)) return data;
@@ -34,6 +33,7 @@ function formatDate(dateString) {
 
 const TABS = [
   { id: "datasets", label: "Review Datasets" },
+  { id: "archive-requests", label: "Archive Requests" },
   { id: "content-updates", label: "Content Updates" },
   { id: "revision-requests", label: "Revision Requests" },
   { id: "access-requests", label: "Access Requests" },
@@ -56,6 +56,7 @@ export default function ReviewerQueuePage() {
 
   // ── State ────────────────────────────────────────────────────────────
   const [datasetQueue, setDatasetQueue] = useState([]);
+  const [archiveRequests, setArchiveRequests] = useState([]);
   const [contentUpdates, setContentUpdates] = useState([]);
   const [revisionRequests, setRevisionRequests] = useState([]);
   const [accessRequests, setAccessRequests] = useState([]);
@@ -82,6 +83,7 @@ export default function ReviewerQueuePage() {
           datasetsApi.getAccessRequestsQueue(),   // 3
           datasetsApi.getMyReviews(),            // 4 — /admin-panel/my-reviews/
           datasetsApi.getAdminPendingReviews(),   // 5 fallback
+          datasetsApi.getArchiveRequestsQueue(),  // 6 — /admin-panel/archive-requests/queue/
         ]);
         if (!active) return;
 
@@ -92,35 +94,14 @@ export default function ReviewerQueuePage() {
         }
 
         const reviewerQ = results[0].status === "fulfilled" ? normalizeList(results[0].value) : [];
-        const adminPending = results[5].status === "fulfilled" ? normalizeList(results[5].value) : [];
-        const seen = new Set();
-        const merged = [];
-        for (const item of [...reviewerQ, ...adminPending]) {
-          const id = String(item.id || item.dataset_id);
-          if (id && !seen.has(id)) { seen.add(id); merged.push(item); }
-        }
+        const myReviewsList = results[4].status === "fulfilled" ? normalizeList(results[4].value) : [];
+        const reviewedIds = new Set(myReviewsList.map((r) => String(r.dataset_id || r.id || r.review_id)));
 
-        // Also check if any datasets in the repository are in pending/submitted/in_review status
-        if (merged.length === 0) {
-          try {
-            const myData = await datasetsApi.getMyDatasets();
-            const myList = Array.isArray(myData) ? myData : (myData?.results || []);
-            for (const item of myList) {
-              const s = String(item.status || "").toLowerCase();
-              const id = String(item.id || item.dataset_id);
-              if (id && (s === "pending" || s === "submitted" || s === "in_review") && !seen.has(id)) {
-                seen.add(id);
-                merged.push(item);
-              }
-            }
-          } catch {
-            // non-fatal
-          }
-        }
-
-        const pendingOnly = merged.filter((d) => {
+        const pendingOnly = reviewerQ.filter((d) => {
+          const id = String(d.id || d.dataset_id);
           const s = String(d.status || "").toLowerCase();
-          return !s || s === "pending" || s === "submitted" || s === "in_review";
+          const isPending = !s || s === "pending" || s === "submitted" || s === "in_review";
+          return isPending && !reviewedIds.has(id);
         });
         setDatasetQueue(pendingOnly);
 
@@ -128,6 +109,7 @@ export default function ReviewerQueuePage() {
         if (results[2].status === "fulfilled") setRevisionRequests(normalizeList(results[2].value));
         if (results[3].status === "fulfilled") setAccessRequests(normalizeList(results[3].value));
         if (results[4].status === "fulfilled") setMyReviews(normalizeList(results[4].value));
+        if (results[6].status === "fulfilled") setArchiveRequests(normalizeList(results[6].value));
       } catch {
         addToast("Failed to load review queue.", "error");
       } finally {
@@ -140,10 +122,11 @@ export default function ReviewerQueuePage() {
 
   const pendingCounts = useMemo(() => ({
     datasets: datasetQueue.length,
+    archiveRequests: archiveRequests.length,
     contentUpdates: contentUpdates.length,
     revisionRequests: revisionRequests.length,
     accessRequests: accessRequests.length,
-  }), [datasetQueue, contentUpdates, revisionRequests, accessRequests]);
+  }), [datasetQueue, archiveRequests, contentUpdates, revisionRequests, accessRequests]);
 
   function setTab(tabId) {
     setSearchParams({ tab: tabId });
@@ -198,7 +181,15 @@ export default function ReviewerQueuePage() {
   // ── Voting on Secondary Queues ────────────────────────────────────────
   async function handleVote(type, itemId, vote, comment = "") {
     setActionId(itemId);
-    const voterMap = {
+  const voterMap = {
+      "archive-requests": { 
+        fn: (itemId, { vote: v }) => {
+          const item = archiveRequests.find((r) => String(r.id || r.request_id || r.dataset_id) === String(itemId));
+          const actualId = item?.id || itemId;
+          return datasetsApi.voteArchiveRequest(actualId, v);
+        }, 
+        setter: setArchiveRequests 
+      },
       "content-updates": { fn: datasetsApi.voteContentUpdate, setter: setContentUpdates },
       "revision-requests": { fn: datasetsApi.voteRevisionRequest, setter: setRevisionRequests },
       "access-requests": { fn: datasetsApi.voteAccessRequest, setter: setAccessRequests },
@@ -323,6 +314,11 @@ export default function ReviewerQueuePage() {
                   {pendingCounts.datasets}
                 </span>
               )}
+              {tab.id === "archive-requests" && pendingCounts.archiveRequests > 0 && (
+                <span className="bg-purple-600 text-white text-[10px] font-bold rounded-full px-2 py-0.5">
+                  {pendingCounts.archiveRequests}
+                </span>
+              )}
               {tab.id === "content-updates" && pendingCounts.contentUpdates > 0 && (
                 <span className="bg-amber-500 text-white text-[10px] font-bold rounded-full px-2 py-0.5">
                   {pendingCounts.contentUpdates}
@@ -357,6 +353,20 @@ export default function ReviewerQueuePage() {
                     const id = item.id || item.dataset_id;
                     navigate(`/reviewer/review/${id}`);
                   }}
+                />
+              )}
+
+              {activeTab === "archive-requests" && (
+                <VoteTable
+                  type="archive-requests"
+                  items={archiveRequests}
+                  emptyTitle="No pending archive requests"
+                  emptyDesc="No dataset archival requests awaiting review."
+                  idKey="id"
+                  titleKey="dataset_title"
+                  descKey="reason"
+                  actionId={actionId}
+                  onVote={handleVote}
                 />
               )}
 

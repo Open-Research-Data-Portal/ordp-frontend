@@ -1,5 +1,4 @@
 import client from "../../../api/client";
-import { fetchAllDatasets } from "../../../api/datasetsHub";
 
 const DATASETS_BASE = "/datasets";
 const METADATA_BASE = "/metadata";
@@ -125,19 +124,8 @@ export async function submitDataset(datasetId, termsAccepted) {
 }
 
 export async function getMyDatasets(params = {}) {
-  try {
-    const { data } = await client.get(`${DATASETS_BASE}/mine/`, { params });
-    // Normalise: backend may return { results: [] } or a plain array
-    if (Array.isArray(data)) return data;
-    if (Array.isArray(data?.results)) return data.results;
-    if (Array.isArray(data?.datasets)) return data.datasets;
-    return [];
-  } catch (err) {
-    // 401/403 = not logged in or no permission → clean empty list, not an error
-    const status = err?.response?.status;
-    if (status === 401 || status === 403) return [];
-    throw err; // re-throw real errors (500, network, etc.)
-  }
+  const { data } = await client.get(`${DATASETS_BASE}/mine/`, { params });
+  return data;
 }
 
 export async function getDatasetDetail(datasetId) {
@@ -167,30 +155,13 @@ export async function getDashboardRecentActivity() {
 }
 
 export async function getDashboardFeed() {
-  try {
-    const { data } = await client.get(`${DATASETS_BASE}/dashboard/feed/`);
-    const list = Array.isArray(data) ? data : (data?.results || data?.datasets || []);
-    if (list.length > 0) return list;
-  } catch {
-    // endpoint unavailable — fall back to the resilient directory scan
-  }
-  return fetchAllDatasets();
+  const { data } = await client.get(`${DATASETS_BASE}/dashboard/feed/`);
+  return data;
 }
 
 export async function getDashboardMyContributions() {
   const { data } = await client.get(`${DATASETS_BASE}/dashboard/my-contributions/`);
   return data;
-}
-
-export async function getDiscoverFeed() {
-  try {
-    const { data } = await client.get("/search/discover/");
-    const list = Array.isArray(data) ? data : (data?.results || data?.datasets || []);
-    if (list.length > 0) return list;
-  } catch {
-    // endpoint unavailable — fall back to the resilient directory scan
-  }
-  return fetchAllDatasets();
 }
 
 export async function getAdminPendingReviews() {
@@ -223,8 +194,8 @@ export async function decideDataset(datasetId, decision, reason) {
   }
 
   const candidateUrls = [
-    `/admin-panel/datasets/${datasetId}/decide/`,
     `/admin-panel/${datasetId}/decide/`,
+    `/admin-panel/datasets/${datasetId}/decide/`,
     `/admin-panel/queue/${datasetId}/decide/`,
     `/datasets/${datasetId}/decide/`,
     ...(normDecision === "approved" ? [`/datasets/${datasetId}/approve/`, `/admin-panel/datasets/${datasetId}/approve/`] : []),
@@ -262,7 +233,12 @@ export async function decideDataset(datasetId, decision, reason) {
 }
 
 export async function moderateDataset(datasetId, payload) {
-  return decideDataset(datasetId, payload.decision, payload.reason || payload.comment || "");
+  const body = {
+    decision: payload.decision,
+    reason: payload.reason || payload.comment || "",
+  };
+  const { data } = await client.post(`/admin-panel/${datasetId}/decide/`, body);
+  return data;
 }
 
 export async function getContentUpdateQueue() {
@@ -358,6 +334,11 @@ export async function getAdminQueue() {
   return data;
 }
 
+export async function getDiscoverFeed() {
+  const { data } = await client.get("/search/discover/");
+  return data;
+}
+
 export async function getBookmarks() {
   const { data } = await client.get(`${DATASETS_BASE}/bookmarks/`);
   return data;
@@ -408,12 +389,20 @@ export async function getFallbackThumbnails(datasetId) {
 
 export async function requestDatasetDeletion(datasetId, reason) {
   try {
-    const { data } = await client.post(`/admin-panel/datasets/${datasetId}/deletion-request/`, { reason });
+    const { data } = await client.post(`/admin-panel/datasets/${datasetId}/request-deletion/`, { reason });
     return data;
   } catch (err) {
     if (err?.response?.status === 404) {
-      const { data } = await client.post(`/admin-panel/deletion-requests/`, { dataset_id: datasetId, reason });
-      return data;
+      try {
+        const { data } = await client.post(`/admin-panel/datasets/${datasetId}/deletion-request/`, { reason });
+        return data;
+      } catch (err2) {
+        if (err2?.response?.status === 404) {
+          const { data } = await client.post(`/admin-panel/deletion-requests/`, { dataset_id: datasetId, reason });
+          return data;
+        }
+        throw err2;
+      }
     }
     throw err;
   }
@@ -429,74 +418,135 @@ export async function executeDatasetDeletion(requestId) {
   return data;
 }
 
-// ── Archive / restore ──────────────────────────────────────────────────
-// These map 1:1 to the ORDP backend archive workflow (DatasetArchiveRequest):
-// an owner requests archiving, reviewers vote, an admin can restore directly.
+// ── Dataset Archiving & Unarchiving API ──────────────────────────────────────────
 
-/** Owner requests archiving a published dataset they own. */
-export async function archiveDataset(datasetId, { reason_category, reason }) {
-  const { data } = await client.post(`/datasets/${datasetId}/archive/`, {
-    reason_category,
+/**
+ * Owner submits an archival request for a published dataset.
+ * @param {string} datasetId
+ * @param {{ reasonCategory: string, reason: string }} payload
+ */
+export async function requestDatasetArchive(datasetId, { reasonCategory, reason }) {
+  const { data } = await client.post(`${DATASETS_BASE}/${datasetId}/archive/`, {
+    reason_category: reasonCategory,
     reason,
   });
   return data;
 }
 
-/** Owner requests restoring (un-archiving) one of their archived datasets. */
-export async function unarchiveDataset(datasetId, { intended_use, reason }) {
-  const { data } = await client.post(`/datasets/${datasetId}/unarchive/`, {
-    intended_use,
+/**
+ * User submits an unarchive / restoration request for an archived dataset.
+ * @param {string} datasetId
+ * @param {{ intendedUse: string, reason: string }} payload
+ */
+export async function requestDatasetUnarchive(datasetId, { intendedUse, reason }) {
+  const { data } = await client.post(`${DATASETS_BASE}/${datasetId}/unarchive/`, {
+    intended_use: intendedUse,
     reason,
   });
   return data;
 }
 
-/** Any authenticated user can browse archived datasets. */
+/**
+ * Fetch all archived datasets accessible for public/user browsing.
+ */
 export async function getArchivedDatasets() {
-  const { data } = await client.get(`/datasets/archived/`);
-  return Array.isArray(data) ? data : (data?.results || []);
+  const candidateUrls = [
+    `/datasets/archived/`,
+    `/admin-panel/datasets/archived/`,
+  ];
+  let lastErr;
+  for (const url of candidateUrls) {
+    try {
+      const { data } = await client.get(url);
+      return data;
+    } catch (err) {
+      lastErr = err;
+      if (err?.response?.status && err.response.status !== 404) {
+        throw err;
+      }
+    }
+  }
+  throw lastErr;
 }
 
-/** Reviewer/admin — pending archive requests. */
-export async function getAdminArchiveRequestQueue() {
-  const { data } = await client.get("/admin-panel/archive-requests/queue/");
-  return Array.isArray(data) ? data : (data?.results || []);
-}
-
-/** Reviewer/admin — cast a vote on an archive request. */
-export async function voteOnArchiveRequest(requestId, vote) {
-  const { data } = await client.post(`/admin-panel/archive-requests/${requestId}/vote/`, { vote });
+/**
+ * Reviewer/Admin fetches queue of pending dataset archival requests.
+ */
+export async function getArchiveRequestsQueue() {
+  const { data } = await client.get(`/admin-panel/archive-requests/queue/`);
   return data;
 }
 
-/** Admin — pending restore (unarchive) requests. */
-export async function getAdminUnarchiveRequestQueue() {
-  const { data } = await client.get("/admin-panel/unarchive-requests/queue/");
-  return Array.isArray(data) ? data : (data?.results || []);
+/**
+ * Reviewer/Admin votes on a pending archive request ("approve" or "reject").
+ * @param {string} requestId
+ * @param {"approve"|"reject"} vote
+ */
+export async function voteArchiveRequest(requestId, vote) {
+  const candidateUrls = [
+    `/admin-panel/archive-requests/${requestId}/vote/`,
+    `/admin-panel/datasets/${requestId}/archive-vote/`,
+    `/datasets/archive-requests/${requestId}/vote/`,
+    `/datasets/${requestId}/archive-vote/`,
+  ];
+  let lastErr;
+  for (const url of candidateUrls) {
+    try {
+      const { data } = await client.post(url, { vote });
+      return data;
+    } catch (err) {
+      lastErr = err;
+      if (err?.response?.status && err.response.status !== 404) {
+        throw err;
+      }
+    }
+  }
+  throw lastErr;
 }
 
-/** Admin — single-admin decision on a restore request. */
+/**
+ * Admin fetches queue of pending dataset unarchiving/restoration requests.
+ */
+export async function getUnarchiveRequestsQueue() {
+  const { data } = await client.get(`/admin-panel/unarchive-requests/queue/`);
+  return data;
+}
+
+/**
+ * Admin decides on a pending unarchive request ("approve" or "reject").
+ * @param {string} requestId
+ * @param {"approve"|"reject"} decision
+ */
 export async function decideUnarchiveRequest(requestId, decision) {
   const { data } = await client.post(`/admin-panel/unarchive-requests/${requestId}/decide/`, { decision });
   return data;
 }
 
-/** Admin — instantly restore an archived dataset (bypasses the committee). */
+/**
+ * Admin directly restores an archived dataset without committee vote.
+ * @param {string} datasetId
+ */
 export async function adminRestoreDataset(datasetId) {
   const { data } = await client.post(`/admin-panel/datasets/${datasetId}/restore/`);
   return data;
 }
 
-/** Admin — list archived datasets. */
+/**
+ * Admin fetches list of archived datasets across the platform.
+ */
 export async function getAdminArchivedDatasets() {
-  const { data } = await client.get("/admin-panel/datasets/archived/");
-  return Array.isArray(data) ? data : (data?.results || []);
+  const { data } = await client.get(`/admin-panel/datasets/archived/`);
+  return data;
 }
 
-/** Admin — full archive/unarchive history for one dataset. */
-export async function getDatasetArchiveHistory(datasetId) {
-  const { data } = await client.get(`/admin-panel/datasets/${datasetId}/archive-history/`);
-  return Array.isArray(data) ? data : (data?.results || []);
+
+/**
+ * Fetch all datasets.
+ */
+export async function getDatasets(params) {
+  const { data } = await client.get(`${DATASETS_BASE}/`, { params });
+  return data;
 }
+
 
 

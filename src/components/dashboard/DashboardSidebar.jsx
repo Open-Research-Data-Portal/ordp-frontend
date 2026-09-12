@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutGrid,
@@ -15,6 +16,9 @@ import {
   ScrollText,
   Bell,
   Archive,
+  ChevronLeft,
+  ChevronRight,
+  X,
 } from "lucide-react";
 import { useAuth } from "../../context/useAuth";
 import { getDashboardPath, isAdmin, isReviewer, isResearcher } from "../../utils/userRoles";
@@ -89,7 +93,12 @@ function isNavActive(to, pathname, search) {
   return search === `?${query}`;
 }
 
-export default function DashboardSidebar() {
+export default function DashboardSidebar({
+  isCollapsed: controlledIsCollapsed,
+  onToggleCollapse: controlledOnToggleCollapse,
+  isMobileOpen: controlledIsMobileOpen,
+  onCloseMobile: controlledOnCloseMobile,
+}) {
   const location = useLocation();
   const navigate = useNavigate();
   const { logout, user } = useAuth();
@@ -98,85 +107,257 @@ export default function DashboardSidebar() {
   const dashboardPath = getDashboardPath(user);
   const { pathname, search } = location;
 
+  const [internalCollapsed, setInternalCollapsed] = useState(() => {
+    return localStorage.getItem("sidebar_collapsed") === "true";
+  });
+  const [internalMobileOpen, setInternalMobileOpen] = useState(false);
+
+  const collapsed = controlledIsCollapsed !== undefined ? controlledIsCollapsed : internalCollapsed;
+  const mobileOpen = controlledIsMobileOpen !== undefined ? controlledIsMobileOpen : internalMobileOpen;
+
+  const handleToggleCollapse = () => {
+    if (controlledOnToggleCollapse) {
+      controlledOnToggleCollapse();
+    } else {
+      setInternalCollapsed((prev) => {
+        const next = !prev;
+        localStorage.setItem("sidebar_collapsed", String(next));
+        return next;
+      });
+    }
+  };
+
+  const handleCloseMobile = () => {
+    if (controlledOnCloseMobile) {
+      controlledOnCloseMobile();
+    } else {
+      setInternalMobileOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape" && mobileOpen) {
+        handleCloseMobile();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [mobileOpen]);
+
   async function handleSignOut() {
     await logout();
     navigate("/login", { replace: true });
   }
 
   return (
-    <aside className="w-64 shrink-0 bg-navy text-slate-300 flex flex-col h-screen max-h-screen sticky top-0 overflow-hidden">
-      {/* Logo + branding */}
-      <div className="px-5 pt-6 pb-4 border-b border-white/10">
-        <Link to={dashboardPath} className="flex items-center gap-3">
-          <img src={logo} alt="AASTU" className="h-10 w-10 object-contain shrink-0" />
-          <div className="min-w-0">
-            <p className="text-sm font-bold text-white leading-tight truncate">{config.title}</p>
-            <p className="text-[10px] text-slate-400 uppercase tracking-wider truncate">{config.subtitle}</p>
-          </div>
-        </Link>
-      </div>
+    <>
+      {/* Desktop Sidebar (Collapsible, Full Height) */}
+      <aside
+        className={`hidden lg:flex flex-col h-screen max-h-screen sticky top-0 bg-navy text-slate-300 shrink-0 border-r border-white/10 z-30 transition-[width] duration-300 ease-in-out select-none ${
+          collapsed ? "w-20" : "w-64"
+        }`}
+      >
+        {/* Header & Branding */}
+        <div className="px-4 py-4 border-b border-white/10 flex items-center justify-between min-h-[4.25rem]">
+          <Link to={dashboardPath} className="flex items-center gap-3 overflow-hidden">
+            <img src={logo} alt="AASTU" className="h-9 w-9 object-contain shrink-0" />
+            {!collapsed && (
+              <div className="min-w-0 transition-opacity duration-200">
+                <p className="text-sm font-bold text-white leading-tight truncate">{config.title}</p>
+                <p className="text-[10px] text-slate-400 uppercase tracking-wider truncate">{config.subtitle}</p>
+              </div>
+            )}
+          </Link>
+          <button
+            type="button"
+            onClick={handleToggleCollapse}
+            className="p-1.5 rounded-lg text-slate-400 hover:bg-white/10 hover:text-white transition shrink-0 ml-auto"
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {collapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronLeft className="w-5 h-5" />}
+          </button>
+        </div>
 
-      {/* Primary CTA */}
+        {/* Navigation Items */}
+        <nav className="flex-1 px-3 py-3 space-y-1 overflow-y-auto min-h-0 custom-scrollbar">
+          {config.nav.map(({ label, icon: Icon, to }) => {
+            const active = isNavActive(to, pathname, search);
+            return (
+              <Link
+                key={to}
+                to={to}
+                title={collapsed ? label : undefined}
+                className={[
+                  "flex items-center gap-3 py-2.5 rounded-lg text-sm font-medium transition group relative",
+                  collapsed ? "justify-center px-0" : "px-3",
+                  active
+                    ? "bg-gold text-navy font-semibold shadow-xs"
+                    : "text-slate-400 hover:bg-white/5 hover:text-white",
+                ].join(" ")}
+              >
+                <Icon className="w-5 h-5 shrink-0" />
+                {!collapsed && <span className="truncate">{label}</span>}
+              </Link>
+            );
+          })}
 
-
-      {/* Navigation */}
-      <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto min-h-0">
-        {config.nav.map(({ label, icon: Icon, to }) => {
-          const active = isNavActive(to, pathname, search);
-          return (
+          {isReviewer(user) && roleKey !== "reviewer" && (
             <Link
-              key={to}
-              to={to}
+              to="/reviewer/review-queue"
+              title={collapsed ? "Review Queue" : undefined}
               className={[
-                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition",
-                active
-                  ? "bg-gold text-navy"
-                  : "text-slate-400 hover:bg-white/5 hover:text-white",
+                "flex items-center gap-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:bg-white/5 hover:text-white transition",
+                collapsed ? "justify-center px-0" : "px-3",
               ].join(" ")}
             >
-              <Icon className="w-4 h-4 shrink-0" />
-              {label}
+              <ClipboardCheck className="w-5 h-5 shrink-0" />
+              {!collapsed && <span className="truncate">Review Queue</span>}
             </Link>
-          );
-        })}
+          )}
 
-        {isReviewer(user) && roleKey !== "reviewer" && (
+          {isAdmin(user) && roleKey !== "admin" && (
+            <Link
+              to="/admin-dashboard"
+              title={collapsed ? "Admin" : undefined}
+              className={[
+                "flex items-center gap-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:bg-white/5 hover:text-white transition",
+                collapsed ? "justify-center px-0" : "px-3",
+              ].join(" ")}
+            >
+              <ShieldCheck className="w-5 h-5 shrink-0" />
+              {!collapsed && <span className="truncate">Admin</span>}
+            </Link>
+          )}
+        </nav>
+
+        {/* Footer Actions */}
+        <div className="px-3 py-4 space-y-1 border-t border-white/10 shrink-0">
           <Link
-            to="/reviewer/review-queue"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:bg-white/5 hover:text-white transition"
+            to="/support"
+            title={collapsed ? "Support" : undefined}
+            className={`flex items-center gap-3 py-2.5 rounded-lg text-sm text-slate-400 hover:bg-white/5 hover:text-white transition ${
+              collapsed ? "justify-center px-0" : "px-3"
+            }`}
           >
-            <ClipboardCheck className="w-4 h-4" />
-            Review Queue
+            <HelpCircle className="w-5 h-5 shrink-0" />
+            {!collapsed && <span>Support</span>}
           </Link>
-        )}
-
-        {isAdmin(user) && roleKey !== "admin" && (
-          <Link
-            to="/admin-dashboard"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:bg-white/5 hover:text-white transition"
+          <button
+            type="button"
+            onClick={handleSignOut}
+            title={collapsed ? "Sign Out" : undefined}
+            className={`w-full flex items-center gap-3 py-2.5 rounded-lg text-sm text-slate-400 hover:bg-white/5 hover:text-white transition ${
+              collapsed ? "justify-center px-0" : "px-3"
+            }`}
           >
-            <ShieldCheck className="w-4 h-4" />
-            Admin
-          </Link>
-        )}
-      </nav>
+            <LogOut className="w-5 h-5 shrink-0" />
+            {!collapsed && <span>Sign Out</span>}
+          </button>
+        </div>
+      </aside>
 
-      {/* Bottom links */}
-      <div className="px-3 pb-6 space-y-0.5 border-t border-white/10 pt-4 shrink-0">
-        <Link
-          to="/support"
-          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:bg-white/5 hover:text-white transition"
-        >
-          <HelpCircle className="w-4 h-4" /> Support
-        </Link>
-        <button
-          type="button"
-          onClick={handleSignOut}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:bg-white/5 hover:text-white transition"
-        >
-          <LogOut className="w-4 h-4" /> Sign Out
-        </button>
-      </div>
-    </aside>
+      {/* Mobile Drawer (Responsive Slide-over) */}
+      {mobileOpen && (
+        <div className="lg:hidden fixed inset-0 z-50 flex">
+          {/* Dark Backdrop */}
+          <div
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity duration-300 animate-in fade-in"
+            onClick={handleCloseMobile}
+          />
+
+          {/* Slide-out Sidebar Panel */}
+          <aside className="relative flex flex-col w-72 max-w-[85vw] h-full bg-navy text-slate-300 shadow-2xl z-10 animate-in slide-in-from-left duration-300">
+            {/* Mobile Header with Close Button */}
+            <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between min-h-[4.25rem]">
+              <Link to={dashboardPath} onClick={handleCloseMobile} className="flex items-center gap-3">
+                <img src={logo} alt="AASTU" className="h-9 w-9 object-contain shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-white leading-tight truncate">{config.title}</p>
+                  <p className="text-[10px] text-slate-400 uppercase tracking-wider truncate">{config.subtitle}</p>
+                </div>
+              </Link>
+              <button
+                type="button"
+                onClick={handleCloseMobile}
+                className="p-1.5 rounded-lg text-slate-400 hover:bg-white/10 hover:text-white transition"
+                aria-label="Close sidebar"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Mobile Navigation */}
+            <nav className="flex-1 px-3 py-3 space-y-1 overflow-y-auto min-h-0">
+              {config.nav.map(({ label, icon: Icon, to }) => {
+                const active = isNavActive(to, pathname, search);
+                return (
+                  <Link
+                    key={to}
+                    to={to}
+                    onClick={handleCloseMobile}
+                    className={[
+                      "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition",
+                      active
+                        ? "bg-gold text-navy font-semibold shadow-xs"
+                        : "text-slate-400 hover:bg-white/5 hover:text-white",
+                    ].join(" ")}
+                  >
+                    <Icon className="w-5 h-5 shrink-0" />
+                    <span>{label}</span>
+                  </Link>
+                );
+              })}
+
+              {isReviewer(user) && roleKey !== "reviewer" && (
+                <Link
+                  to="/reviewer/review-queue"
+                  onClick={handleCloseMobile}
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:bg-white/5 hover:text-white transition"
+                >
+                  <ClipboardCheck className="w-5 h-5 shrink-0" />
+                  <span>Review Queue</span>
+                </Link>
+              )}
+
+              {isAdmin(user) && roleKey !== "admin" && (
+                <Link
+                  to="/admin-dashboard"
+                  onClick={handleCloseMobile}
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:bg-white/5 hover:text-white transition"
+                >
+                  <ShieldCheck className="w-5 h-5 shrink-0" />
+                  <span>Admin</span>
+                </Link>
+              )}
+            </nav>
+
+            {/* Mobile Footer */}
+            <div className="px-3 py-4 space-y-1 border-t border-white/10 shrink-0">
+              <Link
+                to="/support"
+                onClick={handleCloseMobile}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:bg-white/5 hover:text-white transition"
+              >
+                <HelpCircle className="w-5 h-5 shrink-0" />
+                <span>Support</span>
+              </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  handleCloseMobile();
+                  handleSignOut();
+                }}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:bg-white/5 hover:text-white transition"
+              >
+                <LogOut className="w-5 h-5 shrink-0" />
+                <span>Sign Out</span>
+              </button>
+            </div>
+          </aside>
+        </div>
+      )}
+    </>
   );
 }

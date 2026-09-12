@@ -1,40 +1,37 @@
-import { useState, useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Plus,
   Search,
-  Trash2,
-  Archive,
-  Download,
+  Plus,
+  MoreVertical,
   FileText,
-  ImageIcon,
-  Send,
-  Loader2,
-  X,
-  AlertCircle,
+  Download,
+  Image as ImageIcon,
+  Trash2,
 } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import { useAuth } from "../../../context/useAuth";
-import { getDisplayName, getDashboardPath } from "../../../utils/userRoles";
 import { getDatasetImage } from "../../../utils/datasetImage";
+import { getDashboardPath } from "../../../utils/userRoles";
 import * as datasetsApi from "../hooks/datasetsApi";
-import * as archiveApi from "../../../api/archiveRequests";
-import { useToast } from "../../../context/ToastContext.jsx";
 
 const STATUS_META = {
-  approved: { label: "APPROVED", dot: "bg-success", text: "text-success" },
+  published: { label: "PUBLISHED", dot: "bg-success", text: "text-success" },
+  approved: { label: "PUBLISHED", dot: "bg-success", text: "text-success" },
   pending: { label: "PENDING", dot: "bg-[#D98A0D]", text: "text-[#D98A0D]" },
   rejected: { label: "REJECTED", dot: "bg-danger", text: "text-danger" },
   draft: { label: "DRAFT", dot: "bg-gray-400", text: "text-gray-500" },
+  archived: { label: "ARCHIVED", dot: "bg-gray-500", text: "text-gray-600" },
 };
 
 const STATUS_TABS = [
   { id: "all", label: "All" },
   { id: "draft", label: "Draft" },
   { id: "pending", label: "Pending" },
-  { id: "approved", label: "Approved" },
+  { id: "published", label: "Published" },
   { id: "rejected", label: "Rejected" },
 ];
+const STATUS_FILTERS = STATUS_TABS;
 
 const ROWS_PER_PAGE_OPTIONS = [6, 12, 18];
 
@@ -56,95 +53,35 @@ function formatFileSize(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export default function DatasetListPage() {
+export default function DatasetListPage({
+  defaultStatusFilter = "all",
+  title = "My Datasets",
+  subtitle = "Track the status of every dataset you've submitted.",
+}) {
   const [datasets, setDatasets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState(defaultStatusFilter);
   const [rowsPerPage, setRowsPerPage] = useState(6);
   const [page, setPage] = useState(0);
+  const [menuId, setMenuId] = useState(null);
   const [confirmDraft, setConfirmDraft] = useState(null);
-
-  // Archive request state
-  const [requestedMap, setRequestedMap] = useState(() => new Map());
-  const [archiveTarget, setArchiveTarget] = useState(null);
-  const [archiveReason, setArchiveReason] = useState("");
-  const [archiveComment, setArchiveComment] = useState("");
-  const [archiveSubmitting, setArchiveSubmitting] = useState(false);
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { addToast } = useToast();
 
   async function deleteDraft(dataset) {
-    const s = String(dataset.status || "").toLowerCase();
-    if (s !== "draft") return;
+    setMenuId(null);
+    if (dataset.status !== "draft") return;
     try {
       await datasetsApi.deleteDataset(dataset.id);
       setDatasets((items) => items.filter((item) => item.id !== dataset.id));
-      addToast("Draft deleted successfully.", "success");
     } catch (err) {
       setError(err.response?.data?.detail || "Failed to delete draft.");
     }
   }
 
-  function openArchiveModal(dataset) {
-    setArchiveTarget(dataset);
-    setArchiveReason("");
-    setArchiveComment("");
-  }
-
-  async function submitArchiveRequestModal() {
-    if (!archiveTarget || !archiveReason) return;
-    setArchiveSubmitting(true);
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 400));
-      const comment = archiveComment.trim();
-      const reasonText = comment || archiveApi.reasonLabel(archiveReason);
-      let entry;
-      try {
-        const resp = await datasetsApi.archiveDataset(archiveTarget.id, {
-          reason_category: archiveReason,
-          reason: reasonText,
-        });
-        entry = {
-          id: resp?.request_id || `arch-req-${Date.now()}`,
-          dataset_id: String(archiveTarget.id),
-          dataset_title: archiveTarget.title,
-          owner_name: getDisplayName(user),
-          owner_email: user?.email,
-          reason: archiveReason,
-          comment,
-          requested_at: new Date().toISOString(),
-          status: "pending",
-          source: "api",
-        };
-        archiveApi.mirrorSubmittedRequest(entry);
-      } catch {
-        entry = archiveApi.submitArchiveRequest({
-          dataset_id: archiveTarget.id,
-          dataset_title: archiveTarget.title,
-          owner_name: getDisplayName(user),
-          owner_email: user?.email,
-          reason: archiveReason,
-          comment,
-        });
-      }
-      setRequestedMap((prev) => {
-        const next = new Map(prev);
-        next.set(String(archiveTarget.id), entry);
-        return next;
-      });
-      addToast("Archive request sent to the review queue.", "success");
-      setArchiveTarget(null);
-      setArchiveReason("");
-      setArchiveComment("");
-    } catch (err) {
-      addToast(err?.message || "Failed to send archive request.", "error");
-    } finally {
-      setArchiveSubmitting(false);
-    }
-  }
+  const isArchivedPage = title.toLowerCase().includes("archived");
 
   useEffect(() => {
     let isMounted = true;
@@ -153,21 +90,41 @@ export default function DatasetListPage() {
       setLoading(true);
       setError(null);
       try {
-        // Fetch all datasets for the user so tabs can be toggled without roundtrip delays
-        const data = await datasetsApi.getMyDatasets();
+        let data;
+        if (isArchivedPage) {
+          try {
+            data = await datasetsApi.getArchivedDatasets();
+          } catch (err1) {
+            try {
+              data = await datasetsApi.getAdminArchivedDatasets();
+            } catch (err2) {
+              // If both endpoints fail, gracefully fallback to an empty array instead of crashing/throwing
+              data = [];
+            }
+          }
+        } else {
+          const params = {};
+          if (statusFilter !== "all") {
+            params.status = statusFilter === "approved" ? "published" : statusFilter;
+          }
+          try {
+            data = await datasetsApi.getMyDatasets(params);
+          } catch (err) {
+            // Fallback to general datasets or empty array if /datasets/mine/ errors out
+            try {
+              data = await datasetsApi.getDatasets();
+            } catch {
+              data = [];
+            }
+          }
+        }
         if (isMounted) {
           const list = Array.isArray(data) ? data : data?.results || [];
           setDatasets(list);
-          const map = new Map();
-          list.forEach((d) => {
-            const req = archiveApi.getArchiveRequestsForDataset(d.id)[0];
-            if (req) map.set(String(d.id), req);
-          });
-          setRequestedMap(map);
         }
       } catch (err) {
         if (isMounted) {
-          setError(err.response?.data?.detail || "Failed to load your datasets.");
+          setError(err.response?.data?.detail || "Failed to load datasets.");
         }
       } finally {
         if (isMounted) setLoading(false);
@@ -176,11 +133,13 @@ export default function DatasetListPage() {
 
     loadDatasets();
     return () => { isMounted = false; };
-  }, []);
+  }, [statusFilter, title, isArchivedPage]);
+
+  const datasetsArray = Array.isArray(datasets) ? datasets : [];
 
   // Compute counts for tabs
   const tabCounts = useMemo(() => {
-    const active = datasets.filter((d) => d.is_active !== false);
+    const active = datasetsArray.filter((d) => d.is_active !== false);
     return {
       all: active.length,
       draft: active.filter((d) => String(d.status || "").toLowerCase() === "draft").length,
@@ -188,23 +147,31 @@ export default function DatasetListPage() {
         const s = String(d.status || "").toLowerCase();
         return s === "pending" || s === "submitted" || s === "in_review";
       }).length,
-      approved: active.filter((d) => String(d.status || "").toLowerCase() === "approved").length,
+      published: active.filter((d) => {
+        const s = String(d.status || "").toLowerCase();
+        return s === "published" || s === "approved";
+      }).length,
       rejected: active.filter((d) => {
         const s = String(d.status || "").toLowerCase();
         return s === "rejected" || s === "changes_requested";
       }).length,
     };
-  }, [datasets]);
+  }, [datasetsArray]);
 
   // Filter datasets strictly according to active tab and search
   const filtered = useMemo(() => {
-    const active = datasets.filter((d) => d.is_active !== false);
+    const active = datasetsArray.filter((d) => d.is_active !== false);
     return active
       .filter((d) => {
+        if (isArchivedPage) return true;
+        if (d.is_archived) return false;
         if (statusFilter === "all") return true;
         const s = String(d.status || "").toLowerCase();
         if (statusFilter === "pending") {
           return s === "pending" || s === "submitted" || s === "in_review";
+        }
+        if (statusFilter === "published" || statusFilter === "approved") {
+          return s === "published" || s === "approved";
         }
         if (statusFilter === "rejected") {
           return s === "rejected" || s === "changes_requested";
@@ -212,8 +179,8 @@ export default function DatasetListPage() {
         return s === statusFilter;
       })
       .filter((d) => (search.trim() ? d.title?.toLowerCase().includes(search.trim().toLowerCase()) : true))
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  }, [datasets, statusFilter, search]);
+      .sort((a, b) => new Date(b.created_at || b.archived_at || 0).getTime() - new Date(a.created_at || a.archived_at || 0).getTime());
+  }, [datasetsArray, search, statusFilter, isArchivedPage]);
 
   // Reset to first page whenever filters change
   useEffect(() => { queueMicrotask(() => setPage(0)); }, [statusFilter, search, rowsPerPage]);
@@ -226,7 +193,7 @@ export default function DatasetListPage() {
   const canGoNext = pageEnd < totalRows;
 
   return (
-    <DashboardShell title="My Datasets" subtitle="Track the status of every dataset you've submitted.">
+    <DashboardShell title={title} subtitle={subtitle}>
       <div className="p-8 lg:p-10 bg-white min-h-full rounded-2xl border border-[#E3E1DA]">
         {/* Header */}
         <div className="flex items-start justify-between gap-4 mb-6">
@@ -238,336 +205,205 @@ export default function DatasetListPage() {
             >
               ← Back to dashboard
             </button>
-            <h1 className="text-3xl font-serif font-bold text-navy">My Datasets</h1>
-            <p className="text-sm text-gray-500 mt-1">
-              Manage your submissions, track peer review status, and initiate archive requests.
-            </p>
+            <h1 className="text-3xl font-serif font-bold text-navy">{title}</h1>
+            <p className="text-sm text-gray-500 mt-1">{subtitle}</p>
           </div>
-          <button
-            type="button"
-            onClick={() => navigate("/datasets/contribute?new=1")}
-            className="flex items-center gap-2 bg-navy hover:bg-navy-dark text-white rounded-full px-5 py-2.5 text-sm font-semibold shrink-0 transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            New Dataset
-          </button>
+          {!isArchivedPage && (
+            <button
+              type="button"
+              onClick={() => navigate("/datasets/contribute?new=1")}
+              className="flex items-center gap-2 bg-navy hover:bg-navy-dark text-white rounded-full px-5 py-2.5 text-sm font-semibold shrink-0 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              New Dataset
+            </button>
+          )}
         </div>
 
         {/* Search */}
-        <div className="flex items-center gap-3 mb-6">
+        <div className="flex items-center gap-3 mb-4">
           <div className="flex-1 flex items-center gap-2 border border-[#E3E1DA] rounded-full px-4 py-2.5">
             <Search className="w-4 h-4 text-gray-400 shrink-0" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by title…"
+              placeholder="Search datasets"
               className="w-full text-sm text-navy placeholder:text-gray-400 focus:outline-none"
             />
           </div>
+          <button
+            type="button"
+            className="flex items-center gap-2 bg-navy hover:bg-navy-dark text-white rounded-full px-5 py-2.5 text-sm font-semibold shrink-0 transition-colors"
+          >
+            <Search className="w-4 h-4" />
+            Search
+          </button>
         </div>
 
-        {/* Status Tabs with Visual Separation */}
-        <div className="flex border-b border-[#E3E1DA] mb-8 overflow-x-auto gap-2">
-          {STATUS_TABS.map((tab) => {
-            const count = tabCounts[tab.id] ?? 0;
-            const isActive = statusFilter === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setStatusFilter(tab.id)}
-                className={`flex items-center gap-2 px-5 py-3 text-sm font-semibold border-b-2 -mb-px transition-all whitespace-nowrap ${
-                  isActive
-                    ? "border-navy text-navy"
-                    : "border-transparent text-gray-500 hover:text-navy hover:border-gray-300"
-                }`}
-              >
-                <span>{tab.label}</span>
-                <span
-                  className={`text-xs px-2 py-0.5 rounded-full font-bold ${
-                    isActive ? "bg-navy text-white" : "bg-gray-100 text-gray-600"
-                  }`}
+        {/* Status filter pills */}
+        {!isArchivedPage && (
+          <div className="flex flex-wrap items-center gap-2 mb-8">
+            {STATUS_TABS.map((f) => {
+              const count = tabCounts?.[f.id] ?? 0;
+              return (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setStatusFilter(f.id)}
+                  className={[
+                    "px-4 py-1.5 rounded-full text-xs font-semibold tracking-wide transition-colors flex items-center gap-1.5",
+                    statusFilter === f.id
+                      ? "bg-gold text-white"
+                      : "bg-[#F0EFEA] text-gray-600 hover:bg-[#E3E1DA]",
+                  ].join(" ")}
                 >
-                  {count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+                  <span>{f.label}</span>
+                  <span
+                    className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+                      statusFilter === f.id
+                        ? "bg-white/25 text-white"
+                        : "bg-gray-200 text-gray-700"
+                    }`}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {error && <p role="alert" className="text-danger mb-4">{error}</p>}
         {loading && <p className="text-gray-500">Loading datasets…</p>}
 
-        {/* Empty State when no datasets match current tab */}
         {!loading && !error && totalRows === 0 && (
           <div className="bg-[#F7F6F2] rounded-xl p-10 text-center border border-[#E3E1DA]">
-            {statusFilter === "approved" ? (
-              <p className="text-base text-gray-600 font-medium">No approved datasets yet.</p>
-            ) : statusFilter === "draft" ? (
-              <p className="text-base text-gray-600 font-medium">No draft datasets found.</p>
-            ) : statusFilter === "pending" ? (
-              <p className="text-base text-gray-600 font-medium">No datasets currently pending review.</p>
-            ) : statusFilter === "rejected" ? (
-              <p className="text-base text-gray-600 font-medium">No rejected datasets.</p>
-            ) : datasets.length === 0 ? (
-              <>
-                <p className="text-gray-500 mb-4">You haven't uploaded any datasets yet.</p>
-                <button
-                  onClick={() => navigate("/datasets/contribute?new=1")}
-                  className="bg-[#A67A0D] hover:bg-[#8f690b] text-white rounded-md px-4 py-2 text-sm font-semibold transition"
-                >
-                  Upload your first dataset
-                </button>
-              </>
-            ) : (
-              <p className="text-gray-500">No datasets match your search.</p>
+            <p className="text-gray-500 mb-4">
+              {datasetsArray.length === 0
+                ? (isArchivedPage ? "No archived datasets available." : "You haven't uploaded any datasets yet.")
+                : "No datasets match your search or filter."}
+            </p>
+            {datasetsArray.length === 0 && !isArchivedPage && (
+              <button
+                onClick={() => navigate("/datasets/contribute?new=1")}
+                className="bg-[#A67A0D] hover:bg-[#8f690b] text-white rounded-md px-4 py-2 text-sm font-semibold transition"
+              >
+                Upload your first dataset
+              </button>
             )}
           </div>
         )}
 
-        {!loading && !error && totalRows > 0 && (
-          <>
-            {/* Card grid — 6 visible per page */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {pageRows.map((dataset) => {
-                const statusNormalized = String(dataset.status || "draft").toLowerCase();
-                const isDraft = statusNormalized === "draft";
-                const isApproved = statusNormalized === "approved";
-                const isPending = statusNormalized === "pending" || statusNormalized === "submitted" || statusNormalized === "in_review";
-                const isRejected = statusNormalized === "rejected" || statusNormalized === "changes_requested";
-
-                const meta = STATUS_META[statusNormalized] || STATUS_META.draft;
-                const size = formatFileSize(dataset.file_size);
-                const pendingArchive = requestedMap.get(String(dataset.id)) || null;
-                const archivePending = pendingArchive?.status === "pending";
-
-                return (
-                  <div
-                    key={dataset.id}
-                    className="bg-white rounded-xl border border-[#E3E1DA] overflow-hidden hover:shadow-md transition-shadow cursor-pointer flex flex-col justify-between"
-                    onClick={() =>
-                      navigate(isDraft ? `/datasets/contribute?draft=${dataset.id}` : `/my-datasets/${dataset.id}`)
-                    }
-                  >
-                    <div>
-                      {/* Image Thumbnail */}
-                      <div className="h-40 w-full bg-gray-100 overflow-hidden">
-                        {getDatasetImage(dataset) ? (
-                          <img
-                            src={getDatasetImage(dataset)}
-                            alt={dataset.title}
-                            loading="lazy"
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-navy/10 to-gold/10">
-                            <ImageIcon className="w-8 h-8 text-navy/30" />
+              {!loading && !error && totalRows > 0 && (
+                <>
+                  {/* Card grid — 6 visible per page */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                    {pageRows.map((dataset) => {
+                      const meta = dataset.is_archived ? (STATUS_META.archived || STATUS_META.published) : (STATUS_META[dataset.status] || STATUS_META.draft);
+                      const size = formatFileSize(dataset.file_size);
+                      return (
+                        <div
+                          key={dataset.id}
+                          className="bg-white rounded-xl border border-[#E3E1DA] overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
+                          onClick={() => navigate(dataset.status === "draft" ? `/datasets/contribute?draft=${dataset.id}` : `/my-datasets/${dataset.id}`)}
+                        >
+                          <div className="h-40 w-full bg-gray-100 overflow-hidden">
+                            {getDatasetImage(dataset) ? (
+                              <img
+                                src={getDatasetImage(dataset)}
+                                alt={dataset.title}
+                                loading="lazy"
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-navy/10 to-gold/10">
+                                <ImageIcon className="w-8 h-8 text-navy/30" />
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
 
-                      <div className="p-4">
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="text-sm font-semibold text-navy line-clamp-2">{dataset.title}</p>
-                          {/* DRAFT SPEC: Draft cards only have a Delete button, no menu */}
-                          {isDraft && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setConfirmDraft(dataset);
-                              }}
-                              className="p-1 text-red-500 hover:text-red-700 shrink-0 rounded hover:bg-red-50 transition"
-                              title="Delete draft"
-                              aria-label="Delete draft"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          )}
-                        </div>
+                          <div className="p-4">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="text-sm font-semibold text-navy line-clamp-2">{dataset.title}</p>
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); dataset.status === "draft" ? setConfirmDraft(dataset) : setMenuId(menuId === dataset.id ? null : dataset.id); }}
+                                className="p-1 text-gray-400 hover:text-navy shrink-0"
+                                aria-label={dataset.status === "draft" ? "Delete draft" : "More options"}
+                              >
+                                {dataset.status === "draft" ? <Trash2 className="w-4 h-4 text-red-500" /> : <MoreVertical className="w-4 h-4" />}
+                              </button>
+                              {menuId === dataset.id && dataset.status !== "draft" && (
+                                <div className="absolute right-4 mt-2 z-10 w-36 rounded-lg border border-[#E3E1DA] bg-white p-1.5 shadow-lg">
+                                  <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmDraft(dataset); setMenuId(null); }} className="w-full rounded-md px-3 py-2 text-left text-xs font-semibold text-red-600 hover:bg-red-50">Delete draft</button>
+                                </div>
+                              )}
+                            </div>
 
-                        {/* Status badge */}
-                        <span className={`inline-flex items-center gap-1.5 text-xs font-semibold mt-1.5 ${meta.text}`}>
-                          <span className={`w-2 h-2 rounded-full ${meta.dot}`} />
-                          {meta.label}
-                        </span>
-
-                        <p className="text-xs text-gray-500 mt-2">
-                          {dataset.category || dataset.subject_name || "Uncategorized"} · {formatDate(dataset.created_at)}
-                        </p>
-
-                        <div className="flex items-center gap-3 mt-2.5 text-xs text-gray-400">
-                          <span className="flex items-center gap-1">
-                            <FileText className="w-3.5 h-3.5" />
-                            {dataset.file_count ?? 1} File{(dataset.file_count ?? 1) !== 1 ? "s" : ""}
-                            {size ? ` · ${size}` : ""}
-                          </span>
-                          {dataset.downloads != null && (
-                            <span className="flex items-center gap-1">
-                              <Download className="w-3.5 h-3.5" />
-                              {dataset.downloads.toLocaleString()}
+                            {/* Status under the title */}
+                            <span className={`inline-flex items-center gap-1.5 text-xs font-semibold mt-1.5 ${meta.text}`}>
+                              <span className={`w-2 h-2 rounded-full ${meta.dot}`} />
+                              {meta.label}
                             </span>
-                          )}
-                        </div>
 
-                        {/* REJECTED FEEDBACK */}
-                        {isRejected && (dataset.moderation_reason || dataset.feedback || dataset.reason) && (
-                          <div className="mt-3 p-2.5 rounded-lg bg-red-50 border border-red-100 text-xs text-red-700 flex items-start gap-1.5">
-                            <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                            <p className="line-clamp-2">
-                              {dataset.moderation_reason || dataset.feedback || dataset.reason}
+                            <p className="text-xs text-gray-500 mt-2">
+                              {dataset.category || dataset.subject_name || "Uncategorized"} · {formatDate(dataset.created_at)}
                             </p>
+
+                            <div className="flex items-center gap-3 mt-2.5 text-xs text-gray-400">
+                              <span className="flex items-center gap-1">
+                                <FileText className="w-3.5 h-3.5" />
+                                {dataset.file_count ?? 1} File{(dataset.file_count ?? 1) !== 1 ? "s" : ""}
+                                {size ? ` · ${size}` : ""}
+                              </span>
+                              {dataset.downloads != null && (
+                                <span className="flex items-center gap-1">
+                                  <Download className="w-3.5 h-3.5" />
+                                  {dataset.downloads.toLocaleString()}
+                                </span>
+                              )}
+                            </div>
                           </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Card Actions Bottom Area */}
-                    {/* SPEC RULE: Archive button ONLY on Approved datasets! */}
-                    {isApproved && (
-                      <div className="px-4 pb-4 pt-2.5 border-t border-[#F0EFEA] mt-2">
-                        {archivePending ? (
-                          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-3 py-1.5">
-                            <Archive className="w-3.5 h-3.5" />
-                            Request Pending Review
-                          </span>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openArchiveModal(dataset);
-                            }}
-                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-navy bg-[#F0EFEA] hover:bg-[#E3E1DA] rounded-full px-3.5 py-1.5 transition-colors"
-                          >
-                            <Archive className="w-3.5 h-3.5" />
-                            Request Archive
-                          </button>
-                        )}
-                      </div>
-                    )}
+                        </div>
+                      );
+                    })}
                   </div>
-                );
-              })}
+
+                  {/* Pagination */}
+                  <div className="flex items-center justify-end gap-4 mt-8 text-sm text-gray-500">
+                    <span>Rows per page</span>
+                    <select
+                      value={rowsPerPage}
+                      onChange={(e) => setRowsPerPage(Number(e.target.value))}
+                      className="border border-[#E3E1DA] rounded-full px-3 py-1.5 text-sm bg-white focus:outline-none focus:border-navy"
+                    >
+                      {ROWS_PER_PAGE_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                    <span>{totalRows === 0 ? "0" : pageStart + 1} to {pageEnd} of {totalRows}</span>
+                    <button
+                      type="button"
+                      disabled={!canGoPrev}
+                      onClick={() => setPage((p) => Math.max(p - 1, 0))}
+                      className="text-lg disabled:opacity-30 disabled:cursor-not-allowed hover:text-navy"
+                      aria-label="Previous page"
+                    >
+                      ‹
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!canGoNext}
+                      onClick={() => setPage((p) => p + 1)}
+                      className="text-lg disabled:opacity-30 disabled:cursor-not-allowed hover:text-navy"
+                      aria-label="Next page"
+                    >
+                      ›
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
-
-            {/* Pagination */}
-            <div className="flex items-center justify-end gap-4 mt-8 text-sm text-gray-500">
-              <span>Rows per page</span>
-              <select
-                value={rowsPerPage}
-                onChange={(e) => setRowsPerPage(Number(e.target.value))}
-                className="border border-[#E3E1DA] rounded-full px-3 py-1.5 text-sm bg-white focus:outline-none focus:border-navy"
-              >
-                {ROWS_PER_PAGE_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
-              </select>
-              <span>{totalRows === 0 ? "0" : pageStart + 1} to {pageEnd} of {totalRows}</span>
-              <button
-                type="button"
-                disabled={!canGoPrev}
-                onClick={() => setPage((p) => Math.max(p - 1, 0))}
-                className="text-lg disabled:opacity-30 disabled:cursor-not-allowed hover:text-navy"
-                aria-label="Previous page"
-              >
-                ‹
-              </button>
-              <button
-                type="button"
-                disabled={!canGoNext}
-                onClick={() => setPage((p) => p + 1)}
-                className="text-lg disabled:opacity-30 disabled:cursor-not-allowed hover:text-navy"
-                aria-label="Next page"
-              >
-                ›
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Archive Modal */}
-      {archiveTarget && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 px-4"
-          onClick={() => !archiveSubmitting && setArchiveTarget(null)}
-        >
-          <div
-            className="w-full max-w-md rounded-xl border border-[#E3E1DA] bg-white p-6 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-start justify-between gap-3 mb-1">
-              <h2 className="text-base font-semibold text-navy">Request Dataset Archive</h2>
-              <button
-                type="button"
-                onClick={() => setArchiveTarget(null)}
-                className="p-1 text-gray-400 hover:text-navy rounded-lg transition"
-                aria-label="Close"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <p className="text-sm text-gray-500">
-              “{archiveTarget.title}” will be sent to the review queue for archiving.
-            </p>
-
-            <div className="mt-5 space-y-4">
-              <div>
-                <label htmlFor="archive-reason" className="block text-xs font-semibold text-gray-600 mb-1.5">
-                  Reason for archiving
-                </label>
-                <select
-                  id="archive-reason"
-                  value={archiveReason}
-                  onChange={(e) => setArchiveReason(e.target.value)}
-                  className="w-full rounded-lg border border-[#E3E1DA] text-sm py-2.5 px-3 bg-white focus:outline-none focus:border-navy"
-                >
-                  <option value="">Select a reason…</option>
-                  {archiveApi.ARCHIVE_REASONS.map((r) => (
-                    <option key={r.value} value={r.value}>{r.label}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label htmlFor="archive-comment" className="block text-xs font-semibold text-gray-600 mb-1.5">
-                  Comment <span className="font-normal text-gray-400">(optional)</span>
-                </label>
-                <textarea
-                  id="archive-comment"
-                  rows={3}
-                  value={archiveComment}
-                  onChange={(e) => setArchiveComment(e.target.value)}
-                  placeholder="Add any additional details for the reviewer…"
-                  className="w-full rounded-lg border border-[#E3E1DA] text-sm py-2.5 px-3 bg-white focus:outline-none focus:border-navy resize-none"
-                />
-              </div>
-            </div>
-
-            <div className="mt-6 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setArchiveTarget(null)}
-                className="rounded-md border border-[#E3E1DA] px-4 py-2 text-sm font-medium text-gray-600 hover:bg-[#F7F6F2] transition"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={!archiveReason || archiveSubmitting}
-                onClick={submitArchiveRequestModal}
-                className="inline-flex items-center gap-2 rounded-md bg-[#A67A0D] hover:bg-[#8f690b] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed transition"
-              >
-                {archiveSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                {archiveSubmitting ? "Sending…" : "Send Archive Request"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Delete Draft Confirmation Modal */}
-      {confirmDraft && (
+{confirmDraft && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 px-4" onClick={() => setConfirmDraft(null)}>
           <div className="w-full max-w-sm rounded-xl border border-[#E3E1DA] bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-base font-semibold text-navy">Delete draft?</h2>

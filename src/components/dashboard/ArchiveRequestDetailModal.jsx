@@ -70,17 +70,27 @@ export default function ArchiveRequestDetailModal({ request, onClose }) {
             </div>
           </div>
 
-          {/* Form Card 2: Reason / Details */}
+          {/* Form Card 2: Reason */}
           <div className="bg-white border border-border rounded-xl p-4 shadow-xs">
             <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-              <FileText className="w-4 h-4 text-gold" /> Reason & Detailed Comments
+              <FileText className="w-4 h-4 text-gold" /> Reason
             </div>
             <div className="rounded-xl bg-slate-50 border border-border p-4 text-sm text-gray-700 whitespace-pre-line leading-relaxed">
-              {request.comment || request.reason || "No detailed reason comments provided by the researcher."}
+              {request.reason || "No reason specified."}
             </div>
           </div>
 
-          {/* Form Card 3: Contact / Submitter Information */}
+          {/* Form Card 3: Detailed Comments */}
+          <div className="bg-white border border-border rounded-xl p-4 shadow-xs">
+            <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+              <FileText className="w-4 h-4 text-gold" /> Detailed Comments
+            </div>
+            <div className="rounded-xl bg-slate-50 border border-border p-4 text-sm text-gray-700 whitespace-pre-line leading-relaxed">
+              {request.comment || "No detailed comments provided by the researcher."}
+            </div>
+          </div>
+
+          {/* Form Card 4: Contact / Submitter Information */}
           <div className="bg-white border border-border rounded-xl p-4 shadow-xs">
             <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
               <User className="w-4 h-4 text-gold" /> Contact & Submitter Information

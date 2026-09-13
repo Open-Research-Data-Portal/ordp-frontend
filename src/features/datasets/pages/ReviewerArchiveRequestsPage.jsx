@@ -46,7 +46,7 @@ export default function ReviewerArchiveRequestsPage() {
     (async () => {
       try {
         // Real backend queue first — it is authoritative when available.
-        const real = await datasetsApi.getAdminArchiveRequestQueue();
+        const real = await datasetsApi.getArchiveRequestsQueue();
         if (active && real.length > 0) {
           setItems(real.map((r) => archiveApi.normalizeBackendRequest(r)));
           setLoading(false);

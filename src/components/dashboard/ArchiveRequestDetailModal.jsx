@@ -52,7 +52,7 @@ export default function ArchiveRequestDetailModal({ request, onClose }) {
         </div>
 
         {/* Content body */}
-        <div className="p-6 overflow-y-auto space-y-6">
+        <div className="p-6 overflow-y-auto space-y-4">
           {/* Dataset info card */}
           <div className="bg-slate-50 border border-border rounded-xl p-4">
             <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Target Dataset</span>
@@ -60,39 +60,42 @@ export default function ArchiveRequestDetailModal({ request, onClose }) {
             <p className="text-xs text-gray-500 font-mono mt-0.5">ID: {request.dataset_id}</p>
           </div>
 
-          {/* Submitter & Date info */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="bg-white border border-border rounded-xl p-4 shadow-xs">
-              <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
-                <User className="w-4 h-4 text-gold" /> Requested By
-              </div>
-              <p className="text-sm font-bold text-navy">{request.owner_name || request.requested_by || "—"}</p>
-              <p className="text-xs text-gray-400 mt-0.5">{request.owner_email || "No email provided"}</p>
+          {/* Form Card 1: Archival Category */}
+          <div className="bg-white border border-border rounded-xl p-4 shadow-xs">
+            <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+              <FileText className="w-4 h-4 text-gold" /> Archival Category
             </div>
+            <div className="inline-block bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold px-3 py-1.5 rounded-lg">
+              {archiveApi.reasonLabel(request.reason_category || request.reason)}
+            </div>
+          </div>
 
-            <div className="bg-white border border-border rounded-xl p-4 shadow-xs">
-              <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
-                <Calendar className="w-4 h-4 text-gold" /> Submission Date & Status
+          {/* Form Card 2: Reason / Details */}
+          <div className="bg-white border border-border rounded-xl p-4 shadow-xs">
+            <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+              <FileText className="w-4 h-4 text-gold" /> Reason & Detailed Comments
+            </div>
+            <div className="rounded-xl bg-slate-50 border border-border p-4 text-sm text-gray-700 whitespace-pre-line leading-relaxed">
+              {request.comment || request.reason || "No detailed reason comments provided by the researcher."}
+            </div>
+          </div>
+
+          {/* Form Card 3: Contact / Submitter Information */}
+          <div className="bg-white border border-border rounded-xl p-4 shadow-xs">
+            <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+              <User className="w-4 h-4 text-gold" /> Contact & Submitter Information
+            </div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-bold text-navy">{request.owner_name || request.requested_by || "—"}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{request.owner_email || "No email provided"}</p>
               </div>
-              <div className="flex items-center justify-between mt-1">
-                <p className="text-sm font-semibold text-gray-700">{formatDate(request.requested_at || request.created_at)}</p>
+              <div className="text-right">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1">Status</span>
                 <span className={`inline-block text-[10px] font-bold uppercase px-2.5 py-1 rounded-full border ${STATUS_BADGE[status] || STATUS_BADGE.pending}`}>
                   {status}
                 </span>
               </div>
-            </div>
-          </div>
-
-          {/* Reason & Category */}
-          <div className="bg-white border border-border rounded-xl p-5 shadow-xs">
-            <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-              <FileText className="w-4 h-4 text-gold" /> Archival Category & Reason
-            </div>
-            <div className="inline-block bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold px-3 py-1 rounded-lg mb-3">
-              {archiveApi.reasonLabel(request.reason_category || request.reason)}
-            </div>
-            <div className="rounded-xl bg-slate-50 border border-border p-4 text-sm text-gray-700 whitespace-pre-line leading-relaxed">
-              {request.comment || request.reason || "No detailed reason comments provided by the researcher."}
             </div>
           </div>
         </div>

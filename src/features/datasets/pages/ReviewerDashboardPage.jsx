@@ -62,6 +62,7 @@ export default function ReviewerDashboardPage() {
   const [myReviews, setMyReviews] = useState([]);
 
   const [loading, setLoading] = useState(true);
+  const [archiveRequestCount, setArchiveRequestCount] = useState(0);
   const [forbidden, setForbidden] = useState(false);
 
   // ── Data loading ─────────────────────────────────────────────────────
@@ -112,7 +113,9 @@ export default function ReviewerDashboardPage() {
         });
         setDatasetQueue(pendingOnly);
 
-        if (results[3].status === "fulfilled") setContentUpdates(normalizeList(results[3].value));
+        const archiveReqs = await datasetsApi.getArchiveRequestsQueue().catch(() => []);
+        const pendingArchive = (Array.isArray(archiveReqs) ? archiveReqs : []).filter(r => r.status === "pending");
+        setArchiveRequestCount(pendingArchive.length);
         if (results[4].status === "fulfilled") setRevisionRequests(normalizeList(results[4].value));
         if (results[5].status === "fulfilled") setAccessRequests(normalizeList(results[5].value));
         if (results[6].status === "fulfilled") setMyReviews(myReviewsList);
@@ -407,7 +410,14 @@ export default function ReviewerDashboardPage() {
                 <Archive className="w-5 h-5 text-amber-700" />
               </div>
               <div>
-                <h4 className="text-sm font-bold text-navy">Dataset Archive Requests</h4>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-sm font-bold text-navy">Dataset Archive Requests</h4>
+                  {archiveRequestCount > 0 && (
+                    <span className="text-[10px] font-bold uppercase bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">
+                      {archiveRequestCount} pending
+                    </span>
+                  )}
+                </div>
                 <p className="text-xs text-gray-500 mt-0.5">
                   Review and vote on requests from researchers seeking to archive published datasets.
                 </p>

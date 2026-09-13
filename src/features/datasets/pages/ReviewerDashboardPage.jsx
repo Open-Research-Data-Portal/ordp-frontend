@@ -92,6 +92,9 @@ export default function ReviewerDashboardPage() {
         if (results[0].status === "fulfilled") setOverview(results[0].value);
         if (results[1].status === "fulfilled") setMetrics(results[1].value);
 
+        const myReviewsList = results[6].status === "fulfilled" ? normalizeList(results[6].value) : [];
+        const reviewedDatasetIds = new Set(myReviewsList.map(r => String(r.dataset || r.dataset_id || r.id)));
+
         const reviewerQ = results[2].status === "fulfilled" ? normalizeList(results[2].value) : [];
         const adminPending = results[7].status === "fulfilled" ? normalizeList(results[7].value) : [];
         const seen = new Set();
@@ -101,15 +104,18 @@ export default function ReviewerDashboardPage() {
           if (!seen.has(id)) { seen.add(id); merged.push(item); }
         }
         const pendingOnly = merged.filter((d) => {
+          const id = String(d.id || d.dataset_id);
           const s = String(d.status || "").toLowerCase();
-          return !s || s === "pending" || s === "submitted" || s === "in_review";
+          const isPending = !s || s === "pending" || s === "submitted" || s === "in_review";
+          const notReviewed = !reviewedDatasetIds.has(id);
+          return isPending && notReviewed;
         });
-        setDatasetQueue(pendingOnly.length > 0 ? pendingOnly : merged);
+        setDatasetQueue(pendingOnly);
 
         if (results[3].status === "fulfilled") setContentUpdates(normalizeList(results[3].value));
         if (results[4].status === "fulfilled") setRevisionRequests(normalizeList(results[4].value));
         if (results[5].status === "fulfilled") setAccessRequests(normalizeList(results[5].value));
-        if (results[6].status === "fulfilled") setMyReviews(normalizeList(results[6].value));
+        if (results[6].status === "fulfilled") setMyReviews(myReviewsList);
       } catch {
         addToast("Failed to load reviewer metrics.", "error");
       } finally {

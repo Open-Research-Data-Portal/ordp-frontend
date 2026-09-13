@@ -117,7 +117,7 @@ export default function AdminArchivedDatasetsPage() {
   const loadArchiveRequests = async () => {
     setLoadingRequests(true);
     try {
-      const real = await datasetsApi.getAdminArchiveRequestQueue();
+      const real = await datasetsApi.getArchiveRequestsQueue();
       if (Array.isArray(real) && real.length > 0) {
         setArchiveRequests(real.map((r) => archiveApi.normalizeBackendRequest(r)));
         setLoadingRequests(false);
@@ -211,7 +211,7 @@ export default function AdminArchivedDatasetsPage() {
     setActionId(id);
     try {
       try {
-        await datasetsApi.voteOnArchiveRequest(
+        await datasetsApi.voteArchiveRequest(
           id,
           status === "approved" ? "approve" : "reject"
         );

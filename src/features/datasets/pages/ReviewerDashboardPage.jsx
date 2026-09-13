@@ -241,9 +241,18 @@ export default function ReviewerDashboardPage() {
     setSelectedDataset(item);
     setDatasetDetail(null);
     setDetailLoading(true);
+    const id = item.id || item.dataset_id;
+    // Open the side-panel immediately using the queue item's data, then enrich
+    // with the full dataset detail in the background. Never block the drawer —
+    // if the detail endpoint is slow or unavailable we still show everything
+    // the review queue already provided.
+    if (!id) {
+      setDetailLoading(false);
+      return;
+    }
+    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 5000));
     try {
-      const id = item.id || item.dataset_id;
-      const raw = await datasetsApi.getDatasetDetail(id);
+      const raw = await Promise.race([datasetsApi.getDatasetDetail(id), timeout]);
       setDatasetDetail(raw);
     } catch {
       setDatasetDetail(null);
@@ -490,13 +499,7 @@ export default function ReviewerDashboardPage() {
               {activeTab === "datasets" && (
                 <ReviewDatasetsTab
                   items={datasetQueue}
-                  actionId={actionId}
                   onView={handleViewDataset}
-                  onDecide={handleDecide}
-                  onDelete={(item) => {
-                    setDeletionReason("");
-                    setDeletionModal(item);
-                  }}
                 />
               )}
 
@@ -608,12 +611,7 @@ export default function ReviewerDashboardPage() {
 
             {/* Body */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              {detailLoading ? (
-                <div className="flex flex-col items-center justify-center py-24">
-                  <Loader2 className="w-8 h-8 text-gold animate-spin mb-3" />
-                  <span className="text-sm font-medium text-gray-500">Fetching complete dataset details…</span>
-                </div>
-              ) : (() => {
+              {(() => {
                 const item = datasetDetail || selectedDataset;
                 const metadata = item.metadata || {};
                 const categoryName =
@@ -630,6 +628,11 @@ export default function ReviewerDashboardPage() {
 
                 return (
                   <>
+                    {detailLoading && (
+                      <div className="mb-3 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-gray-500">
+                        <Loader2 className="w-3.5 h-3.5 text-gold animate-spin" /> Refreshing complete dataset details…
+                      </div>
+                    )}
                     {/* Archive Request Form Details Section */}
                     {(selectedDataset.reason || selectedDataset.reason_category) && (() => {
                       const parsed = parseArchiveReason(selectedDataset.reason);
@@ -1321,7 +1324,7 @@ function MetricCard({ label, value, color = "text-navy" }) {
 }
 
 // ── Review Datasets tab ───────────────────────────────────────────────────
-function ReviewDatasetsTab({ items, actionId, onView, onDecide, onDelete }) {
+function ReviewDatasetsTab({ items, onView }) {
   if (items.length === 0) {
     return <EmptyState title="No pending datasets" description="All caught up — no datasets awaiting review." />;
   }
@@ -1340,7 +1343,6 @@ function ReviewDatasetsTab({ items, actionId, onView, onDecide, onDelete }) {
         <tbody>
           {items.map((item) => {
             const id = item.id || item.dataset_id;
-            const busy = actionId === id;
             return (
               <tr key={id} className="border-t border-gray-100 hover:bg-bg/50">
                 <td className="px-5 py-4">
@@ -1350,44 +1352,15 @@ function ReviewDatasetsTab({ items, actionId, onView, onDecide, onDelete }) {
                 <td className="px-5 py-4 text-gray-600">{item.owner?.email || item.owner_name || item.submitter || "—"}</td>
                 <td className="px-5 py-4 text-gray-500">{formatDate(item.created_at || item.submitted_at)}</td>
                 <td className="px-5 py-4"><StatusBadge status={String(item.status || "pending").toLowerCase()} /></td>
-                <td className="px-5 py-4">
-                  <div className="flex items-center justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={() => onView(item)}
-                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-navy bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2 transition-colors"
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                      View Dataset
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => onDecide(id, "approved", "Approved by reviewer.")}
-                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg px-3 py-2 disabled:opacity-50 transition-colors"
-                    >
-                      {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-                      Approve
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => onDecide(id, "rejected", "")}
-                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg px-3 py-2 disabled:opacity-50 transition-colors"
-                    >
-                      {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}
-                      Reject
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => onDelete(item)}
-                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-red-600 bg-white ring-1 ring-inset ring-red-200 hover:bg-red-50 rounded-lg px-3 py-2 disabled:opacity-50 transition-colors"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      Delete Request
-                    </button>
-                  </div>
+                <td className="px-5 py-4 text-right">
+                  <button
+                    type="button"
+                    onClick={() => onView(item)}
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-navy bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2 transition-colors"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    View Dataset
+                  </button>
                 </td>
               </tr>
             );

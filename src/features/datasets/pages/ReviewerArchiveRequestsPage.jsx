@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Archive, XCircle, Loader2, Inbox, Eye, RotateCcw, CheckCircle2 } from "lucide-react";
+import { Archive, XCircle, Loader2, Inbox, Eye } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import { SectionHeader } from "../../../components/dashboard/dashboardUi";
 import { useAuth } from "../../../context/useAuth";
@@ -15,6 +15,11 @@ function formatDate(value) {
   const d = new Date(value);
   if (isNaN(d.getTime())) return String(value);
   return d.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+/** Stable per-reviewer key used by the local vote quorum. */
+function getReviewerKey(user) {
+  return user?.username || user?.email || `reviewer-${user?.id || "anon"}`;
 }
 
 const STATUS_BADGE = {
@@ -46,7 +51,7 @@ export default function ReviewerArchiveRequestsPage() {
     (async () => {
       try {
         // Real backend queue first — it is authoritative when available.
-        const real = await datasetsApi.getAdminArchiveRequestQueue();
+        const real = await datasetsApi.getArchiveRequestsQueue();
         if (active && real.length > 0) {
           setItems(real.map((r) => archiveApi.normalizeBackendRequest(r)));
           setLoading(false);
@@ -68,24 +73,29 @@ export default function ReviewerArchiveRequestsPage() {
 
   const pendingItems = useMemo(() => items.filter((r) => r.status === "pending"), [items]);
 
-  async function handleResolve(request, status) {
+  async function handleVote(request, vote) {
     const id = request.id;
     if (!id || actionId) return;
     setActionId(id);
     try {
-      // Real vote first (approve/reject) — falls back to the local store.
+      // Real backend vote when available; otherwise local demo quorum (3 votes).
+      let result;
       try {
-        await datasetsApi.voteOnArchiveRequest(id, status === "approved" ? "approve" : "reject");
+        await datasetsApi.voteArchiveRequest(id, vote);
+        result = { status: vote === "approve" ? "approved" : "rejected", votes: request.votes || [] };
       } catch {
-        archiveApi.resolveArchiveRequest(id, status);
+        result = archiveApi.voteArchiveRequest(id, getReviewerKey(user), vote);
       }
-      setItems((list) => list.map((r) => (r.id === id ? { ...r, status } : r)));
-      addToast(
-        status === "approved"
-          ? `Archive request for "${request.dataset_title}" approved.`
-          : `Archive request for "${request.dataset_title}" rejected.`,
-        status === "approved" ? "success" : "error"
+      setItems((list) =>
+        list.map((r) => (r.id === id ? { ...r, status: result.status, votes: result.votes || r.votes } : r))
       );
+      addToast(
+        vote === "approve"
+          ? `Archive request for "${request.dataset_title}" approved (archived).`
+          : `Archive request for "${request.dataset_title}" rejected.`,
+        vote === "approve" ? "success" : "error"
+      );
+      setDetail(null);
     } catch (err) {
       addToast(err?.response?.data?.detail || err?.message || "Failed to act on the request.", "error");
     } finally {
@@ -136,7 +146,6 @@ export default function ReviewerArchiveRequestsPage() {
                 </tr>
               ) : (
                 items.map((request) => {
-                  const busy = actionId === request.id;
                   return (
                     <tr key={request.id} className="border-t border-gray-100 hover:bg-bg/50">
                       <td className="px-5 py-4">
@@ -169,57 +178,14 @@ export default function ReviewerArchiveRequestsPage() {
                         </span>
                       </td>
                       <td className="px-5 py-4 text-right">
-                        {request.status === "pending" ? (
-                          <div className="flex items-center justify-end gap-2">
-                            <button
-                              type="button"
-                              disabled={busy}
-                              onClick={() => handleResolve(request, "approved")}
-                              className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg px-3 py-2 disabled:opacity-50 transition-colors"
-                            >
-                              {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Archive className="w-3.5 h-3.5" />}
-                              Archive
-                            </button>
-                            <button
-                              type="button"
-                              disabled={busy}
-                              onClick={() => handleResolve(request, "rejected")}
-                              className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg px-3 py-2 disabled:opacity-50 transition-colors"
-                            >
-                              <XCircle className="w-3.5 h-3.5" />
-                              Reject
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center justify-end gap-2">
-                            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-400">
-                              Resolved ({request.status})
-                            </span>
-                            {request.status === "rejected" && (
-                              <button
-                                type="button"
-                                disabled={busy}
-                                onClick={() => handleResolve(request, "approved")}
-                                className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg px-2.5 py-1.5 transition"
-                                title="Undo rejection and accept this archive request"
-                              >
-                                {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
-                                Undo / Accept
-                              </button>
-                            )}
-                            {request.status === "approved" && (
-                              <button
-                                type="button"
-                                disabled={busy}
-                                onClick={() => handleResolve(request, "pending")}
-                                className="inline-flex items-center gap-1 text-xs font-semibold text-gray-600 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg px-2.5 py-1.5 transition"
-                                title="Undo approval and revert to pending"
-                              >
-                                <RotateCcw className="w-3.5 h-3.5" /> Revert
-                              </button>
-                            )}
-                          </div>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => setDetail(request)}
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-navy bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2 transition-colors"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          View Reason
+                        </button>
                       </td>
                     </tr>
                   );
@@ -231,7 +197,40 @@ export default function ReviewerArchiveRequestsPage() {
       </section>
 
       {detail && (
-        <ArchiveRequestDetailModal request={detail} onClose={() => setDetail(null)} />
+        <ArchiveRequestDetailModal
+          request={detail}
+          onClose={() => { setDetail(null); setActionId(null); }}
+          votesText={detail.status === "pending" ? archiveApi.votesTextFor(detail) : null}
+          footer={(
+            <>
+              <button
+                type="button"
+                onClick={() => { setDetail(null); setActionId(null); }}
+                className="rounded-md border border-[#E3E1DA] px-4 py-2 text-sm font-medium text-gray-600 hover:bg-[#F7F6F2] transition"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                disabled={Boolean(actionId)}
+                onClick={() => handleVote(detail, "reject")}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg px-3 py-2 disabled:opacity-50 transition-colors"
+              >
+                {Boolean(actionId) ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}
+                Reject
+              </button>
+              <button
+                type="button"
+                disabled={Boolean(actionId)}
+                onClick={() => handleVote(detail, "approve")}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg px-3 py-2 disabled:opacity-50 transition-colors"
+              >
+                {Boolean(actionId) ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Archive className="w-3.5 h-3.5" />}
+                Archive
+              </button>
+            </>
+          )}
+        />
       )}
     </DashboardShell>
   );

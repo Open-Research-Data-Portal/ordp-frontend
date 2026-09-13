@@ -17,10 +17,11 @@ const STATUS_BADGE = {
 
 /**
  * Popup that shows the full details of an archive request — the reason text is
- * often truncated inside the table row, so clicking "View" opens this panel to
- * read the complete comment.
+ * often truncated inside the table row, so clicking "View" (or "View Reason")
+ * opens this panel to read the complete comment. Pass an optional `footer`
+ * React fragment to render Approve/Reject/Restore actions inside the popup.
  */
-export default function ArchiveRequestDetailModal({ request, onClose }) {
+export default function ArchiveRequestDetailModal({ request, onClose, footer, votesText }) {
   if (!request) return null;
   const status = request?.status || "pending";
   return (
@@ -74,7 +75,11 @@ export default function ArchiveRequestDetailModal({ request, onClose }) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <dt className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Reason</dt>
-              <dd className="mt-0.5 text-gray-700">{archiveApi.reasonLabel(request.reason)}</dd>
+              <dd className="mt-0.5 text-gray-700">
+                {request.type === "unarchive"
+                  ? archiveApi.intendedUseLabel(request.intended_use)
+                  : archiveApi.reasonLabel(request.reason)}
+              </dd>
             </div>
             <div>
               <dt className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</dt>
@@ -92,16 +97,24 @@ export default function ArchiveRequestDetailModal({ request, onClose }) {
               {request.comment || request.reason || "No additional details provided."}
             </dd>
           </div>
+
+          {votesText && (
+            <div className="flex items-center gap-2 rounded-lg bg-violet-50 border border-violet-200 px-3 py-2 text-xs font-semibold text-violet-700">
+              {votesText}
+            </div>
+          )}
         </dl>
 
-        <div className="mt-6 flex justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md border border-[#E3E1DA] px-4 py-2 text-sm font-medium text-gray-600 hover:bg-[#F7F6F2] transition"
-          >
-            Close
-          </button>
+        <div className="mt-6 flex items-center justify-end gap-2">
+          {footer ? footer : (
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md border border-[#E3E1DA] px-4 py-2 text-sm font-medium text-gray-600 hover:bg-[#F7F6F2] transition"
+            >
+              Close
+            </button>
+          )}
         </div>
       </div>
     </div>

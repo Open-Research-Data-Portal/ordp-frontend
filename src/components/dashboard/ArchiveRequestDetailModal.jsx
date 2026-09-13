@@ -60,45 +60,55 @@ export default function ArchiveRequestDetailModal({ request, onClose }) {
             <p className="text-xs text-gray-500 font-mono mt-0.5">ID: {request.dataset_id}</p>
           </div>
 
-          {/* Form Card 1: Archival Category */}
+          {/* Field 1: Archival Category */}
           <div className="bg-white border border-border rounded-xl p-4 shadow-xs">
             <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-              <FileText className="w-4 h-4 text-gold" /> Archival Category
+              <FileText className="w-4 h-4 text-gold" /> 1. Archival Category
             </div>
             <div className="inline-block bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold px-3 py-1.5 rounded-lg">
-              {archiveApi.reasonLabel(request.reason_category || request.reason)}
+              {archiveApi.reasonLabel(request.reason_category)}
             </div>
           </div>
 
-          {/* Form Card 2: Reason */}
+          {/* Field 2: Research Impact Assessment */}
           <div className="bg-white border border-border rounded-xl p-4 shadow-xs">
             <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-              <FileText className="w-4 h-4 text-gold" /> Reason
+              <Shield className="w-4 h-4 text-gold" /> 2. Research Impact Assessment
+            </div>
+            <div className="inline-block bg-slate-50 border border-border text-navy text-xs font-bold px-3 py-1.5 rounded-lg">
+              {request.impact || "No Active Citations / No Impact"}
+            </div>
+          </div>
+
+          {/* Field 3: Detailed Archival Justification */}
+          <div className="bg-white border border-border rounded-xl p-4 shadow-xs">
+            <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+              <FileText className="w-4 h-4 text-gold" /> 3. Detailed Archival Justification
             </div>
             <div className="rounded-xl bg-slate-50 border border-border p-4 text-sm text-gray-700 whitespace-pre-line leading-relaxed">
-              {request.reason || "No reason specified."}
+              {request.reason || "No detailed justification provided."}
             </div>
           </div>
 
-          {/* Form Card 3: Detailed Comments */}
+          {/* Field 4: Data Preservation & Backup Storage Plan */}
           <div className="bg-white border border-border rounded-xl p-4 shadow-xs">
             <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-              <FileText className="w-4 h-4 text-gold" /> Detailed Comments
+              <Archive className="w-4 h-4 text-gold" /> 4. Data Preservation & Backup Storage Plan
             </div>
             <div className="rounded-xl bg-slate-50 border border-border p-4 text-sm text-gray-700 whitespace-pre-line leading-relaxed">
-              {request.comment || "No detailed comments provided by the researcher."}
+              {request.preservation || "No preservation plan specified."}
             </div>
           </div>
 
-          {/* Form Card 4: Contact / Submitter Information */}
+          {/* Field 5: Contact Email for Inquiries */}
           <div className="bg-white border border-border rounded-xl p-4 shadow-xs">
             <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-              <User className="w-4 h-4 text-gold" /> Contact & Submitter Information
+              <User className="w-4 h-4 text-gold" /> 5. Contact Email for Inquiries
             </div>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-bold text-navy">{request.owner_name || request.requested_by || "—"}</p>
-                <p className="text-xs text-gray-400 mt-0.5">{request.owner_email || "No email provided"}</p>
+                <p className="text-sm font-bold text-navy">{request.owner_email || request.owner_name || "—"}</p>
+                <p className="text-xs text-gray-400 mt-0.5">Requested by: {request.owner_name || "Researcher"}</p>
               </div>
               <div className="text-right">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1">Status</span>

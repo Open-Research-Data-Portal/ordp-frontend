@@ -188,14 +188,38 @@ export function hasPendingArchiveRequest(datasetId) {
  * so the full text is preserved for the detail popup.
  */
 export function normalizeBackendRequest(r) {
+  const rawReason = r.reason || r.comment || "";
+  let impact = "No Active Citations / No Impact";
+  let preservation = "Not specified";
+  let contact = r.owner_email || "";
+  let reasonText = rawReason;
+
+  const impactMatch = rawReason.match(/\[Impact:\s*([^\]]+)\]/i);
+  if (impactMatch) impact = impactMatch[1];
+
+  const presMatch = rawReason.match(/\[Preservation:\s*([^\]]+)\]/i);
+  if (presMatch) preservation = presMatch[1];
+
+  const contactMatch = rawReason.match(/\[Contact:\s*([^\]]+)\]/i);
+  if (contactMatch) contact = contactMatch[1];
+
+  reasonText = rawReason
+    .replace(/\[Impact:\s*[^\]]+\]/gi, "")
+    .replace(/\[Preservation:\s*[^\]]+\]/gi, "")
+    .replace(/\[Contact:\s*[^\]]+\]/gi, "")
+    .trim();
+
   return {
     id: r.id,
     dataset_id: r.dataset_id,
     dataset_title: r.dataset_title || r.dataset?.title || "Untitled dataset",
     owner_name: r.requested_by || r.owner_name || r.owner?.email || "—",
-    owner_email: r.owner_email || r.owner?.email || "",
-    reason: r.reason_category || "other",
-    comment: r.reason || r.comment || "",
+    owner_email: contact || r.owner_email || "",
+    reason_category: r.reason_category || "superseded",
+    impact,
+    preservation,
+    reason: reasonText || rawReason,
+    comment: reasonText || rawReason,
     requested_at: r.created_at || r.requested_at || new Date().toISOString(),
     status: r.status || "pending",
     source: r.source || "api",

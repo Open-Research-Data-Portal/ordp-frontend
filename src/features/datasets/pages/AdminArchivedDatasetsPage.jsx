@@ -11,6 +11,7 @@ import {
   XCircle,
   Clock,
   Search,
+  X,
 } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import { useAuth } from "../../../context/useAuth";
@@ -20,6 +21,7 @@ import * as archiveApi from "../../../api/archiveRequests";
 import * as datasetsApi from "../hooks/datasetsApi";
 import ArchiveRequestDetailModal from "../../../components/dashboard/ArchiveRequestDetailModal";
 import ArchiveHistoryModal from "../../../components/dashboard/ArchiveHistoryModal";
+import { getDatasetImage } from "../../../utils/datasetImage";
 
 function formatDate(value) {
   if (!value) return "—";
@@ -54,17 +56,15 @@ export default function AdminArchivedDatasetsPage() {
   const [archivedDatasets, setArchivedDatasets] = useState([]);
   const [loadingArchived, setLoadingArchived] = useState(true);
 
-  // Tab 2: Archive Requests Queue (GET /api/admin-panel/archive-requests/queue/)
-  const [archiveRequests, setArchiveRequests] = useState([]);
-  const [loadingRequests, setLoadingRequests] = useState(true);
-
-  // Tab 3: Restore Requests Queue (GET /api/admin-panel/unarchive-requests/queue/)
+  // Tab 2: Restore Requests Queue (GET /api/admin-panel/unarchive-requests/queue/)
   const [unarchiveRequests, setUnarchiveRequests] = useState([]);
   const [loadingUnarchive, setLoadingUnarchive] = useState(true);
 
   const [actionId, setActionId] = useState(null);
   const [detailModal, setDetailModal] = useState(null);
   const [historyTarget, setHistoryTarget] = useState(null);
+  const [confirmRestoreDataset, setConfirmRestoreDataset] = useState(null);
+  const [selectedRestoreReq, setSelectedRestoreReq] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
 
   // Admins only — redirect everyone else to their own dashboard.
@@ -113,24 +113,7 @@ export default function AdminArchivedDatasetsPage() {
     }
   };
 
-  // 2. Fetch archive requests queue
-  const loadArchiveRequests = async () => {
-    setLoadingRequests(true);
-    try {
-      const real = await datasetsApi.getAdminArchiveRequestQueue();
-      if (Array.isArray(real) && real.length > 0) {
-        setArchiveRequests(real.map((r) => archiveApi.normalizeBackendRequest(r)));
-        setLoadingRequests(false);
-        return;
-      }
-    } catch {
-      // fallback to local store
-    }
-    setArchiveRequests(archiveApi.getAllArchiveRequests());
-    setLoadingRequests(false);
-  };
-
-  // 3. Fetch unarchive requests queue
+  // 2. Fetch unarchive requests queue
   const loadUnarchiveRequests = async () => {
     setLoadingUnarchive(true);
     try {
@@ -145,26 +128,20 @@ export default function AdminArchivedDatasetsPage() {
 
   useEffect(() => {
     loadArchivedDatasets();
-    loadArchiveRequests();
     loadUnarchiveRequests();
   }, []);
 
   // Instant Unarchive (Admin Override - no request body needed)
-  async function handleInstantRestore(dataset) {
+  async function executeInstantRestore(dataset) {
     const id = dataset.id;
     if (!id || actionId) return;
-
-    const confirmed = window.confirm(
-      `Instant Restore Override:\n\nRestore "${dataset.title}" immediately?\nThis bypasses committee voting and un-archives the dataset instantly.`
-    );
-    if (!confirmed) return;
 
     setActionId(id);
     try {
       await datasetsApi.adminRestoreDataset(id);
       addToast(`Dataset "${dataset.title}" instantly restored.`, "success");
       setArchivedDatasets((list) => list.filter((d) => d.id !== id));
-      loadArchiveRequests();
+      setConfirmRestoreDataset(null);
     } catch (err) {
       addToast(
         err?.response?.data?.detail || err?.message || "Failed to restore dataset.",
@@ -250,10 +227,6 @@ export default function AdminArchivedDatasetsPage() {
     );
   }, [archivedDatasets, searchQuery]);
 
-  const pendingArchiveCount = useMemo(
-    () => archiveRequests.filter((r) => r.status === "pending").length,
-    [archiveRequests]
-  );
   const pendingUnarchiveCount = unarchiveRequests.length;
 
   return (
@@ -262,7 +235,7 @@ export default function AdminArchivedDatasetsPage() {
       subtitle="Comprehensive Archive & Restore Management"
     >
       {/* Top summary metric cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6 animate-fade-in-up">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6 animate-fade-in-up">
         <div
           onClick={() => switchTab("archived")}
           className={`cursor-pointer rounded-2xl border p-5 transition ${
@@ -282,28 +255,6 @@ export default function AdminArchivedDatasetsPage() {
           <p className="text-3xl font-bold mt-2">{archivedDatasets.length}</p>
           <p className="text-xs mt-1 opacity-70">
             Currently unlisted from search
-          </p>
-        </div>
-
-        <div
-          onClick={() => switchTab("archive-requests")}
-          className={`cursor-pointer rounded-2xl border p-5 transition ${
-            activeTab === "archive-requests"
-              ? "bg-navy text-white border-navy shadow-md"
-              : "bg-white border-border hover:border-gold/50"
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider opacity-80">
-              Archive Requests
-            </span>
-            <Clock
-              className={`w-5 h-5 ${activeTab === "archive-requests" ? "text-gold" : "text-amber-500"}`}
-            />
-          </div>
-          <p className="text-3xl font-bold mt-2">{pendingArchiveCount}</p>
-          <p className="text-xs mt-1 opacity-70">
-            Awaiting committee review
           </p>
         </div>
 
@@ -330,7 +281,7 @@ export default function AdminArchivedDatasetsPage() {
         </div>
       </div>
 
-      {/* Main Table Section */}
+      {/* Main Section */}
       <section className="bg-white rounded-2xl border border-border shadow-xs overflow-hidden animate-fade-in-up">
         {/* Tab switcher header */}
         <div className="border-b border-border px-5 pt-4">
@@ -346,17 +297,6 @@ export default function AdminArchivedDatasetsPage() {
                 }`}
               >
                 All Archived Datasets ({archivedDatasets.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => switchTab("archive-requests")}
-                className={`px-4 py-2 rounded-xl text-xs font-semibold transition ${
-                  activeTab === "archive-requests"
-                    ? "bg-navy text-white shadow-xs"
-                    : "text-gray-600 hover:bg-gray-100"
-                }`}
-              >
-                Archive Requests Queue ({pendingArchiveCount})
               </button>
               <button
                 type="button"
@@ -385,98 +325,88 @@ export default function AdminArchivedDatasetsPage() {
           </div>
         </div>
 
-        {/* TAB 1: ALL ARCHIVED DATASETS (Admin Management Table) */}
+        {/* TAB 1: ALL ARCHIVED DATASETS (Admin Management Card Rows) */}
         {activeTab === "archived" && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="text-xs uppercase text-gray-500 bg-gray-50/70 border-b border-gray-100">
-                <tr>
-                  <th className="px-5 py-3 text-left font-semibold">Dataset</th>
-                  <th className="px-5 py-3 text-left font-semibold">Owner</th>
-                  <th className="px-5 py-3 text-left font-semibold">Archived At</th>
-                  <th className="px-5 py-3 text-left font-semibold">Status</th>
-                  <th className="px-5 py-3 text-right font-semibold">
-                    Admin Actions (Override)
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {loadingArchived ? (
-                  <tr>
-                    <td colSpan={5} className="px-5 py-12 text-center text-sm text-gray-500">
-                      <span className="inline-flex items-center gap-2">
-                        <Loader2 className="w-4 h-4 animate-spin text-gold" /> Loading archived datasets…
-                      </span>
-                    </td>
-                  </tr>
-                ) : filteredArchived.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-5 py-12 text-center">
-                      <Inbox className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-                      <p className="text-sm font-semibold text-gray-700">No Archived Datasets</p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        There are currently no archived datasets in the portal.
-                      </p>
-                    </td>
-                  </tr>
-                ) : (
-                  filteredArchived.map((dataset) => {
-                    const busy = actionId === dataset.id;
-                    return (
-                      <tr key={dataset.id} className="hover:bg-gray-50/60 transition-colors">
-                        <td className="px-5 py-4">
-                          <p className="font-semibold text-navy leading-tight">
-                            {dataset.title || "Untitled Dataset"}
-                          </p>
-                          <p className="text-xs text-gray-400 font-mono mt-0.5">
-                            {dataset.id}
-                          </p>
-                        </td>
-                        <td className="px-5 py-4 text-gray-700 font-medium">
-                          {dataset.owner || "Researcher"}
-                        </td>
-                        <td className="px-5 py-4 text-gray-500 text-xs whitespace-nowrap">
-                          {formatDate(dataset.archived_at)}
-                        </td>
-                        <td className="px-5 py-4">
-                          <span className="inline-flex items-center gap-1 text-[11px] font-bold uppercase px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-700 border border-gray-200">
-                            <Archive className="w-3 h-3" /> Archived
+          <div className="divide-y divide-gray-100">
+            {loadingArchived ? (
+              <div className="px-5 py-12 text-center text-sm text-gray-500">
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin text-gold" /> Loading archived datasets…
+                </span>
+              </div>
+            ) : filteredArchived.length === 0 ? (
+              <div className="px-5 py-12 text-center">
+                <Inbox className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                <p className="text-sm font-semibold text-gray-700">No Archived Datasets</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  There are currently no archived datasets in the portal.
+                </p>
+              </div>
+            ) : (
+              filteredArchived.map((dataset) => {
+                const busy = actionId === dataset.id;
+                const thumb = getDatasetImage(dataset);
+                const filesCount = dataset.files?.length || 1;
+                const fileType = dataset.files?.[0]?.file_type || "DATA";
+                const fileSize = dataset.files?.[0]?.file_size ? `${(dataset.files[0].file_size / (1024 * 1024)).toFixed(1)} MB` : "—";
+                const visibility = dataset.visibility || "public";
+                return (
+                  <div key={dataset.id} className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50/60 transition">
+                    <div className="flex items-start gap-4">
+                      <div className="w-16 h-16 rounded-xl bg-gray-100 border border-gray-200 overflow-hidden shrink-0 flex items-center justify-center">
+                        {thumb ? (
+                          <img src={thumb} alt={dataset.title} className="w-full h-full object-cover" />
+                        ) : (
+                          <Archive className="w-6 h-6 text-gray-400" />
+                        )}
+                      </div>
+                      <div>
+                        <h3 className="text-base font-serif font-bold text-navy leading-snug">
+                          {dataset.title || "Untitled Dataset"}
+                        </h3>
+                        <p className="text-xs text-gray-500 mt-1">
+                          <span className="font-medium text-gray-700">{dataset.owner || "Researcher"}</span>
+                          {" · "}
+                          Updated {formatDate(dataset.updated_at || dataset.archived_at)}
+                        </p>
+                        <div className="flex items-center gap-2 mt-2 flex-wrap text-xs text-gray-500">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-700 border border-gray-200">
+                            {visibility}
                           </span>
-                        </td>
-                        <td className="px-5 py-4 text-right">
-                          <div className="inline-flex items-center gap-2 justify-end">
-                            <button
-                              type="button"
-                              onClick={() => setHistoryTarget(dataset)}
-                              className="inline-flex items-center gap-1 text-xs font-semibold text-navy bg-gray-100 hover:bg-gray-200 rounded-lg px-3 py-1.5 transition"
-                              title="View full archive/unarchive history"
-                            >
-                              <History className="w-3.5 h-3.5 text-navy" />
-                              History
-                            </button>
+                          <span>·</span>
+                          <span>{filesCount} File ({fileType.toUpperCase()})</span>
+                          <span>·</span>
+                          <span>{fileSize}</span>
+                        </div>
+                      </div>
+                    </div>
 
-                            <button
-                              type="button"
-                              disabled={busy}
-                              onClick={() => handleInstantRestore(dataset)}
-                              className="inline-flex items-center gap-1 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg px-3 py-1.5 disabled:opacity-50 transition shadow-2xs"
-                              title="Instant unarchive override (no request body needed)"
-                            >
-                              {busy ? (
-                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                              ) : (
-                                <RotateCcw className="w-3.5 h-3.5" />
-                              )}
-                              Instant Restore
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+                    <div className="flex items-center gap-2 justify-end shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/datasets/${dataset.id}`)}
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-navy bg-gray-100 hover:bg-gray-200 rounded-xl px-3.5 py-2 transition shadow-2xs"
+                        title="View dataset details"
+                      >
+                        <Eye className="w-4 h-4 text-navy" />
+                        View
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => setConfirmRestoreDataset(dataset)}
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl px-4 py-2 disabled:opacity-50 transition shadow-2xs"
+                        title="Instant unarchive override"
+                      >
+                        {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+                        Instant Restore
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         )}
 
@@ -623,7 +553,6 @@ export default function AdminArchivedDatasetsPage() {
                 <tr>
                   <th className="px-5 py-3 text-left font-semibold">Dataset</th>
                   <th className="px-5 py-3 text-left font-semibold">Requester</th>
-                  <th className="px-5 py-3 text-left font-semibold">Intended Use & Reason</th>
                   <th className="px-5 py-3 text-left font-semibold">Date</th>
                   <th className="px-5 py-3 text-right font-semibold">Admin Decision</th>
                 </tr>
@@ -631,7 +560,7 @@ export default function AdminArchivedDatasetsPage() {
               <tbody className="divide-y divide-gray-100">
                 {loadingUnarchive ? (
                   <tr>
-                    <td colSpan={5} className="px-5 py-12 text-center text-sm text-gray-500">
+                    <td colSpan={4} className="px-5 py-12 text-center text-sm text-gray-500">
                       <span className="inline-flex items-center gap-2">
                         <Loader2 className="w-4 h-4 animate-spin text-gold" /> Loading restore requests…
                       </span>
@@ -639,7 +568,7 @@ export default function AdminArchivedDatasetsPage() {
                   </tr>
                 ) : unarchiveRequests.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-5 py-12 text-center">
+                    <td colSpan={4} className="px-5 py-12 text-center">
                       <Inbox className="w-10 h-10 text-gray-300 mx-auto mb-2" />
                       <p className="text-sm font-semibold text-gray-700">No Pending Restore Requests</p>
                       <p className="text-xs text-gray-500 mt-1">
@@ -663,21 +592,20 @@ export default function AdminArchivedDatasetsPage() {
                         <td className="px-5 py-4 text-gray-700 font-medium">
                           {req.requested_by_name || req.requested_by || "User"}
                         </td>
-                        <td className="px-5 py-4 max-w-[320px]">
-                          {req.intended_use && (
-                            <p className="text-xs font-semibold text-navy">
-                              Use: {req.intended_use}
-                            </p>
-                          )}
-                          <p className="text-xs text-gray-600 mt-0.5 italic">
-                            &ldquo;{req.reason || "No detailed reason provided."}&rdquo;
-                          </p>
-                        </td>
                         <td className="px-5 py-4 text-gray-500 text-xs whitespace-nowrap">
                           {formatDate(req.created_at)}
                         </td>
                         <td className="px-5 py-4 text-right">
                           <div className="inline-flex items-center gap-1.5 justify-end">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedRestoreReq(req)}
+                              className="inline-flex items-center gap-1 text-xs font-semibold text-navy bg-gray-100 hover:bg-gray-200 rounded-lg px-3 py-1.5 transition shadow-2xs"
+                              title="View intended use and reason"
+                            >
+                              <Eye className="w-3.5 h-3.5 text-navy" />
+                              View
+                            </button>
                             <button
                               type="button"
                               disabled={busy}
@@ -689,7 +617,7 @@ export default function AdminArchivedDatasetsPage() {
                               ) : (
                                 <CheckCircle2 className="w-3.5 h-3.5" />
                               )}
-                              Approve Restore
+                              Approve
                             </button>
                             <button
                               type="button"
@@ -720,12 +648,119 @@ export default function AdminArchivedDatasetsPage() {
         />
       )}
 
-      {/* Full Archive/Unarchive History Timeline Modal */}
-      {historyTarget && (
-        <ArchiveHistoryModal
-          dataset={historyTarget}
-          onClose={() => setHistoryTarget(null)}
-        />
+      {/* Restore Request Detail Modal */}
+      {selectedRestoreReq && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-xl w-full p-6 sm:p-8 animate-fade-in-up">
+            <div className="flex items-center justify-between pb-4 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-700 shrink-0">
+                  <RotateCcw className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Restore Request Details</h3>
+                  <p className="text-xs text-gray-500">Petition for &ldquo;{selectedRestoreReq.dataset_title || "Archived Dataset"}&rdquo;</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedRestoreReq(null)}
+                className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="mt-5 space-y-4">
+              <div>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Requester</p>
+                <p className="text-sm font-semibold text-slate-900 mt-0.5">{selectedRestoreReq.requested_by_name || selectedRestoreReq.requested_by || "User"}</p>
+              </div>
+
+              <div>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Intended Use</p>
+                <span className="inline-flex items-center mt-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 capitalize">
+                  {selectedRestoreReq.intended_use || "research"}
+                </span>
+              </div>
+
+              <div>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Reason for Restoration</p>
+                <div className="mt-1 p-4 rounded-xl bg-gray-50 border border-gray-200 text-sm text-slate-700 italic leading-relaxed">
+                  &ldquo;{selectedRestoreReq.reason || "No detailed reason provided."}&rdquo;
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Submitted At</p>
+                <p className="text-xs text-slate-600 mt-0.5">{formatDate(selectedRestoreReq.created_at)}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-100 mt-6">
+              <button
+                type="button"
+                onClick={() => setSelectedRestoreReq(null)}
+                className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-slate-700 rounded-xl text-xs font-semibold transition"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const req = selectedRestoreReq;
+                  setSelectedRestoreReq(null);
+                  handleDecideUnarchive(req, "approve");
+                }}
+                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-sm transition"
+              >
+                Approve Restore
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pretty Instant Restore Confirmation Modal */}
+      {confirmRestoreDataset && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-fade-in-up">
+            <div className="flex items-center gap-3 pb-4 border-b border-gray-100">
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 shrink-0">
+                <RotateCcw className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Confirm Instant Restore</h3>
+                <p className="text-xs text-gray-500">Bypass committee review and restore dataset immediately.</p>
+              </div>
+            </div>
+
+            <div className="py-4">
+              <p className="text-sm text-slate-700">
+                Are you sure you want to instantly restore <span className="font-semibold text-navy">&ldquo;{confirmRestoreDataset.title}&rdquo;</span>? This will make the dataset active and searchable again right away.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setConfirmRestoreDataset(null)}
+                className="px-4 py-2 text-xs font-semibold text-gray-500 hover:text-slate-900 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={actionId === confirmRestoreDataset.id}
+                onClick={() => executeInstantRestore(confirmRestoreDataset)}
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-sm transition disabled:opacity-50"
+              >
+                {actionId === confirmRestoreDataset.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+                Yes, Restore Dataset
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </DashboardShell>
   );

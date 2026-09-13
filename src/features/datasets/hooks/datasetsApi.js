@@ -504,6 +504,8 @@ export async function voteArchiveRequest(requestId, vote) {
   throw lastErr;
 }
 
+export const voteOnArchiveRequest = voteArchiveRequest;
+
 /**
  * Admin fetches queue of pending dataset unarchiving/restoration requests.
  */
@@ -511,6 +513,8 @@ export async function getUnarchiveRequestsQueue() {
   const { data } = await client.get(`/admin-panel/unarchive-requests/queue/`);
   return data;
 }
+
+export const getAdminUnarchiveRequestQueue = getUnarchiveRequestsQueue;
 
 /**
  * Admin decides on a pending unarchive request ("approve" or "reject").

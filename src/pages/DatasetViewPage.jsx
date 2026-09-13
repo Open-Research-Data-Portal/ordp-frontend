@@ -211,6 +211,8 @@ function normalizeDataset(raw) {
     },
     viewsSeries: MOCK_DATASET.viewsSeries, // FIXME: no per-dataset views time-series endpoint yet
     downloadsSeries: MOCK_DATASET.downloadsSeries, // FIXME: no per-dataset downloads time-series endpoint yet
+    is_archived: raw.is_archived ?? false,
+    archived_at: raw.archived_at ?? null,
   };
 }
 

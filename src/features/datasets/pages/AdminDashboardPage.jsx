@@ -57,6 +57,7 @@ export default function AdminDashboardPage() {
   const [users, setUsers] = useState([]);
   const [queue, setQueue] = useState([]);
   const [reviews, setReviews] = useState([]);
+  const [unarchiveRequests, setUnarchiveRequests] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const [userSearch, setUserSearch] = useState("");
@@ -75,13 +76,14 @@ export default function AdminDashboardPage() {
     let active = true;
     async function load() {
       setLoading(true);
-      const [cardsRes, auditRes, delRes, usersRes, queueRes, reviewsRes] = await Promise.allSettled([
+      const [cardsRes, auditRes, delRes, usersRes, queueRes, reviewsRes, unarchiveRes] = await Promise.allSettled([
         datasetsApi.getAdminCards?.() ?? Promise.resolve(null),
         datasetsApi.getAdminAuditLog?.() ?? Promise.resolve([]),
         datasetsApi.getAdminDeletionQueue?.() ?? Promise.resolve([]),
         datasetsApi.getAdminUsers?.() ?? Promise.resolve([]),
         datasetsApi.getAdminQueue?.() ?? Promise.resolve([]),
         datasetsApi.getMyReviews?.() ?? Promise.resolve([]),
+        datasetsApi.getAdminUnarchiveRequestQueue?.() ?? Promise.resolve([]),
       ]);
       if (!active) return;
       if (cardsRes.status === "fulfilled") setCards(cardsRes.value);
@@ -90,6 +92,7 @@ export default function AdminDashboardPage() {
       if (usersRes.status === "fulfilled") setUsers(normalizeList(usersRes.value));
       if (queueRes.status === "fulfilled") setQueue(normalizeList(queueRes.value));
       if (reviewsRes.status === "fulfilled") setReviews(normalizeList(reviewsRes.value));
+      if (unarchiveRes.status === "fulfilled") setUnarchiveRequests(normalizeList(unarchiveRes.value));
 
       // The moderation queue can be empty/unavailable even when datasets
       // exist — fall back to the full directory so the datasets tab always

@@ -266,6 +266,8 @@ function normalizeDataset(raw) {
     citation_notes: meta.citation_notes ?? raw.citation_notes ?? "",
 
     files,
+    is_archived: raw.is_archived ?? false,
+    archived_at: raw.archived_at ?? null,
   };
 }
 

@@ -102,7 +102,7 @@ function downloadPreviewCsv(file, datasetTitle) {
 }
 
 export default function ReviewDatasetPage() {
-  const { datasetId } = useParams();
+  const { id: datasetId } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
   const { addToast } = useToast();

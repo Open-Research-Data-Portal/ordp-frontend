@@ -1,4 +1,4 @@
-import { X, Eye } from "lucide-react";
+import { X, Archive, Shield, User, Calendar, FileText, CheckCircle2 } from "lucide-react";
 import * as archiveApi from "../../api/archiveRequests";
 
 function formatDate(value) {
@@ -15,92 +15,96 @@ const STATUS_BADGE = {
   rejected: "bg-red-50 text-red-700 border-red-200",
 };
 
-/**
- * Popup that shows the full details of an archive request — the reason text is
- * often truncated inside the table row, so clicking "View" opens this panel to
- * read the complete comment.
- */
 export default function ArchiveRequestDetailModal({ request, onClose }) {
   if (!request) return null;
   const status = request?.status || "pending";
   return (
     <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 px-4 animate-fade-in"
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 px-4 animate-fade-in"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
-      aria-label="Archive request details"
+      aria-label="Archive request details form"
     >
       <div
-        className="w-full max-w-lg rounded-xl border border-[#E3E1DA] bg-white p-6 shadow-2xl"
+        className="w-full max-w-2xl rounded-2xl border border-border bg-white shadow-2xl overflow-hidden animate-fade-in-up max-h-[90vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span className="w-8 h-8 rounded-lg bg-violet-50 flex items-center justify-center">
-              <Eye className="w-4 h-4 text-violet-700" />
-            </span>
-            <h2 className="text-base font-bold text-navy">Archive Request Details</h2>
+        {/* Header */}
+        <div className="bg-navy text-white px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gold/20 border border-gold/40 flex items-center justify-center shrink-0">
+              <Archive className="w-5 h-5 text-gold" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold">Dataset Archival Request Form</h2>
+              <p className="text-xs text-slate-300">Detailed review of researcher archival submission</p>
+            </div>
           </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="p-1 text-gray-400 hover:text-navy rounded-lg transition"
+            className="p-1.5 text-slate-300 hover:text-white rounded-lg hover:bg-white/10 transition"
           >
-            <X className="w-4 h-4" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        <dl className="mt-5 grid grid-cols-1 gap-3 text-sm">
-          <div>
-            <dt className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Dataset</dt>
-            <dd className="mt-0.5 font-medium text-navy">{request.dataset_title || "Untitled dataset"}</dd>
-            <dd className="text-xs text-gray-400 font-mono">{request.dataset_id}</dd>
+        {/* Content body */}
+        <div className="p-6 overflow-y-auto space-y-6">
+          {/* Dataset info card */}
+          <div className="bg-slate-50 border border-border rounded-xl p-4">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Target Dataset</span>
+            <h3 className="text-lg font-extrabold text-navy mt-0.5">{request.dataset_title || "Untitled dataset"}</h3>
+            <p className="text-xs text-gray-500 font-mono mt-0.5">ID: {request.dataset_id}</p>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <dt className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Requested By</dt>
-              <dd className="mt-0.5 text-gray-600">{request.owner_name || request.requested_by || "—"}</dd>
-              <dd className="text-xs text-gray-400">{request.owner_email}</dd>
+          {/* Submitter & Date info */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="bg-white border border-border rounded-xl p-4 shadow-xs">
+              <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                <User className="w-4 h-4 text-gold" /> Requested By
+              </div>
+              <p className="text-sm font-bold text-navy">{request.owner_name || request.requested_by || "—"}</p>
+              <p className="text-xs text-gray-400 mt-0.5">{request.owner_email || "No email provided"}</p>
             </div>
-            <div>
-              <dt className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Date</dt>
-              <dd className="mt-0.5 text-gray-600">{formatDate(request.requested_at || request.created_at)}</dd>
-            </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <dt className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Reason</dt>
-              <dd className="mt-0.5 text-gray-700">{archiveApi.reasonLabel(request.reason)}</dd>
-            </div>
-            <div>
-              <dt className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</dt>
-              <dd className="mt-0.5">
-                <span className={`inline-block text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${STATUS_BADGE[status] || STATUS_BADGE.pending}`}>
+            <div className="bg-white border border-border rounded-xl p-4 shadow-xs">
+              <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                <Calendar className="w-4 h-4 text-gold" /> Submission Date & Status
+              </div>
+              <div className="flex items-center justify-between mt-1">
+                <p className="text-sm font-semibold text-gray-700">{formatDate(request.requested_at || request.created_at)}</p>
+                <span className={`inline-block text-[10px] font-bold uppercase px-2.5 py-1 rounded-full border ${STATUS_BADGE[status] || STATUS_BADGE.pending}`}>
                   {status}
                 </span>
-              </dd>
+              </div>
             </div>
           </div>
 
-          <div>
-            <dt className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Full Comment / Reason Detail</dt>
-            <dd className="mt-1 rounded-lg bg-[#F7F6F2] border border-[#E3E1DA] p-3 text-gray-700 whitespace-pre-line">
-              {request.comment || request.reason || "No additional details provided."}
-            </dd>
+          {/* Reason & Category */}
+          <div className="bg-white border border-border rounded-xl p-5 shadow-xs">
+            <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+              <FileText className="w-4 h-4 text-gold" /> Archival Category & Reason
+            </div>
+            <div className="inline-block bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold px-3 py-1 rounded-lg mb-3">
+              {archiveApi.reasonLabel(request.reason_category || request.reason)}
+            </div>
+            <div className="rounded-xl bg-slate-50 border border-border p-4 text-sm text-gray-700 whitespace-pre-line leading-relaxed">
+              {request.comment || request.reason || "No detailed reason comments provided by the researcher."}
+            </div>
           </div>
-        </dl>
+        </div>
 
-        <div className="mt-6 flex justify-end">
+        {/* Footer */}
+        <div className="px-6 py-4 bg-slate-50 border-t border-border flex justify-end gap-3">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md border border-[#E3E1DA] px-4 py-2 text-sm font-medium text-gray-600 hover:bg-[#F7F6F2] transition"
+            className="rounded-xl border border-border px-5 py-2.5 text-sm font-semibold text-gray-700 bg-white hover:bg-gray-100 transition shadow-xs"
           >
-            Close
+            Close Form
           </button>
         </div>
       </div>

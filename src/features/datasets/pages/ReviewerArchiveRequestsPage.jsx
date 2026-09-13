@@ -109,7 +109,6 @@ export default function ReviewerArchiveRequestsPage() {
               <tr>
                 <th className="px-5 py-3 text-left font-semibold">Dataset</th>
                 <th className="px-5 py-3 text-left font-semibold">Requested By</th>
-                <th className="px-5 py-3 text-left font-semibold">Reason / Comment</th>
                 <th className="px-5 py-3 text-left font-semibold">Date</th>
                 <th className="px-5 py-3 text-left font-semibold">Status</th>
                 <th className="px-5 py-3 text-right font-semibold">Actions</th>
@@ -118,7 +117,7 @@ export default function ReviewerArchiveRequestsPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-10 text-center text-sm text-gray-500">
+                  <td colSpan={5} className="px-5 py-10 text-center text-sm text-gray-500">
                     <span className="inline-flex items-center gap-2">
                       <Loader2 className="w-4 h-4 animate-spin text-gold" /> Loading archive requests…
                     </span>
@@ -126,7 +125,7 @@ export default function ReviewerArchiveRequestsPage() {
                 </tr>
               ) : items.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-10 text-center">
+                  <td colSpan={5} className="px-5 py-10 text-center">
                     <Inbox className="w-10 h-10 text-gray-300 mx-auto mb-3" />
                     <p className="text-sm text-gray-500 mb-2">No archive requests yet.</p>
                     <p className="text-xs text-gray-400">
@@ -151,17 +150,6 @@ export default function ReviewerArchiveRequestsPage() {
                           </span>
                         )}
                       </td>
-                      <td className="px-5 py-4 max-w-[300px]">
-                        <p className="text-xs font-semibold text-gray-700">{archiveApi.reasonLabel(request.reason)}</p>
-                        {request.comment && <p className="text-xs text-gray-500 mt-0.5 italic line-clamp-2">"{request.comment}"</p>}
-                        <button
-                          type="button"
-                          onClick={() => setDetail(request)}
-                          className="mt-1.5 inline-flex items-center gap-1 text-xs font-semibold text-gold hover:text-gold-dark transition-colors"
-                        >
-                          <Eye className="w-3.5 h-3.5" /> View
-                        </button>
-                      </td>
                       <td className="px-5 py-4 text-gray-500 whitespace-nowrap">{formatDate(request.requested_at)}</td>
                       <td className="px-5 py-4">
                         <span className={`inline-block text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${STATUS_BADGE[request.status] || STATUS_BADGE.pending}`}>
@@ -169,57 +157,66 @@ export default function ReviewerArchiveRequestsPage() {
                         </span>
                       </td>
                       <td className="px-5 py-4 text-right">
-                        {request.status === "pending" ? (
-                          <div className="flex items-center justify-end gap-2">
-                            <button
-                              type="button"
-                              disabled={busy}
-                              onClick={() => handleResolve(request, "approved")}
-                              className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg px-3 py-2 disabled:opacity-50 transition-colors"
-                            >
-                              {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Archive className="w-3.5 h-3.5" />}
-                              Archive
-                            </button>
-                            <button
-                              type="button"
-                              disabled={busy}
-                              onClick={() => handleResolve(request, "rejected")}
-                              className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg px-3 py-2 disabled:opacity-50 transition-colors"
-                            >
-                              <XCircle className="w-3.5 h-3.5" />
-                              Reject
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center justify-end gap-2">
-                            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-400">
-                              Resolved ({request.status})
-                            </span>
-                            {request.status === "rejected" && (
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setDetail(request)}
+                            className="inline-flex items-center gap-1 text-xs font-semibold text-navy bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2 transition"
+                          >
+                            <Eye className="w-3.5 h-3.5" /> View
+                          </button>
+                          {request.status === "pending" ? (
+                            <>
                               <button
                                 type="button"
                                 disabled={busy}
                                 onClick={() => handleResolve(request, "approved")}
-                                className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg px-2.5 py-1.5 transition"
-                                title="Undo rejection and accept this archive request"
+                                className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg px-3 py-2 disabled:opacity-50 transition-colors"
                               >
-                                {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
-                                Undo / Accept
+                                {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Archive className="w-3.5 h-3.5" />}
+                                Archive
                               </button>
-                            )}
-                            {request.status === "approved" && (
                               <button
                                 type="button"
                                 disabled={busy}
-                                onClick={() => handleResolve(request, "pending")}
-                                className="inline-flex items-center gap-1 text-xs font-semibold text-gray-600 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg px-2.5 py-1.5 transition"
-                                title="Undo approval and revert to pending"
+                                onClick={() => handleResolve(request, "rejected")}
+                                className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg px-3 py-2 disabled:opacity-50 transition-colors"
                               >
-                                <RotateCcw className="w-3.5 h-3.5" /> Revert
+                                <XCircle className="w-3.5 h-3.5" />
+                                Reject
                               </button>
-                            )}
-                          </div>
-                        )}
+                            </>
+                          ) : (
+                            <>
+                              <span className="text-xs font-semibold text-gray-400">
+                                Resolved ({request.status})
+                              </span>
+                              {request.status === "rejected" && (
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  onClick={() => handleResolve(request, "approved")}
+                                  className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg px-2.5 py-2 transition"
+                                  title="Undo rejection and accept this archive request"
+                                >
+                                  {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                                  Undo / Accept
+                                </button>
+                              )}
+                              {request.status === "approved" && (
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  onClick={() => handleResolve(request, "pending")}
+                                  className="inline-flex items-center gap-1 text-xs font-semibold text-gray-600 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg px-2.5 py-2 transition"
+                                  title="Undo approval and revert to pending"
+                                >
+                                  <RotateCcw className="w-3.5 h-3.5" /> Revert
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );

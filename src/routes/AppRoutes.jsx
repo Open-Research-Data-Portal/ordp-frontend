@@ -23,6 +23,7 @@ import AdminAuditLogPage from "../features/datasets/pages/AdminAuditLogPage.jsx"
 import AdminDeletionRequestsPage from "../features/datasets/pages/AdminDeletionRequestsPage.jsx";
 import ReviewerDashboardPage from "../features/datasets/pages/ReviewerDashboardPage.jsx";
 import ReviewerQueuePage from "../features/datasets/pages/ReviewerQueuePage.jsx";
+import ReviewerArchiveRequestsPage from "../features/datasets/pages/ReviewerArchiveRequestsPage.jsx";
 import ReviewDatasetPage from "../features/datasets/pages/ReviewDatasetPage.jsx";
 import DatasetDetailPage from "../features/datasets/pages/Datasetdetailpage.jsx";
 import BrowseDatasetsPage from "../pages/BrowseDatasetsPage.jsx";
@@ -134,7 +135,7 @@ export default function AppRoutes() {
         <ProtectedRoute><ReviewDatasetPage /></ProtectedRoute>
       } />
       <Route path="/reviewer/archive-requests" element={
-        <ProtectedRoute><DatasetListPage defaultStatusFilter="published" title="Archive Requests" subtitle="Manage and review dataset archival requests." /></ProtectedRoute>
+        <ProtectedRoute><ReviewerArchiveRequestsPage /></ProtectedRoute>
       } />
       <Route path="/archived-datasets" element={
         <ProtectedRoute><DatasetListPage defaultStatusFilter="published" title="Archived Datasets" subtitle="Browse datasets that have been archived." /></ProtectedRoute>

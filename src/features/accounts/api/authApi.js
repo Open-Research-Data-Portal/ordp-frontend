@@ -4,7 +4,8 @@
  * axios instance (src/api/client.js), whose baseURL comes from
  * VITE_API_BASE_URL. No endpoint is hardcoded to a local server.
  */
-import client from "../../../api/client"; // shared axios instance
+import client from "../../../api/client";
+import { formatApiError } from "../../../utils/errorFormatter"; // shared axios instance
 
 const BASE = "/accounts";
 
@@ -229,9 +230,10 @@ function normalizeError(
   }
 
   if (body?.error) {
+    const formatted = formatApiError({ response: { data: body } });
     return new AuthApiError({
       code: body.error.code,
-      message: body.error.message,
+      message: formatted,
       field: body.error.field,
       status,
     });
@@ -266,9 +268,10 @@ function normalizeError(
     null;
 
   if (backendMessage) {
+    const formatted = formatApiError({ response: { data: body } });
     return new AuthApiError({
       code: body?.code ? String(body.code).toUpperCase() : "ERROR",
-      message: backendMessage,
+      message: formatted,
       status,
     });
   }

@@ -8,12 +8,14 @@ import {
   Download,
   Image as ImageIcon,
   Trash2,
+  Eye,
 } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import { useAuth } from "../../../context/useAuth";
 import { getDatasetImage } from "../../../utils/datasetImage";
 import { getDashboardPath } from "../../../utils/userRoles";
 import * as datasetsApi from "../hooks/datasetsApi";
+import DatasetPreviewModal from "../../../components/dashboard/DatasetPreviewModal";
 
 const STATUS_META = {
   published: { label: "PUBLISHED", dot: "bg-success", text: "text-success" },
@@ -67,6 +69,7 @@ export default function DatasetListPage({
   const [page, setPage] = useState(0);
   const [menuId, setMenuId] = useState(null);
   const [confirmDraft, setConfirmDraft] = useState(null);
+  const [previewDataset, setPreviewDataset] = useState(null);
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -326,14 +329,25 @@ export default function DatasetListPage({
                           <div className="p-4">
                             <div className="flex items-start justify-between gap-2">
                               <p className="text-sm font-semibold text-navy line-clamp-2">{dataset.title}</p>
-                              <button
-                                type="button"
-                                onClick={(e) => { e.stopPropagation(); dataset.status === "draft" ? setConfirmDraft(dataset) : setMenuId(menuId === dataset.id ? null : dataset.id); }}
-                                className="p-1 text-gray-400 hover:text-navy shrink-0"
-                                aria-label={dataset.status === "draft" ? "Delete draft" : "More options"}
-                              >
-                                {dataset.status === "draft" ? <Trash2 className="w-4 h-4 text-red-500" /> : <MoreVertical className="w-4 h-4" />}
-                              </button>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); setPreviewDataset(dataset); }}
+                                  className="p-1.5 text-gray-400 hover:text-navy rounded-full hover:bg-gray-100 transition"
+                                  title="Preview dataset details"
+                                  aria-label="Preview dataset details"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); dataset.status === "draft" ? setConfirmDraft(dataset) : setMenuId(menuId === dataset.id ? null : dataset.id); }}
+                                  className="p-1 text-gray-400 hover:text-navy"
+                                  aria-label={dataset.status === "draft" ? "Delete draft" : "More options"}
+                                >
+                                  {dataset.status === "draft" ? <Trash2 className="w-4 h-4 text-red-500" /> : <MoreVertical className="w-4 h-4" />}
+                                </button>
+                              </div>
                               {menuId === dataset.id && dataset.status !== "draft" && (
                                 <div className="absolute right-4 mt-2 z-10 w-36 rounded-lg border border-[#E3E1DA] bg-white p-1.5 shadow-lg">
                                   <button type="button" onClick={(e) => { e.stopPropagation(); setConfirmDraft(dataset); setMenuId(null); }} className="w-full rounded-md px-3 py-2 text-left text-xs font-semibold text-red-600 hover:bg-red-50">Delete draft</button>
@@ -403,7 +417,7 @@ export default function DatasetListPage({
                 </>
               )}
             </div>
-{confirmDraft && (
+            {confirmDraft && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 px-4" onClick={() => setConfirmDraft(null)}>
           <div className="w-full max-w-sm rounded-xl border border-[#E3E1DA] bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-base font-semibold text-navy">Delete draft?</h2>
@@ -414,6 +428,12 @@ export default function DatasetListPage({
             </div>
           </div>
         </div>
+      )}
+      {previewDataset && (
+        <DatasetPreviewModal
+          dataset={previewDataset}
+          onClose={() => setPreviewDataset(null)}
+        />
       )}
     </DashboardShell>
   );

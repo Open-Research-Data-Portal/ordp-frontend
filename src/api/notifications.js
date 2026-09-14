@@ -33,51 +33,18 @@ export async function fetchNotifications(user) {
   let backendList = [];
 
   try {
-    const res = await client.get("/notifications/");
-    backendList = Array.isArray(res.data) ? res.data : (res.data?.results || []);
+    const res = await client.get("/notifications/history/");
+    backendList = Array.isArray(res.data) ? res.data : (res.data?.results || res.data?.notifications || []);
   } catch (err) {
-    // Backend endpoint not active or returned 404/403
-  }
-
-  let localList = getLocalNotifications(userId);
-
-  if (!localList && backendList.length === 0) {
-    // Seed initial relevant notifications for the user
-    localList = [
-      {
-        id: `notif-welcome-${userId}`,
-        title: "Welcome to AASTU Research Portal",
-        message: "Your academic account is active. Explore datasets, bookmark findings, or submit your own research data.",
-        type: "system",
-        is_read: false,
-        created_at: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-        link_path: "/datasets",
-      },
-      {
-        id: `notif-guide-${userId}`,
-        title: "Institutional Data Policy",
-        message: "Review the open data submission guidelines to ensure your datasets comply with university ethics standards.",
-        type: "info",
-        is_read: true,
-        created_at: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-        link_path: "/datasets/contribute",
-      },
-    ];
-
-    if (user?.role === "reviewer" || user?.roles?.includes?.("reviewer")) {
-      localList.unshift({
-        id: `notif-rev-role-${userId}`,
-        title: "Reviewer Moderation Queue Access",
-        message: "You have reviewer privileges. Review submitted datasets and verify research reproducibility in your dashboard.",
-        type: "review",
-        is_read: false,
-        created_at: new Date().toISOString(),
-        link_path: "/reviewer-dashboard?tab=datasets",
-      });
+    try {
+      const resBell = await client.get("/notifications/bell/");
+      backendList = Array.isArray(resBell.data) ? resBell.data : (resBell.data?.notifications || []);
+    } catch (err2) {
+      // Backend endpoint not active or returned error
     }
-
-    saveLocalNotifications(userId, localList);
   }
+
+  let localList = getModelNotificationsWithSentinel(userId, backendList.length > 0);
 
   const combined = [...backendList, ...(localList || [])];
   // Deduplicate by ID
@@ -100,12 +67,42 @@ export async function fetchNotifications(user) {
   return deduped;
 }
 
+function getModelNotificationsWithSentinel(userId, hasBackend) {
+  const sentinelKey = `ordp_notif_initialized_${userId}`;
+  const isInitialized = localStorage.getItem(sentinelKey) === "true";
+  let localList = getLocalNotifications(userId);
+
+  if (!isInitialized && !localList && !hasBackend) {
+    localList = [
+      {
+        id: `notif-welcome-${userId}`,
+        title: "Welcome to AASTU Research Portal",
+        message: "Your academic account is active. Explore datasets, bookmark findings, or submit your own research data.",
+        type: "system",
+        is_read: false,
+        created_at: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
+        link_path: "/datasets",
+      },
+    ];
+    saveLocalNotifications(userId, localList);
+    localStorage.setItem(sentinelKey, "true");
+  } else if (!isInitialized) {
+    localStorage.setItem(sentinelKey, "true");
+  }
+
+  return localList || [];
+}
+
 export async function markNotificationAsRead(user, notificationId) {
   const userId = user?.id || user?.user_id || "user";
   try {
-    await client.patch(`/notifications/${notificationId}/`, { is_read: true });
+    await client.post(`/notifications/${notificationId}/read/`);
   } catch (err) {
-    // Fallback to local
+    try {
+      await client.patch(`/notifications/${notificationId}/`, { is_read: true });
+    } catch (e) {
+      // Fallback to local
+    }
   }
 
   const current = getLocalNotifications(userId) || [];
@@ -113,33 +110,23 @@ export async function markNotificationAsRead(user, notificationId) {
     String(n.id) === String(notificationId) ? { ...n, is_read: true } : n
   );
   saveLocalNotifications(userId, updated);
-  return updated;
+  return await fetchNotifications(user);
 }
 
 export async function markAllNotificationsAsRead(user) {
   const userId = user?.id || user?.user_id || "user";
-  try {
-    await client.post("/notifications/mark-all-read/");
-  } catch (err) {
-    // Fallback to local
-  }
-
+  // The backend notification API manages bell and individual notification reads 
+  // but does not expose a bulk mark-all-read endpoint; mark all as read locally and sync.
   const current = getLocalNotifications(userId) || [];
   const updated = current.map((n) => ({ ...n, is_read: true }));
   saveLocalNotifications(userId, updated);
-  return updated;
+  return await fetchNotifications(user);
 }
 
 export async function deleteNotificationItem(user, notificationId) {
   const userId = user?.id || user?.user_id || "user";
-  try {
-    await client.delete(`/notifications/${notificationId}/`);
-  } catch (err) {
-    // Fallback to local
-  }
-
   const current = getLocalNotifications(userId) || [];
   const updated = current.filter((n) => String(n.id) !== String(notificationId));
   saveLocalNotifications(userId, updated);
-  return updated;
+  return await fetchNotifications(user);
 }

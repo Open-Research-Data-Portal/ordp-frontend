@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Archive, XCircle, Loader2, Inbox, Eye, RotateCcw, CheckCircle2 } from "lucide-react";
+import { Archive, XCircle, Loader2, Inbox, Eye, RotateCcw, CheckCircle2, ExternalLink } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import { SectionHeader } from "../../../components/dashboard/dashboardUi";
 import { useAuth } from "../../../context/useAuth";
@@ -163,7 +163,15 @@ export default function ReviewerArchiveRequestsPage() {
                             onClick={() => setDetail(request)}
                             className="inline-flex items-center gap-1 text-xs font-semibold text-navy bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2 transition"
                           >
-                            <Eye className="w-3.5 h-3.5" /> View
+                            <Eye className="w-3.5 h-3.5" /> View Request
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/datasets/${request.dataset_id}`)}
+                            className="inline-flex items-center gap-1 text-xs font-semibold text-navy bg-slate-100 hover:bg-slate-200 rounded-lg px-3 py-2 transition"
+                            title="View dataset details page"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" /> View Dataset
                           </button>
                           {request.status === "pending" ? (
                             <>

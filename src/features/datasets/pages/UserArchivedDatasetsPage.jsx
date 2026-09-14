@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Archive, Clock, CheckCircle2, XCircle, Inbox } from "lucide-react";
+import { Archive, Clock, CheckCircle2, XCircle, Inbox, Eye } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import { useAuth } from "../../../context/useAuth";
 import { getDashboardPath } from "../../../utils/userRoles";
 import { getDatasetImage } from "../../../utils/datasetImage";
 import * as datasetsApi from "../hooks/datasetsApi";
 import * as archiveApi from "../../../api/archiveRequests";
+import DatasetPreviewModal from "../../../components/dashboard/DatasetPreviewModal";
 
 function formatDate(value) {
   if (!value) return "—";
@@ -52,6 +53,7 @@ export default function UserArchivedDatasetsPage() {
   const [requestsMap, setRequestsMap] = useState(() => new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [previewDataset, setPreviewDataset] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -156,7 +158,18 @@ export default function UserArchivedDatasetsPage() {
                     )}
                   </div>
                   <div className="p-4">
-                    <p className="text-sm font-semibold text-navy line-clamp-2">{dataset.title}</p>
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sm font-semibold text-navy line-clamp-2">{dataset.title}</p>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setPreviewDataset(dataset); }}
+                        className="p-1.5 text-gray-400 hover:text-navy rounded-full hover:bg-gray-100 transition shrink-0"
+                        title="Preview dataset details"
+                        aria-label="Preview dataset details"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                    </div>
                     <div className="mt-2">
                       <RequestBadge request={request} />
                     </div>
@@ -178,6 +191,12 @@ export default function UserArchivedDatasetsPage() {
           </div>
         )}
       </div>
+      {previewDataset && (
+        <DatasetPreviewModal
+          dataset={previewDataset}
+          onClose={() => setPreviewDataset(null)}
+        />
+      )}
     </DashboardShell>
   );
 }

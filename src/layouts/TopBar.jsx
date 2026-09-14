@@ -1,14 +1,32 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Search, SlidersHorizontal, Bell } from "lucide-react";
 import { useAuth } from "../context/useAuth";
 import { getDisplayName, getDashboardPath } from "../utils/userRoles";
+import { fetchNotifications } from "../api/notifications";
 import logo from "../assets/aastulogo.png";
 
 export default function TopBar() {
   const [query, setQuery] = useState("");
+  const [unreadCount, setUnreadCount] = useState(0);
   const navigate = useNavigate();
   const { isAuthenticated, user } = useAuth();
+
+  useEffect(() => {
+    let active = true;
+    if (isAuthenticated && user) {
+      fetchNotifications(user)
+        .then((list) => {
+          if (!active) return;
+          const unread = list.filter((n) => !n.is_read).length;
+          setUnreadCount(unread);
+        })
+        .catch(() => {});
+    }
+    return () => {
+      active = false;
+    };
+  }, [isAuthenticated, user]);
 
   function handleSearchSubmit(e) {
     e.preventDefault();
@@ -68,7 +86,11 @@ export default function TopBar() {
                 aria-label="Notifications"
               >
                 <Bell className="w-4 h-4" />
-                <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-red-500 rounded-full" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 px-1.5 py-0.5 text-[10px] font-bold bg-red-500 text-white rounded-full">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
               </Link>
               <Link
                 to={getDashboardPath(user)}

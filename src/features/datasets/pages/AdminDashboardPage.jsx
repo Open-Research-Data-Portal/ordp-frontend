@@ -231,20 +231,6 @@ export default function AdminDashboardPage() {
     }
   }
 
-  async function handleDeleteDataset(dataset) {
-    const id = dataset.id || dataset.dataset_id;
-    if (!id || deletingId) return;
-    setDeletingId(id);
-    try {
-      await datasetsApi.deleteDataset(id);
-      setQueue((items) => items.filter((item) => (item.id || item.dataset_id) !== id));
-    } catch (err) {
-      alert(err?.message || "Failed to delete dataset.");
-    } finally {
-      setDeletingId(null);
-    }
-  }
-
   return (
     <DashboardShell title="ORDP Admin Console" subtitle="System status and key metrics">
       <ProfileSavedNotice />
@@ -483,7 +469,6 @@ export default function AdminDashboardPage() {
                       <td className="px-5 py-3">
                         <div className="flex justify-end gap-2">
                           <button type="button" onClick={() => navigate(`/datasets/${id}`)} className="border border-gold text-gold-dark rounded-md px-3 py-1.5 text-xs font-semibold hover:bg-gold-light">Review</button>
-                          <button type="button" onClick={() => handleDeleteDataset(dataset)} disabled={deletingId === id} className="border border-red-200 text-red-700 rounded-md px-3 py-1.5 text-xs font-semibold hover:bg-red-50 disabled:opacity-60">{deletingId === id ? "Deleting..." : "Delete"}</button>
                         </div>
                       </td>
                     </tr>
@@ -527,9 +512,9 @@ export default function AdminDashboardPage() {
             />
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          <div className="mb-8">
             {/* User Role Distribution bar chart */}
-            <section className="lg:col-span-2 bg-white rounded-xl border border-border shadow-sm p-6 animate-fade-in-up" style={{ animationDelay: "250ms" }}>
+            <section className="bg-white rounded-xl border border-border shadow-sm p-6 animate-fade-in-up" style={{ animationDelay: "250ms" }}>
               <SectionHeader title="User Role Distribution" subtitle="Number of users per role" />
               {loading ? (
                 <div className="h-56 flex items-center justify-center text-sm text-gray-500">Loading chart…</div>
@@ -562,27 +547,6 @@ export default function AdminDashboardPage() {
                   </div>
                 );
               })()}
-            </section>
-
-            {/* Review pipeline summary */}
-            <section className="bg-white rounded-xl border border-border shadow-sm p-5 animate-fade-in-up" style={{ animationDelay: "300ms" }}>
-              <div className="flex items-center gap-2 mb-4">
-                <ClipboardList className="w-5 h-5 text-gold" />
-                <h2 className="text-base font-semibold text-navy">Review Pipeline</h2>
-              </div>
-              <ul className="space-y-3">
-                {[
-                  { label: "Pending", value: loading ? "…" : reviewStats.pending, color: "text-amber-600" },
-                  { label: "Approved", value: loading ? "…" : reviewStats.approved, color: "text-emerald-600" },
-                  { label: "Rejected", value: loading ? "…" : reviewStats.rejected, color: "text-red-600" },
-                  { label: "Approval Rate", value: loading ? "…" : `${reviewStats.approvedPct}%`, color: "text-navy" },
-                ].map(({ label, value, color }) => (
-                  <li key={label} className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600">{label}</span>
-                    <span className={`font-bold ${color}`}>{value}</span>
-                  </li>
-                ))}
-              </ul>
             </section>
           </div>
 

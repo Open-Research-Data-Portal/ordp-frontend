@@ -320,6 +320,13 @@ export async function getAdminGraphs() {
   const { data } = await client.get("/admin-panel/dashboard/admin/graphs/");
   return data;
 }
+export async function exportAdminAuditLog(format = "csv") {
+  const { data } = await client.get(`/admin-panel/dashboard/admin/audit-log/export/?export_format=${format}`, {
+    responseType: "blob",
+  });
+  return data;
+}
+
 
 export async function getAdminDeletionQueue() {
   const { data } = await client.get("/admin-panel/deletion-requests/queue/");

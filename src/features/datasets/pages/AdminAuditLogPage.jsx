@@ -49,10 +49,8 @@ export default function AdminAuditLogPage() {
 
   const handleExport = async (format) => {
     try {
-      const res = await datasetsApi.client.get(`/admin-panel/dashboard/admin/audit-log/export/?export_format=${format}`, {
-        responseType: "blob",
-      });
-      const blob = new Blob([res.data], { type: format === "pdf" ? "application/pdf" : "text/csv" });
+      const data = await datasetsApi.exportAdminAuditLog(format);
+      const blob = new Blob([data], { type: format === "pdf" ? "application/pdf" : "text/csv" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;

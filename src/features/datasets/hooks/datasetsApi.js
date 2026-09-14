@@ -301,6 +301,26 @@ export async function getAdminAuditLog() {
   return data;
 }
 
+export async function getAdminAuditPeakHours(params) {
+  const { data } = await client.get("/admin-panel/dashboard/admin/audit-log/peak-hours/", { params });
+  return data;
+}
+
+export async function getAdminAuditMostAccessedDatasets(params) {
+  const { data } = await client.get("/admin-panel/dashboard/admin/audit-log/most-accessed-datasets/", { params });
+  return data;
+}
+
+export async function getAdminAuditFlagged(params) {
+  const { data } = await client.get("/admin-panel/dashboard/admin/audit-log/flagged/", { params });
+  return data;
+}
+
+export async function getAdminGraphs() {
+  const { data } = await client.get("/admin-panel/dashboard/admin/graphs/");
+  return data;
+}
+
 export async function getAdminDeletionQueue() {
   const { data } = await client.get("/admin-panel/deletion-requests/queue/");
   return data;

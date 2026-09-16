@@ -25,6 +25,7 @@ import TopBar from "../layouts/TopBar";
 import { getDatasetImage } from "../utils/datasetImage";
 import { useAuth } from "../context/useAuth";
 import { getDashboardPath } from "../utils/userRoles";
+import TabularPreview from "../components/ui/TabularPreview";
 
 // ---------------------------------------------------------------------
 // DatasetViewPage — the PUBLIC read-only view a researcher lands on when
@@ -188,13 +189,25 @@ function normalizeDataset(raw) {
       ? {
           name: primaryFile.original_filename || primaryFile.file_key || "data file",
           sizeLabel: formatBytes(primaryFile.file_size),
-          // The backend doesn't return a row preview yet — this stays
-          // empty until a "preview rows" endpoint exists, rather than
-          // showing MOCK_DATASET's unrelated sample rows as if real.
-          columns: primaryFile.columns || [],
-          rows: primaryFile.preview_rows || [],
+          columns: (primaryFile.preview_rows && typeof primaryFile.preview_rows === "object" && Array.isArray(primaryFile.preview_rows.columns) && primaryFile.preview_rows.columns.length > 0)
+            ? primaryFile.preview_rows.columns
+            : (Array.isArray(primaryFile.columns) && primaryFile.columns.length > 0
+                ? primaryFile.columns
+                : (Array.isArray(raw.data_preview?.columns) ? raw.data_preview.columns : [])),
+          rows: Array.isArray(primaryFile.preview_rows) 
+            ? primaryFile.preview_rows 
+            : (primaryFile.preview_rows && typeof primaryFile.preview_rows === "object" && Array.isArray(primaryFile.preview_rows.rows) 
+                ? primaryFile.preview_rows.rows 
+                : (Array.isArray(raw.data_preview?.rows) ? raw.data_preview.rows : [])),
         }
-      : MOCK_DATASET.dataFile, // FIXME: no files on this dataset yet — using mock as placeholder
+      : (raw.data_preview && raw.data_preview.available
+          ? {
+              name: "data preview",
+              sizeLabel: "—",
+              columns: Array.isArray(raw.data_preview.columns) ? raw.data_preview.columns : [],
+              rows: Array.isArray(raw.data_preview.rows) ? raw.data_preview.rows : [],
+            }
+          : MOCK_DATASET.dataFile),
     dataExplorer: {
       version: raw.version ? String(raw.version) : MOCK_DATASET.dataExplorer.version, // FIXME: no per-file version breakdown from backend yet
       sizeLabel: formatBytes(files.reduce((acc, f) => acc + (f.file_size || 0), 0)),
@@ -211,6 +224,8 @@ function normalizeDataset(raw) {
     },
     viewsSeries: MOCK_DATASET.viewsSeries, // FIXME: no per-dataset views time-series endpoint yet
     downloadsSeries: MOCK_DATASET.downloadsSeries, // FIXME: no per-dataset downloads time-series endpoint yet
+    is_archived: raw.is_archived ?? false,
+    archived_at: raw.archived_at ?? null,
   };
 }
 
@@ -657,7 +672,7 @@ export default function DatasetViewPage() {
 
       {/* Data preview + Data Explorer */}
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_260px]">
-        <div className="rounded-2xl border border-gray-200 bg-white p-5">
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 min-w-0 overflow-hidden">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-semibold text-slate-900">{dataset.dataFile.name}</p>
@@ -668,25 +683,13 @@ export default function DatasetViewPage() {
             </button>
           </div>
 
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 text-xs font-semibold uppercase text-gray-400">
-                  {dataset.dataFile.columns.map((col) => (
-                    <th key={col} className="px-3 py-2 text-amber-700">{col}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {dataset.dataFile.rows.map((row, i) => (
-                  <tr key={i} className="border-b border-gray-50 last:border-0">
-                    {row.map((cell, j) => (
-                      <td key={j} className="px-3 py-2 text-gray-700">{cell}</td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="mt-4">
+            <TabularPreview
+              columns={dataset.dataFile.columns}
+              rows={dataset.dataFile.rows}
+              maxRows={10}
+              maxHeight={320}
+            />
           </div>
         </div>
 

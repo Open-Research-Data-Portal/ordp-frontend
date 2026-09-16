@@ -11,14 +11,19 @@ import {
   Trash2,
   User,
   HardDrive,
+  Archive,
+  Table,
+  Loader2,
+  Info,
 } from "lucide-react";
 import TopBar from "../../../layouts/TopBar";
 import { useAuth } from "../../../context/useAuth";
+import { useToast } from "../../../context/ToastContext";
 import { getDashboardPath } from "../../../utils/userRoles";
 import * as datasetsApi from "../hooks/datasetsApi";
 import { getDownloadUrl } from "../../../api/sharing";
+import TabularPreview from "../../../components/ui/TabularPreview";
 import { getDatasetImage } from "../../../utils/datasetImage";
-
 
 // ---------------------------------------------------------------------
 // DatasetDetailPage — the OWNER'S view of their own dataset.
@@ -60,22 +65,75 @@ function formatBytes(bytes) {
 }
 
 // ---------------------------------------------------------------------
+// Data File Previews (Tabular CSV & Image)
+// ---------------------------------------------------------------------
+
+
+function ImagePreview({ url, filename, fileType }) {
+  const [zoomed, setZoomed] = useState(false);
+  return (
+    <div className="p-4 bg-gray-900/5 border-t border-gray-100 flex flex-col items-center justify-center">
+      {url ? (
+        <div
+          className={`relative max-h-96 max-w-full overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm transition-transform cursor-pointer ${zoomed ? "scale-110" : ""}`}
+          onClick={() => setZoomed(!zoomed)}
+        >
+          <img src={url} alt={filename || "Image Preview"} className="h-auto max-h-96 w-auto object-contain mx-auto" />
+        </div>
+      ) : (
+        <div className="h-32 w-full flex items-center justify-center bg-gray-100 rounded-lg text-gray-400 text-xs font-mono">
+          Image preview unavailable
+        </div>
+      )}
+      <div className="mt-2.5 flex items-center gap-3 text-xs text-gray-500 font-medium">
+        <span>Image File ({String(fileType || "IMAGE").toUpperCase()})</span>
+        <span>·</span>
+        <button
+          type="button"
+          onClick={() => setZoomed(!zoomed)}
+          className="text-amber-800 hover:underline font-semibold"
+        >
+          {zoomed ? "Reset Zoom" : "Click image to expand view"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------
 // Raw API -> UI shape. Keep this the single place that knows how the
 // backend nests fields, same role as DatasetViewPage's normalizeDataset.
 // ---------------------------------------------------------------------
 function normalizeFile(f) {
+  if (!f) return {};
+  const pr = f.preview_rows;
+  let columns = (Array.isArray(f.columns) && f.columns.length > 0) ? f.columns : [];
+  let rows = [];
+
+  if (pr && typeof pr === "object" && !Array.isArray(pr)) {
+    if (Array.isArray(pr.columns) && pr.columns.length > 0) {
+      columns = pr.columns;
+    }
+    if (Array.isArray(pr.rows)) {
+      rows = pr.rows;
+    }
+  } else if (Array.isArray(pr)) {
+    rows = pr;
+  }
+
+  const origName = f.original_filename || f.filename || f.file_key || "";
   return {
-    id: f.id,
-    filename: f.original_filename || f.file_key || f.filename || "data file",
+    id: f.id || Math.random().toString(),
+    filename: origName || (f.file_type ? `data_file.${f.file_type}` : "data file"),
     file_type:
       f.file_type ||
-      (f.original_filename ? f.original_filename.split(".").pop()?.toUpperCase() : null),
-    file_size: f.file_size,
+      (origName ? origName.split(".").pop()?.toUpperCase() : "CSV"),
+    file_size: f.file_size || 0,
     download_url: f.download_url || f.file_key || null,
-    // FIXME: confirm real field names for per-file instance/column counts —
-    // backend may return these under a different key or not at all yet.
+    columns,
+    preview_rows: rows,
     item_count: f.item_count ?? f.row_count ?? null,
-    column_count: f.column_count ?? (Array.isArray(f.columns) ? f.columns.length : null),
+    column_count: f.column_count ?? (Array.isArray(columns) ? columns.length : null),
     has_missing_values: f.has_missing_values ?? null,
   };
 }
@@ -83,35 +141,30 @@ function normalizeFile(f) {
 function normalizeDataset(raw) {
   if (!raw) return null;
   const meta = raw.metadata || {};
-  const files = (raw.files || []).map(normalizeFile);
+  const files = Array.isArray(raw.files) ? raw.files.map(normalizeFile) : [];
 
   return {
     id: raw.id,
-    title: raw.title,
-    visibility: raw.visibility,
-    status: raw.status,
+    title: raw.title || "Untitled Dataset",
+    visibility: raw.visibility || "public",
+    status: raw.status || "published",
     owner: raw.owner,
-    is_owner: raw.is_owner,
+    is_owner: raw.is_owner ?? false,
     owner_name: raw.author || raw.owner_name || null,
-    updated_at: raw.updated_at,
+    updated_at: raw.updated_at || raw.created_at || new Date().toISOString(),
     thumbnail_url: getDatasetImage(raw),
 
     description: meta.description ?? raw.description ?? "",
-    keywords: meta.keywords ?? raw.keywords ?? [],
+    keywords: Array.isArray(meta.keywords) ? meta.keywords : (Array.isArray(raw.keywords) ? raw.keywords : []),
 
     subject_name: meta.subject_name ?? raw.subject_name ?? "",
     associated_tasks: meta.associated_tasks ?? raw.associated_tasks ?? "",
     feature_type: meta.feature_type ?? raw.feature_type ?? "",
-    characteristics: meta.characteristics ?? raw.characteristics ?? [],
-    // FIXME: dataset-level has_missing_values vs. per-file — backend may only
-    // expose this on the file record. Falls back to the first file's value
-    // in the render below if this is null.
+    characteristics: Array.isArray(meta.characteristics) ? meta.characteristics : (Array.isArray(raw.characteristics) ? raw.characteristics : []),
     has_missing_values: meta.has_missing_values ?? raw.has_missing_values ?? null,
 
     creators: meta.creators ?? raw.creators ?? [],
 
-    // FIXME: no confirmed backend field for these three yet — confirm with
-    // backend and adjust the metadata key names here + in buildPatch.
     collaborators_note: meta.collaborators_note ?? raw.collaborators_note ?? "",
     coverage: meta.coverage ?? raw.coverage ?? "",
     doi: meta.doi ?? raw.doi ?? null,
@@ -119,6 +172,8 @@ function normalizeDataset(raw) {
     citation_notes: meta.citation_notes ?? raw.citation_notes ?? "",
 
     files,
+    is_archived: raw.is_archived ?? false,
+    archived_at: raw.archived_at ?? null,
   };
 }
 
@@ -255,6 +310,7 @@ export default function DatasetDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { addToast } = useToast();
 
   const [dataset, setDataset] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -272,6 +328,30 @@ export default function DatasetDetailPage() {
   const [downloadError, setDownloadError] = useState(null);
   const [linkCopied, setLinkCopied] = useState(false);
 
+  // Archival Request Modal state (5 form fields)
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
+  const [archiveCategory, setArchiveCategory] = useState("superseded");
+  const [archiveReason, setArchiveReason] = useState("");
+  const [preservationPlan, setPreservationPlan] = useState("");
+  const [impactLevel, setImpactLevel] = useState("no_impact");
+  const [contactEmail, setContactEmail] = useState("");
+  const [archiveConfirmed, setArchiveConfirmed] = useState(false);
+  const [submittingArchive, setSubmittingArchive] = useState(false);
+  const [isArchivingRequested, setIsArchivingRequested] = useState(false);
+  const [showUnarchiveModal, setShowUnarchiveModal] = useState(false);
+  const [unarchiveIntendedUse, setUnarchiveIntendedUse] = useState("research");
+  const [unarchiveReason, setUnarchiveReason] = useState("");
+  const [submittingUnarchive, setSubmittingUnarchive] = useState(false);
+  const [isUnarchivingRequested, setIsUnarchivingRequested] = useState(false);
+
+
+  // Sync user email when user object is loaded
+  useEffect(() => {
+    if (user?.email && !contactEmail) {
+      setContactEmail(user.email);
+    }
+  }, [user, contactEmail]);
+
   useEffect(() => {
     let isMounted = true;
     const load = async () => {
@@ -281,7 +361,8 @@ export default function DatasetDetailPage() {
         const raw = await datasetsApi.getDatasetDetail(id);
         if (isMounted) setDataset(normalizeDataset(raw));
       } catch (err) {
-        if (isMounted) setError(err.response?.data?.detail || "Failed to load this dataset.");
+        console.error("Dataset detail load error:", err);
+        if (isMounted) setError(err.response?.data?.detail || err.message || "Failed to load this dataset.");
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -293,8 +374,58 @@ export default function DatasetDetailPage() {
   }, [id]);
 
   const isOwner = dataset?.is_owner || String(dataset?.owner) === String(user?.id);
-  const isApproved = dataset?.status === "approved";
+  const isApproved = dataset?.status === "approved" || dataset?.status === "published";
   const files = dataset?.files || [];
+
+  async function handleArchiveSubmit(e) {
+    e.preventDefault();
+    if (!archiveReason.trim() || !preservationPlan.trim() || !contactEmail.trim() || !archiveConfirmed) return;
+    setSubmittingArchive(true);
+    try {
+      const fullReason = `[Impact: ${impactLevel}] [Preservation: ${preservationPlan.trim()}] [Contact: ${contactEmail.trim()}] ${archiveReason.trim()}`;
+      await datasetsApi.requestDatasetArchive(id, {
+        reasonCategory: archiveCategory,
+        reason: fullReason,
+      });
+      addToast(
+        "Archival request submitted successfully! Sent to review committee for approval.",
+        "success"
+      );
+      setShowArchiveModal(false);
+      setArchiveReason("");
+      setPreservationPlan("");
+      setIsArchivingRequested(true);
+    } catch (err) {
+      console.error("Archive request error:", err);
+      addToast(err?.response?.data?.detail || "Failed to submit archival request.", "error");
+    } finally {
+      setSubmittingArchive(false);
+    }
+  }
+  async function handleUnarchiveSubmit(e) {
+    e.preventDefault();
+    if (!unarchiveReason.trim()) return;
+    setSubmittingUnarchive(true);
+    try {
+      await datasetsApi.requestDatasetUnarchive(id, {
+        intendedUse: unarchiveIntendedUse,
+        reason: unarchiveReason.trim(),
+      });
+      addToast(
+        "Unarchive request submitted successfully! Sent to admin for review.",
+        "success"
+      );
+      setShowUnarchiveModal(false);
+      setUnarchiveReason("");
+      setIsUnarchivingRequested(true);
+    } catch (err) {
+      console.error("Unarchive request error:", err);
+      addToast(err?.response?.data?.detail || "Failed to submit unarchive request.", "error");
+    } finally {
+      setSubmittingUnarchive(false);
+    }
+  }
+
 
   function startEditing(section, initialDraft) {
     setSaveError(null);
@@ -599,7 +730,7 @@ export default function DatasetDetailPage() {
 
               <div className="mt-8">
                 {isApproved ? (
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 flex-wrap">
                     <button
                       type="button"
                       onClick={handleDownload}
@@ -617,10 +748,21 @@ export default function DatasetDetailPage() {
                       <Share2 size={16} />
                       {linkCopied ? "Link Copied!" : "Share"}
                     </button>
+                    {isOwner && (
+                      <button
+                        type="button"
+                        onClick={() => dataset.is_archived ? setShowUnarchiveModal(true) : setShowArchiveModal(true)}
+                        disabled={dataset.is_archived ? isUnarchivingRequested : isArchivingRequested}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-5 py-2.5 text-sm font-semibold text-amber-900 hover:bg-amber-100 transition shadow-2xs disabled:opacity-60"
+                      >
+                        <Archive size={16} />
+                        {dataset.is_archived ? (isUnarchivingRequested ? "Unarchival Requested" : "Unarchive Dataset") : (isArchivingRequested ? "Archival Requested" : "Archive Dataset")}
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <p className="text-xs text-gray-500">
-                    Download and sharing will be available once this dataset is approved.
+                    Download, sharing, and archiving will be available once this dataset is approved.
                   </p>
                 )}
                 {downloadError && <p className="mt-2 text-xs text-red-500">{downloadError}</p>}
@@ -659,43 +801,70 @@ export default function DatasetDetailPage() {
         </div>
 
         {/* Files + Dataset Details */}
-        <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_300px]">
-          <div className="rounded-2xl border border-gray-200 bg-white p-5">
-            <p className="text-sm font-bold text-slate-900 mb-3">Files</p>
+        <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_260px]">
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 space-y-6 min-w-0 overflow-hidden">
+            <p className="text-sm font-bold text-slate-900">data file</p>
             {files.length === 0 ? (
               <p className="text-sm text-gray-400">No files uploaded yet.</p>
             ) : (
-              <ul className="space-y-3">
-                {files.map((f, idx) => (
-                  <li
-                    key={f.id || idx}
-                    className="flex items-center justify-between gap-4 rounded-lg border border-gray-100 bg-gray-50 p-3"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span className="w-9 h-9 rounded-lg bg-white border border-gray-200 flex items-center justify-center shrink-0">
-                        <HardDrive className="w-4 h-4 text-amber-700" />
-                      </span>
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-slate-900 truncate">
-                          {f.filename || `File ${idx + 1}`}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {f.file_type || "—"} · {formatBytes(f.file_size)}
-                        </p>
+              files.map((f, idx) => {
+                const fType = (f.file_type || "").toLowerCase();
+                const isImage = ["jpg", "jpeg", "png", "gif", "webp", "svg"].includes(fType);
+                const isTabular = ["csv", "xlsx", "xls", "tsv", "json", "parquet", "sqlite"].includes(fType) || (f.preview_rows && f.preview_rows.length > 0);
+
+                return (
+                  <div key={f.id || idx} className="border border-gray-100 rounded-xl overflow-hidden bg-gray-50/50 min-w-0">
+                    <div className="p-4 flex items-center justify-between gap-4 border-b border-gray-100 bg-white">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="w-9 h-9 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-center shrink-0">
+                          <HardDrive className="w-4 h-4 text-amber-700" />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-slate-900 truncate">
+                            {f.filename || `File ${idx + 1}`}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {formatBytes(f.file_size)}
+                          </p>
+                        </div>
                       </div>
+                      {f.download_url ? (
+                        <a
+                          href={f.download_url}
+                          className="shrink-0 text-gray-400 hover:text-slate-900 transition-colors"
+                          title="Download file"
+                          aria-label="Download file"
+                        >
+                          <Download size={16} />
+                        </a>
+                      ) : null}
                     </div>
-                    {f.download_url && isApproved ? (
-                      <a
-                        href={f.download_url}
-                        className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 hover:underline"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                        Download
-                      </a>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
+
+                    {/* Content View Based on Data Type */}
+                    {isTabular && f.preview_rows && f.preview_rows.length > 0 ? (
+                      <div className="p-4">
+                        <TabularPreview
+                          columns={f.columns}
+                          rows={f.preview_rows}
+                          maxRows={10}
+                          maxHeight={320}
+                        />
+                      </div>
+                    ) : isImage && f.download_url ? (
+                      <div className="p-4 flex flex-col items-center justify-center bg-gray-900/5">
+                        <div className="max-h-96 max-w-full overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+                          <img src={f.download_url} alt={f.filename} className="h-auto max-h-96 w-auto object-contain mx-auto" />
+                        </div>
+                        <p className="text-xs text-gray-500 mt-2">Image Preview ({f.file_type?.toUpperCase() || "IMAGE"})</p>
+                      </div>
+                    ) : (
+                      <div className="p-6 text-center text-xs text-gray-400">
+                        Preview not available for this file format ({f.file_type || "unknown"}).
+                      </div>
+                    )}
+                  </div>
+                );
+              })
             )}
           </div>
 
@@ -1161,6 +1330,229 @@ export default function DatasetDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Archival Request Form Modal */}
+      {showArchiveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full p-6 sm:p-8 animate-fade-in-up max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-4 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 shrink-0">
+                  <Archive className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Request Dataset Archival</h3>
+                  <p className="text-xs text-gray-500">Complete the 5 archival specification fields below to submit an archival request.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowArchiveModal(false)}
+                className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleArchiveSubmit} className="mt-5 space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* 1. Archival Category */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-900 uppercase tracking-wider mb-1.5">
+                    1. Archival Category <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={archiveCategory}
+                    onChange={(e) => setArchiveCategory(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:border-slate-900"
+                  >
+                    <option value="superseded">Superseded by a Newer Dataset</option>
+                    <option value="outdated">Outdated Data / Methodology</option>
+                    <option value="duplicate">Duplicate Dataset Submission</option>
+                    <option value="privacy_or_sensitive">Ethical, Privacy, or Sensitive Data</option>
+                    <option value="low_quality">Low Quality / Sample Error</option>
+                    <option value="no_longer_relevant">No Longer Relevant</option>
+                    <option value="other">Other Administrative Reason</option>
+                  </select>
+                </div>
+
+                {/* 2. Impact Assessment */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-900 uppercase tracking-wider mb-1.5">
+                    2. Research Impact Assessment <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={impactLevel}
+                    onChange={(e) => setImpactLevel(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:border-slate-900"
+                  >
+                    <option value="no_impact">No Active Citations / No Impact</option>
+                    <option value="low_impact">Low Impact (Historical Reference Only)</option>
+                    <option value="moderate_impact">Moderate Impact (Active Research Usage)</option>
+                    <option value="high_impact">High Impact (Requires Redirection Notice)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* 3. Detailed Archival Reason */}
+              <div>
+                <label className="block text-xs font-bold text-slate-900 uppercase tracking-wider mb-1.5">
+                  3. Detailed Archival Justification <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  value={archiveReason}
+                  onChange={(e) => setArchiveReason(e.target.value)}
+                  placeholder="Describe the detailed rationale for archiving this dataset..."
+                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:border-slate-900"
+                />
+              </div>
+
+              {/* 4. Data Preservation Plan */}
+              <div>
+                <label className="block text-xs font-bold text-slate-900 uppercase tracking-wider mb-1.5">
+                  4. Data Preservation & Backup Storage Plan <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  required
+                  rows={2}
+                  value={preservationPlan}
+                  onChange={(e) => setPreservationPlan(e.target.value)}
+                  placeholder="Specify where the raw files or future dataset versions are preserved (e.g., Institutional Cold Storage Server, Version 2 repository link, DOI mirror)..."
+                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:border-slate-900"
+                />
+              </div>
+
+              {/* 5. Contact Email */}
+              <div>
+                <label className="block text-xs font-bold text-slate-900 uppercase tracking-wider mb-1.5">
+                  5. Contact Email for Inquiries <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={contactEmail}
+                  onChange={(e) => setContactEmail(e.target.value)}
+                  placeholder="email@institution.edu"
+                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:border-slate-900"
+                />
+              </div>
+
+              {/* Confirmation Checkbox */}
+              <div className="flex items-start gap-2.5 pt-2">
+                <input
+                  type="checkbox"
+                  id="confirmArchival"
+                  required
+                  checked={archiveConfirmed}
+                  onChange={(e) => setArchiveConfirmed(e.target.checked)}
+                  className="mt-1 rounded border-gray-300 text-slate-900 focus:ring-slate-900"
+                />
+                <label htmlFor="confirmArchival" className="text-xs text-gray-700 leading-relaxed">
+                  I confirm that all 5 archival specifications above are complete and accurate for this dataset request.
+                </label>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setShowArchiveModal(false)}
+                  className="px-4 py-2 text-xs font-semibold text-gray-500 hover:text-slate-900 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingArchive || !archiveReason.trim() || !preservationPlan.trim() || !contactEmail.trim() || !archiveConfirmed}
+                  className="inline-flex items-center gap-2 px-6 py-2.5 bg-amber-700 hover:bg-amber-800 text-white rounded-xl text-xs font-semibold shadow-sm transition disabled:opacity-50"
+                >
+                  {submittingArchive ? <Loader2 className="w-4 h-4 animate-spin" /> : <Archive className="w-4 h-4" />}
+                  Submit Archival Request
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Unarchive Request Form Modal */}
+      {showUnarchiveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-xl w-full p-6 sm:p-8 animate-fade-in-up max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-4 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 shrink-0">
+                  <Archive className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Request Dataset Restoration (Unarchive)</h3>
+                  <p className="text-xs text-gray-500">Provide your intended use and reason for restoring this archived dataset.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowUnarchiveModal(false)}
+                className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUnarchiveSubmit} className="mt-5 space-y-5">
+              <div>
+                <label className="block text-xs font-bold text-slate-900 uppercase tracking-wider mb-1.5">
+                  Intended Use <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={unarchiveIntendedUse}
+                  onChange={(e) => setUnarchiveIntendedUse(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:border-slate-900"
+                >
+                  <option value="research">Research</option>
+                  <option value="audit">Audit</option>
+                  <option value="verification">Verification</option>
+                  <option value="legal">Legal</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-900 uppercase tracking-wider mb-1.5">
+                  Reason for Restoration <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  value={unarchiveReason}
+                  onChange={(e) => setUnarchiveReason(e.target.value)}
+                  placeholder="Explain why this dataset needs to be unarchived and made accessible again..."
+                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:border-slate-900"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setShowUnarchiveModal(false)}
+                  className="px-4 py-2 text-xs font-semibold text-gray-500 hover:text-slate-900 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingUnarchive || !unarchiveReason.trim()}
+                  className="inline-flex items-center gap-2 px-6 py-2.5 bg-amber-700 hover:bg-amber-800 text-white rounded-xl text-xs font-semibold shadow-sm transition disabled:opacity-50"
+                >
+                  {submittingUnarchive ? <Loader2 className="w-4 h-4 animate-spin" /> : <Archive className="w-4 h-4" />}
+                  Submit Unarchive Request
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

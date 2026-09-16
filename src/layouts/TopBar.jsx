@@ -1,14 +1,32 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Search, SlidersHorizontal } from "lucide-react";
+import { Search, SlidersHorizontal, Bell } from "lucide-react";
 import { useAuth } from "../context/useAuth";
 import { getDisplayName, getDashboardPath } from "../utils/userRoles";
+import { fetchNotifications } from "../api/notifications";
 import logo from "../assets/aastulogo.png";
 
 export default function TopBar() {
   const [query, setQuery] = useState("");
+  const [unreadCount, setUnreadCount] = useState(0);
   const navigate = useNavigate();
   const { isAuthenticated, user } = useAuth();
+
+  useEffect(() => {
+    let active = true;
+    if (isAuthenticated && user) {
+      fetchNotifications(user)
+        .then((list) => {
+          if (!active) return;
+          const unread = list.filter((n) => !n.is_read).length;
+          setUnreadCount(unread);
+        })
+        .catch(() => {});
+    }
+    return () => {
+      active = false;
+    };
+  }, [isAuthenticated, user]);
 
   function handleSearchSubmit(e) {
     e.preventDefault();
@@ -60,17 +78,32 @@ export default function TopBar() {
 
         <div className="flex items-center gap-2 shrink-0">
           {isAuthenticated ? (
-            <Link
-              to={getDashboardPath(user)}
-              className="flex items-center gap-2 text-sm font-semibold text-navy hover:bg-gray-50 rounded-xl px-3 py-1.5 border border-slate-200/80 shadow-xs transition"
-            >
-              <span className="w-8 h-8 rounded-full bg-gold-light flex items-center justify-center text-xs font-bold text-navy shrink-0">
-                {initial}
-              </span>
-              <span className="inline max-w-[130px] sm:max-w-[160px] truncate text-xs sm:text-sm font-bold text-navy">
-                {displayName}
-              </span>
-            </Link>
+            <>
+              <Link
+                to="/notifications"
+                className="relative p-2 rounded-xl text-slate-500 hover:text-navy hover:bg-gray-50 transition border border-slate-200/60"
+                title="Notifications"
+                aria-label="Notifications"
+              >
+                <Bell className="w-4 h-4" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 px-1.5 py-0.5 text-[10px] font-bold bg-red-500 text-white rounded-full">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
+              </Link>
+              <Link
+                to={getDashboardPath(user)}
+                className="flex items-center gap-2 text-sm font-semibold text-navy hover:bg-gray-50 rounded-xl px-3 py-1.5 border border-slate-200/80 shadow-xs transition"
+              >
+                <span className="w-8 h-8 rounded-full bg-gold-light flex items-center justify-center text-xs font-bold text-navy shrink-0">
+                  {initial}
+                </span>
+                <span className="inline max-w-[130px] sm:max-w-[160px] truncate text-xs sm:text-sm font-bold text-navy">
+                  {displayName}
+                </span>
+              </Link>
+            </>
           ) : (
             <>
               <Link

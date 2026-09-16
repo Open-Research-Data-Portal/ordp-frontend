@@ -29,6 +29,7 @@ export default function ContributeDatasetPage() {
     submitFinal,
     resumeDraftUpload,
     isSubmitting, submitError,
+    uploadStage,
   } = useDatasetSubmission(searchParams.get("new") ? "__new__" : searchParams.get("draft"));
 
   useEffect(() => {
@@ -94,6 +95,7 @@ export default function ContributeDatasetPage() {
             onBack={goToPreviousStep}
             isSubmitting={isSubmitting}
             submitError={submitError}
+            uploadStage={uploadStage}
           />
         )}
         {step === 4 && (

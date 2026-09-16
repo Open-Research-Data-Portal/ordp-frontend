@@ -14,6 +14,8 @@ import DashboardShell from "../../../components/dashboard/DashboardShell";
 import StatCard from "../../../components/dashboard/StatCard";
 import { SectionHeader, StatusBadge, ProfileSavedNotice, EmptyState } from "../../../components/dashboard/dashboardUi";
 import * as datasetsApi from "../hooks/datasetsApi";
+import { fetchAllDatasets } from "../../../api/datasetsHub";
+import { useToast } from "../../../context/ToastContext.jsx";
 
 function normalizeList(data) {
   if (Array.isArray(data)) return data;
@@ -23,20 +25,30 @@ function normalizeList(data) {
 const CHART_COLORS = ["#B8860B", "#0B1526", "#ef4444", "#10b981", "#6366f1", "#f59e0b"];
 
 const ROLE_OPTIONS = [
-  { value: "user", label: "Normal User" },
-  { value: "checker", label: "Reviewer (Checker)" },
+  { value: "public", label: "User" },
+  { value: "reviewer", label: "Reviewer (Checker)" },
 ];
 
+// The admin users API returns roles as an array (e.g. ["reviewer"]), while
+// freshly-created rows in this page keep a plain `role` string — resolve
+// either into the single label used in the users table.
+function displayRoleOf(user) {
+  if (Array.isArray(user?.roles) && user.roles.length) return user.roles[0];
+  return user?.role || "user";
+}
+
 const roleBadge = {
-  user: "bg-gray-100 text-gray-700 border-gray-200",
-  checker: "bg-violet-50 text-violet-700 border-violet-200",
+  public: "bg-gray-100 text-gray-700 border-gray-200",
+  reviewer: "bg-violet-50 text-violet-700 border-violet-200",
   admin: "bg-gold-light text-gold border-gold/30",
   researcher: "bg-blue-50 text-blue-700 border-blue-200",
+  user: "bg-gray-100 text-gray-700 border-gray-200",
 };
 
 export default function AdminDashboardPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { addToast } = useToast();
   const tab = searchParams.get("tab") || "overview";
 
   const [cards, setCards] = useState(null);
@@ -45,15 +57,17 @@ export default function AdminDashboardPage() {
   const [users, setUsers] = useState([]);
   const [queue, setQueue] = useState([]);
   const [reviews, setReviews] = useState([]);
+  const [unarchiveRequests, setUnarchiveRequests] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const [userSearch, setUserSearch] = useState("");
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newUserFullName, setNewUserFullName] = useState("");
-  const [newUserRole, setNewUserRole] = useState("user");
+  const [newUserRole, setNewUserRole] = useState("public");
   const [creatingUser, setCreatingUser] = useState(false);
   const [createError, setCreateError] = useState("");
+  const [successNotice, setSuccessNotice] = useState("");
 
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
@@ -62,13 +76,14 @@ export default function AdminDashboardPage() {
     let active = true;
     async function load() {
       setLoading(true);
-      const [cardsRes, auditRes, delRes, usersRes, queueRes, reviewsRes] = await Promise.allSettled([
+      const [cardsRes, auditRes, delRes, usersRes, queueRes, reviewsRes, unarchiveRes] = await Promise.allSettled([
         datasetsApi.getAdminCards?.() ?? Promise.resolve(null),
         datasetsApi.getAdminAuditLog?.() ?? Promise.resolve([]),
         datasetsApi.getAdminDeletionQueue?.() ?? Promise.resolve([]),
         datasetsApi.getAdminUsers?.() ?? Promise.resolve([]),
         datasetsApi.getAdminQueue?.() ?? Promise.resolve([]),
         datasetsApi.getMyReviews?.() ?? Promise.resolve([]),
+        datasetsApi.getAdminUnarchiveRequestQueue?.() ?? Promise.resolve([]),
       ]);
       if (!active) return;
       if (cardsRes.status === "fulfilled") setCards(cardsRes.value);
@@ -77,6 +92,18 @@ export default function AdminDashboardPage() {
       if (usersRes.status === "fulfilled") setUsers(normalizeList(usersRes.value));
       if (queueRes.status === "fulfilled") setQueue(normalizeList(queueRes.value));
       if (reviewsRes.status === "fulfilled") setReviews(normalizeList(reviewsRes.value));
+      if (unarchiveRes.status === "fulfilled") setUnarchiveRequests(normalizeList(unarchiveRes.value));
+
+      // The moderation queue can be empty/unavailable even when datasets
+      // exist — fall back to the full directory so the datasets tab always
+      // shows what's actually in the portal.
+      if (active && normalizeList(queueRes.value ?? []).length === 0) {
+        try {
+          setQueue(await fetchAllDatasets());
+        } catch {
+          // keep empty queue — not critical
+        }
+      }
       setLoading(false);
     }
     load();
@@ -154,6 +181,7 @@ export default function AdminDashboardPage() {
         full_name: newUserFullName.trim(),
         role: newUserRole,
       });
+      const name = newUserFullName.trim() || newUserEmail.trim();
       setUsers((s) => [
         {
           id: created.id || created.user_id || `new-${Date.now()}`,
@@ -161,17 +189,26 @@ export default function AdminDashboardPage() {
           full_name: newUserFullName.trim(),
           role: newUserRole,
           status: "Active",
-          initials: (newUserFullName.trim() || newUserEmail.trim()).slice(0, 2).toUpperCase(),
+          initials: name.slice(0, 2).toUpperCase(),
           ...created,
         },
         ...s,
       ]);
+      addToast(`User "${name}" created successfully. Activation email sent.`, "success");
+      setSuccessNotice(`User "${name}" (${newUserEmail.trim()}) was created successfully. An activation email has been dispatched.`);
       setNewUserEmail("");
       setNewUserFullName("");
-      setNewUserRole("user");
+      setNewUserRole("public");
       setShowCreateForm(false);
     } catch (err) {
-      setCreateError(err?.message || "Failed to create user.");
+      const detail =
+        err?.response?.data?.detail ||
+        err?.response?.data?.email?.[0] ||
+        err?.response?.data?.full_name?.[0] ||
+        err?.response?.data?.role?.[0] ||
+        err?.message ||
+        "Failed to create user.";
+      setCreateError(detail);
     } finally {
       setCreatingUser(false);
     }
@@ -189,20 +226,6 @@ export default function AdminDashboardPage() {
     } catch (err) {
       setUsers(previous);
       alert(err?.message || "Failed to delete user.");
-    } finally {
-      setDeletingId(null);
-    }
-  }
-
-  async function handleDeleteDataset(dataset) {
-    const id = dataset.id || dataset.dataset_id;
-    if (!id || deletingId) return;
-    setDeletingId(id);
-    try {
-      await datasetsApi.deleteDataset(id);
-      setQueue((items) => items.filter((item) => (item.id || item.dataset_id) !== id));
-    } catch (err) {
-      alert(err?.message || "Failed to delete dataset.");
     } finally {
       setDeletingId(null);
     }
@@ -243,12 +266,31 @@ export default function AdminDashboardPage() {
             </div>
             <button
               type="button"
-              onClick={() => setShowCreateForm((s) => !s)}
+              onClick={() => {
+                setShowCreateForm((s) => !s);
+                setSuccessNotice("");
+              }}
               className="bg-gold hover:bg-gold-dark text-white text-sm font-semibold rounded-lg px-4 py-2 transition-colors"
             >
               {showCreateForm ? "Cancel" : "+ Create User"}
             </button>
           </div>
+
+          {successNotice && (
+            <div className="mx-5 mt-4 flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-800">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-sm">✓</span>
+                <span>{successNotice}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSuccessNotice("")}
+                className="text-emerald-600 hover:text-emerald-900 text-sm font-bold ml-3"
+              >
+                ✕
+              </button>
+            </div>
+          )}
 
           {showCreateForm && (
             <form onSubmit={handleCreateUser} className="mx-5 mt-4 mb-2 rounded-xl border border-slate-200 bg-[#F8F7F4] p-5">
@@ -270,7 +312,7 @@ export default function AdminDashboardPage() {
                     value={newUserEmail}
                     onChange={(e) => setNewUserEmail(e.target.value)}
                     className="w-full rounded-lg border border-slate-200 text-sm py-2 px-3"
-                    placeholder="user@example.com"
+                    placeholder="name@aastu.edu.et"
                   />
                 </div>
                 <div>
@@ -357,7 +399,7 @@ export default function AdminDashboardPage() {
                         </div>
                       </td>
                       <td className="px-5 py-4">
-                        <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${roleBadge[u.role] || "bg-gray-100 text-gray-700"}`}>{u.role || "user"}</span>
+                        <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${roleBadge[displayRoleOf(u)] || "bg-gray-100 text-gray-700"}`}>{displayRoleOf(u)}</span>
                       </td>
                       <td className="px-5 py-4">
                         <StatusBadge status={u.is_active === false ? "inactive" : "active"} />
@@ -427,7 +469,6 @@ export default function AdminDashboardPage() {
                       <td className="px-5 py-3">
                         <div className="flex justify-end gap-2">
                           <button type="button" onClick={() => navigate(`/datasets/${id}`)} className="border border-gold text-gold-dark rounded-md px-3 py-1.5 text-xs font-semibold hover:bg-gold-light">Review</button>
-                          <button type="button" onClick={() => handleDeleteDataset(dataset)} disabled={deletingId === id} className="border border-red-200 text-red-700 rounded-md px-3 py-1.5 text-xs font-semibold hover:bg-red-50 disabled:opacity-60">{deletingId === id ? "Deleting..." : "Delete"}</button>
                         </div>
                       </td>
                     </tr>
@@ -471,67 +512,41 @@ export default function AdminDashboardPage() {
             />
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-            {/* Analytics charts */}
-            <section className="lg:col-span-2 bg-white rounded-xl border border-border shadow-sm p-6 animate-fade-in-up" style={{ animationDelay: "250ms" }}>
-              <SectionHeader title="Review Decisions" subtitle="Approved vs rejected" />
+          <div className="mb-8">
+            {/* User Role Distribution bar chart */}
+            <section className="bg-white rounded-xl border border-border shadow-sm p-6 animate-fade-in-up" style={{ animationDelay: "250ms" }}>
+              <SectionHeader title="User Role Distribution" subtitle="Number of users per role" />
               {loading ? (
-                <div className="h-56 flex items-center justify-center text-sm text-gray-500">Loading charts…</div>
-              ) : pieData.length === 0 ? (
-                <EmptyState title="No review data yet" description="Decisions will appear here once reviews are processed." />
-              ) : (
-                <div className="h-56">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
-                        {pieData.map((entry, idx) => (
-                          <Cell key={entry.name} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                      <Legend />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
-              {!loading && barData.length > 0 && (
-                <div className="mt-6 pt-6 border-t border-border">
-                  <SectionHeader title="Activity Trend" subtitle="Last 14 entries" />
+                <div className="h-56 flex items-center justify-center text-sm text-gray-500">Loading chart…</div>
+              ) : (() => {
+                const roleMap = { public: 0, reviewer: 0, admin: 0 };
+                users.forEach((u) => {
+                  const roles = Array.isArray(u.roles) ? u.roles : (u.role ? [u.role] : ["public"]);
+                  roles.forEach((r) => { if (r in roleMap) roleMap[r]++; else roleMap["public"]++; });
+                });
+                const chartData = [
+                  { name: "User", count: roleMap.public, fill: "#94a3b8" },
+                  { name: "Reviewer", count: roleMap.reviewer, fill: "#7c3aed" },
+                ].filter(d => d.count > 0);
+                return chartData.length === 0 ? (
+                  <EmptyState title="No user data" description="User role data will appear here." />
+                ) : (
                   <div className="h-56">
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={barData}>
-                        <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                        <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
+                      <BarChart data={chartData} layout="vertical" margin={{ left: 20, right: 20 }}>
+                        <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12 }} />
+                        <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={80} />
                         <Tooltip />
-                        <Bar dataKey="count" fill="#B8860B" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="count" radius={[0, 4, 4, 0]}>
+                          {chartData.map((entry) => (
+                            <Cell key={entry.name} fill={entry.fill} />
+                          ))}
+                        </Bar>
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
-                </div>
-              )}
-            </section>
-
-            {/* Deletion queue */}
-            <section className="bg-red-50 rounded-xl border border-red-200 p-5 animate-fade-in-up" style={{ animationDelay: "300ms" }}>
-              <div className="flex items-center gap-2 mb-3">
-                <Trash2 className="w-5 h-5 text-red-600" />
-                <h2 className="text-base font-semibold text-red-800">Deletion Queue</h2>
-              </div>
-              <ul className="space-y-2 mb-4">
-                {deletions.length === 0 ? (
-                  <li className="text-sm text-red-900">No pending deletions.</li>
-                ) : (
-                  deletions.map((d) => (
-                    <li key={d.id} className="text-sm text-red-900">
-                      <span className="font-mono font-semibold">{d.code || d.dataset_id}</span>
-                      <span className="text-red-700/70 ml-2 text-xs">{d.reason}</span>
-                    </li>
-                  ))
-                )}
-              </ul>
-              <button type="button" className="w-full bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-lg py-2.5 transition-colors">
-                Execute Deletions
-              </button>
+                );
+              })()}
             </section>
           </div>
 

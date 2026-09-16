@@ -216,7 +216,11 @@ export default function PreReviewSummary({
               <div>
                 <span className="text-gray-400 block text-[11px] uppercase font-semibold">Access Permission</span>
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase bg-emerald-100 text-emerald-800 mt-0.5">
-                  {upload.access === "restricted" ? "Restricted Access" : "Public / Open Access"}
+                  {upload.access === "private" || upload.access === "institution"
+                    ? "Private Access"
+                    : upload.access === "restricted"
+                    ? "Restricted Access"
+                    : "Public / Open Access"}
                 </span>
               </div>
               <div className="text-right">

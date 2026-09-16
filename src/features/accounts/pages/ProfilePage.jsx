@@ -6,6 +6,9 @@ import {
   Database,
   Save,
   RotateCcw,
+  Pencil,
+  Check,
+  Lock,
 } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import TextInput from "../../../components/ui/TextInput";
@@ -78,12 +81,55 @@ function getNameParts(source) {
   };
 }
 
-function SectionCard({ icon: Icon, title, children }) {
+function SectionCard({
+  icon: Icon,
+  title,
+  children,
+  isEditing = false,
+  onToggleEdit,
+  showEditToggle = true,
+}) {
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl mb-6 shadow-sm">
-      <div className="flex items-center gap-2.5 px-6 py-4 border-b border-slate-100">
-        <Icon className="w-4 h-4 text-[#8B6F1F]" />
-        <h2 className="text-sm font-bold text-[#0B1526]">{title}</h2>
+    <div
+      className={`bg-white border rounded-2xl mb-6 shadow-sm transition-all duration-200 ${
+        isEditing
+          ? "border-gold/60 ring-2 ring-gold/15"
+          : "border-slate-200"
+      }`}
+    >
+      <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+        <div className="flex items-center gap-2.5">
+          <Icon className="w-4 h-4 text-[#8B6F1F]" />
+          <h2 className="text-sm font-bold text-[#0B1526]">{title}</h2>
+          {isEditing && (
+            <span className="px-2 py-0.5 text-[10px] font-semibold bg-amber-100 text-amber-800 rounded-full">
+              Editing Enabled
+            </span>
+          )}
+        </div>
+        {showEditToggle && (
+          <button
+            type="button"
+            onClick={onToggleEdit}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+              isEditing
+                ? "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                : "bg-gold/10 text-gold-dark hover:bg-gold/20"
+            }`}
+          >
+            {isEditing ? (
+              <>
+                <Check className="w-3.5 h-3.5 text-green-600" />
+                <span>Done</span>
+              </>
+            ) : (
+              <>
+                <Pencil className="w-3.5 h-3.5" />
+                <span>Edit Section</span>
+              </>
+            )}
+          </button>
+        )}
       </div>
 
       <div className="p-6">{children}</div>
@@ -130,6 +176,38 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState("");
+
+  const [editingSections, setEditingSections] = useState({
+    personal: false,
+    academic: false,
+    research: false,
+    visibility: false,
+  });
+
+  const toggleEditSection = (key) => {
+    setEditingSections((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
+
+  const enableAllEditing = () => {
+    setEditingSections({
+      personal: true,
+      academic: true,
+      research: true,
+      visibility: true,
+    });
+  };
+
+  const lockAllEditing = () => {
+    setEditingSections({
+      personal: false,
+      academic: false,
+      research: false,
+      visibility: false,
+    });
+  };
 
   useEffect(() => {
     const parts = getNameParts(user);
@@ -371,16 +449,19 @@ export default function ProfilePage() {
     setSaveError("");
 
     if (!firstName.trim() || !fatherName.trim()) {
+      setEditingSections((prev) => ({ ...prev, personal: true }));
       setSaveError("First name and father name are required.");
       return;
     }
 
     if (!profileVisibility) {
+      setEditingSections((prev) => ({ ...prev, visibility: true }));
       setSaveError("Choose who can see your profile.");
       return;
     }
 
     if (!termsAccepted) {
+      setEditingSections((prev) => ({ ...prev, visibility: true }));
       setSaveError(
         "Please accept the terms of use to save your profile."
       );
@@ -543,13 +624,33 @@ export default function ProfilePage() {
       }
     >
       <div className="max-w-4xl">
-        <button
-          type="button"
-          onClick={() => navigate(getDashboardPath(user))}
-          className="mb-4 inline-flex items-center text-xs font-semibold text-gray-500 hover:text-navy transition-colors"
-        >
-          ← Back to dashboard
-        </button>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-2">
+          <button
+            type="button"
+            onClick={() => navigate(getDashboardPath(user))}
+            className="inline-flex items-center text-xs font-semibold text-gray-500 hover:text-navy transition-colors"
+          >
+            ← Back to dashboard
+          </button>
+
+          <div className="flex items-center gap-2 text-xs">
+            <button
+              type="button"
+              onClick={enableAllEditing}
+              className="font-semibold text-[#8B6F1F] hover:underline"
+            >
+              Edit All Sections
+            </button>
+            <span className="text-slate-300">|</span>
+            <button
+              type="button"
+              onClick={lockAllEditing}
+              className="font-semibold text-slate-500 hover:text-slate-700 hover:underline"
+            >
+              Lock All Sections
+            </button>
+          </div>
+        </div>
 
         {saved && (
           <div
@@ -572,6 +673,8 @@ export default function ProfilePage() {
         <SectionCard
           icon={UserIcon}
           title="Personal Information"
+          isEditing={editingSections.personal}
+          onToggleEdit={() => toggleEditSection("personal")}
         >
           <div className="flex items-start gap-6 mb-6">
             <div className="relative shrink-0">
@@ -587,30 +690,34 @@ export default function ProfilePage() {
                 )}
               </div>
 
-              <label
-                htmlFor="avatar-upload"
-                className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-gold text-white flex items-center justify-center cursor-pointer shadow-sm"
-                aria-label="Upload profile picture"
-              >
-                <Camera className="w-3.5 h-3.5" />
-              </label>
+              {editingSections.personal && (
+                <>
+                  <label
+                    htmlFor="avatar-upload"
+                    className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-gold text-white flex items-center justify-center cursor-pointer shadow-sm"
+                    aria-label="Upload profile picture"
+                  >
+                    <Camera className="w-3.5 h-3.5" />
+                  </label>
 
-              <input
-                id="avatar-upload"
-                type="file"
-                accept="image/jpeg,image/png"
-                className="hidden"
-                onChange={handleAvatarChange}
-              />
+                  <input
+                    id="avatar-upload"
+                    type="file"
+                    accept="image/jpeg,image/png"
+                    className="hidden"
+                    onChange={handleAvatarChange}
+                  />
 
-              <button
-                type="button"
-                onClick={() => setAvatarUrl(null)}
-                className="absolute -bottom-1 -left-1 w-auto px-2 h-7 rounded-md bg-white border border-slate-200 text-xs text-slate-600 flex items-center gap-1 shadow-sm"
-                aria-label="Delete profile picture"
-              >
-                Delete
-              </button>
+                  <button
+                    type="button"
+                    onClick={() => setAvatarUrl(null)}
+                    className="absolute -bottom-1 -left-1 w-auto px-2 h-7 rounded-md bg-white border border-slate-200 text-xs text-slate-600 flex items-center gap-1 shadow-sm"
+                    aria-label="Delete profile picture"
+                  >
+                    Delete
+                  </button>
+                </>
+              )}
             </div>
 
             <p className="text-xs text-slate-400 pt-8">
@@ -623,6 +730,7 @@ export default function ProfilePage() {
               id="firstName"
               label="First Name"
               required
+              readOnly={!editingSections.personal}
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
             />
@@ -631,6 +739,7 @@ export default function ProfilePage() {
               id="fatherName"
               label="Father Name"
               required
+              readOnly={!editingSections.personal}
               value={fatherName}
               onChange={(e) => setFatherName(e.target.value)}
             />
@@ -639,6 +748,7 @@ export default function ProfilePage() {
               id="grandFatherName"
               label="Grand Father Name"
               required
+              readOnly={!editingSections.personal}
               value={grandFatherName}
               onChange={(e) =>
                 setGrandFatherName(e.target.value)
@@ -687,6 +797,8 @@ export default function ProfilePage() {
         <SectionCard
           icon={GraduationCap}
           title="Academic & Professional Information"
+          isEditing={editingSections.academic}
+          onToggleEdit={() => toggleEditSection("academic")}
         >
           <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6">
             <div className="md:col-span-3">
@@ -694,6 +806,7 @@ export default function ProfilePage() {
                 id="affiliation"
                 label="Affiliation"
                 required
+                readOnly={!editingSections.academic}
                 value={affiliation}
                 onChange={(e) =>
                   setAffiliation(e.target.value)
@@ -705,6 +818,7 @@ export default function ProfilePage() {
               id="academicRole"
               label="Occupation"
               required
+              disabled={!editingSections.academic}
               value={academicRole}
               onChange={(e) => {
                 const next = e.target.value;
@@ -723,6 +837,7 @@ export default function ProfilePage() {
                 id="studentType"
                 label="Student Type"
                 required
+                disabled={!editingSections.academic}
                 value={studentType}
                 onChange={(e) =>
                   setStudentType(e.target.value)
@@ -735,6 +850,7 @@ export default function ProfilePage() {
               id="academicTitle"
               label="Title"
               optional
+              disabled={!editingSections.academic}
               value={academicTitle}
               onChange={(e) =>
                 setAcademicTitle(e.target.value)
@@ -746,6 +862,7 @@ export default function ProfilePage() {
               id="academicRank"
               label="Academic Rank"
               optional
+              disabled={!editingSections.academic}
               value={academicRank}
               onChange={(e) =>
                 setAcademicRank(e.target.value)
@@ -757,6 +874,7 @@ export default function ProfilePage() {
               id="highestDegree"
               label="Highest Degree"
               optional
+              disabled={!editingSections.academic}
               value={highestDegree}
               onChange={(e) =>
                 setHighestDegree(e.target.value)
@@ -769,11 +887,14 @@ export default function ProfilePage() {
         <SectionCard
           icon={Database}
           title="Research Profile"
+          isEditing={editingSections.research}
+          onToggleEdit={() => toggleEditSection("research")}
         >
           <TextArea
             id="bio"
             label={`Bio (max ${BIO_MAX_LENGTH} chars)`}
             optional
+            readOnly={!editingSections.research}
             value={bio}
             onChange={(e) =>
               setBio(
@@ -792,6 +913,7 @@ export default function ProfilePage() {
             id="orcid"
             label="ORCID ID"
             optional
+            readOnly={!editingSections.research}
             value={orcidId}
             onChange={(e) =>
               setOrcidId(e.target.value)
@@ -810,6 +932,7 @@ export default function ProfilePage() {
             id="additionalLink"
             label="Additional Link"
             optional
+            readOnly={!editingSections.research}
             value={additionalLink}
             onChange={(e) =>
               setAdditionalLink(e.target.value)
@@ -822,6 +945,7 @@ export default function ProfilePage() {
             id="researchInterests"
             label="Research Interests"
             required
+            readOnly={!editingSections.research}
             value={researchInterests}
             onChange={setResearchInterests}
             categories={interestCategories}
@@ -832,6 +956,7 @@ export default function ProfilePage() {
             id="projectWork"
             label="Research & project work"
             optional
+            readOnly={!editingSections.research}
             value={projectWork}
             onChange={(e) =>
               setProjectWork(e.target.value)
@@ -844,11 +969,14 @@ export default function ProfilePage() {
         <SectionCard
           icon={UserIcon}
           title="Visibility & Consent"
+          isEditing={editingSections.visibility}
+          onToggleEdit={() => toggleEditSection("visibility")}
         >
           <Select
             id="profileVisibility"
             label="Profile Visibility"
             required
+            disabled={!editingSections.visibility}
             value={profileVisibility}
             onChange={(e) =>
               setProfileVisibility(e.target.value)
@@ -872,11 +1000,16 @@ export default function ProfilePage() {
 
             <label
               htmlFor="ordpTerms"
-              className="flex items-start gap-2 text-sm text-slate-600 cursor-pointer"
+              className={`flex items-start gap-2 text-sm text-slate-600 ${
+                !editingSections.visibility
+                  ? "cursor-not-allowed opacity-75"
+                  : "cursor-pointer"
+              }`}
             >
               <input
                 id="ordpTerms"
                 type="checkbox"
+                disabled={!editingSections.visibility}
                 checked={termsAccepted}
                 onChange={(e) =>
                   setTermsAccepted(e.target.checked)
@@ -896,6 +1029,7 @@ export default function ProfilePage() {
           <Button
             variant="secondary"
             fullWidth={false}
+            onClick={() => navigate(getDashboardPath(user))}
           >
             Cancel
           </Button>

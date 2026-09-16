@@ -1,9 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import FileUploadItem from "./FileUploadItem";
 
-export default function UploadForm({ initialValues = {}, onNext, onBack, isSubmitting = false, submitError = null }) {
+export default function UploadForm({
+  initialValues = {},
+  onNext,
+  onBack,
+  isSubmitting = false,
+  submitError = null,
+  uploadStage = null,
+}) {
   const [files, setFiles] = useState(initialValues.files || []);
-  const [access, setAccess] = useState(initialValues.access || "public");
+  const [access, setAccess] = useState(
+    initialValues.access === "institution" ? "private" : initialValues.access || "public"
+  );
   const [isDragging, setIsDragging] = useState(false);
   const [thumbnail, setThumbnail] = useState(initialValues.thumbnail || null);
   useEffect(() => {
@@ -138,13 +147,13 @@ export default function UploadForm({ initialValues = {}, onNext, onBack, isSubmi
         <div className="grid grid-cols-3 gap-4">
           <button
             type="button"
-            onClick={() => setAccess("institution")}
+            onClick={() => setAccess("private")}
             className={`text-left p-5 border rounded-lg bg-white flex flex-col gap-1.5
-              ${access === "institution" ? "border-gold bg-[#FBF6E9]" : "border-[#E3E1DA]"}`}
+              ${access === "private" || access === "institution" ? "border-gold bg-[#FBF6E9]" : "border-[#E3E1DA]"}`}
           >
-            <span className="text-2xl">🏛️</span>
-            <span className="font-semibold text-base">Institution</span>
-            <span className="text-sm text-gray-500">Limited to verified members of Addis Ababa Science and Technology University.</span>
+            <span className="text-2xl">🔒</span>
+            <span className="font-semibold text-base">Private</span>
+            <span className="text-sm text-gray-500">Only accessible by you and authorized project collaborators.</span>
           </button>
           <button
             type="button"
@@ -152,7 +161,7 @@ export default function UploadForm({ initialValues = {}, onNext, onBack, isSubmi
             className={`text-left p-5 border rounded-lg bg-white flex flex-col gap-1.5
               ${access === "restricted" ? "border-gold bg-[#FBF6E9]" : "border-[#E3E1DA]"}`}
           >
-            <span className="text-2xl">🔒</span>
+            <span className="text-2xl">🛡️</span>
             <span className="font-semibold text-base">Restricted</span>
             <span className="text-sm text-gray-500">Only approved users. Requires access request or manual validation.</span>
           </button>
@@ -168,6 +177,61 @@ export default function UploadForm({ initialValues = {}, onNext, onBack, isSubmi
           </button>
         </div>
       </div>
+
+      {/* ── Multi-Stage Loading Progress Line ── */}
+      {isSubmitting && (
+        <div className="mt-8 p-5 bg-gradient-to-br from-[#FAF8F4] to-white border border-gold/40 rounded-xl shadow-sm animate-fade-in-up">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-gold opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-gold"></span>
+              </span>
+              <span className="text-xs font-bold text-navy uppercase tracking-wider">
+                {uploadStage?.stageName || "Processing Upload"}
+              </span>
+            </div>
+            <span className="text-xs font-mono font-bold text-gold-dark">
+              {uploadStage?.progress ?? 50}%
+            </span>
+          </div>
+
+          {/* Smooth animated progress line */}
+          <div className="w-full h-2.5 bg-slate-200/80 rounded-full overflow-hidden p-0.5 relative">
+            <div
+              className="h-full bg-gradient-to-r from-gold via-amber-500 to-navy rounded-full transition-all duration-300 relative overflow-hidden"
+              style={{ width: `${Math.max(6, uploadStage?.progress ?? 50)}%` }}
+            >
+              <div className="absolute inset-0 bg-white/25 animate-pulse" />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between mt-2 text-xs text-slate-600 font-medium">
+            <span>{uploadStage?.message || "Uploading dataset files..."}</span>
+            {uploadStage?.chunkInfo && (
+              <span className="text-[11px] text-slate-500 font-mono bg-white px-2 py-0.5 rounded border border-slate-200">
+                {uploadStage.chunkInfo}
+              </span>
+            )}
+          </div>
+
+          {/* Stepper indicators */}
+          <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-slate-200/60 text-[11px]">
+            <div className={`flex items-center gap-1.5 ${(uploadStage?.stage || 1) >= 1 ? "text-navy font-semibold" : "text-slate-400"}`}>
+              <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] ${(uploadStage?.stage || 1) >= 1 ? "bg-gold text-white" : "bg-slate-200 text-slate-500"}`}>1</span>
+              <span>Session Setup</span>
+            </div>
+            <div className={`flex items-center gap-1.5 justify-center ${(uploadStage?.stage || 1) >= 2 ? "text-navy font-semibold" : "text-slate-400"}`}>
+              <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] ${(uploadStage?.stage || 1) >= 2 ? "bg-gold text-white" : "bg-slate-200 text-slate-500"}`}>2</span>
+              <span>Chunk Upload</span>
+            </div>
+            <div className={`flex items-center gap-1.5 justify-end ${(uploadStage?.stage || 1) >= 3 ? "text-navy font-semibold" : "text-slate-400"}`}>
+              <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] ${(uploadStage?.stage || 1) >= 3 ? "bg-gold text-white" : "bg-slate-200 text-slate-500"}`}>3</span>
+              <span>Verify & Assemble</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {submitError && (
         <div className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3.5 text-sm text-red-700 mt-4">

@@ -10,7 +10,11 @@ export default function TextArea({
   rows = 3,
   helperText = null,
   showCount = false,
+  readOnly = false,
+  disabled = false,
 }) {
+  const isDisabled = disabled || readOnly;
+
   return (
     <div className="mb-4">
       <div className="flex items-center justify-between mb-1.5">
@@ -27,8 +31,13 @@ export default function TextArea({
         onChange={onChange}
         placeholder={placeholder}
         maxLength={maxLength}
-        className="w-full rounded-xl border border-slate-200 text-sm p-3.5 resize-none bg-[#F7F6F2]
-                   focus:outline-none focus:ring-2 focus:ring-[#0B1526]/15 focus:border-[#0B1526]"
+        readOnly={readOnly}
+        disabled={disabled}
+        className={[
+          "w-full rounded-xl border border-slate-200 text-sm p-3.5 resize-none bg-[#F7F6F2]",
+          "focus:outline-none focus:ring-2 focus:ring-[#0B1526]/15 focus:border-[#0B1526]",
+          isDisabled ? "bg-slate-100 text-slate-500 cursor-not-allowed border-slate-200" : "",
+        ].join(" ")}
       />
       <div className="flex items-center justify-between mt-1.5">
         {helperText ? <p className="text-xs text-slate-400">{helperText}</p> : <span />}

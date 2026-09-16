@@ -9,10 +9,14 @@ export default function Select({
   onChange,
   options, // array of strings, or [{ value, label }]
   placeholder = "Select...",
+  disabled = false,
+  readOnly = false,
 }) {
   const normalized = options.map((o) =>
     typeof o === "string" ? { value: o, label: o } : o
   );
+
+  const isDisabled = disabled || readOnly;
 
   return (
     <div className="mb-4">
@@ -28,8 +32,12 @@ export default function Select({
           id={id}
           value={value ?? ""}
           onChange={onChange}
-          className="w-full appearance-none rounded-xl border border-slate-200 text-sm py-2.5 pl-3.5 pr-9
-                     bg-[#F7F6F2] focus:outline-none focus:ring-2 focus:ring-[#0B1526]/15 focus:border-[#0B1526]"
+          disabled={isDisabled}
+          className={[
+            "w-full appearance-none rounded-xl border border-slate-200 text-sm py-2.5 pl-3.5 pr-9 bg-[#F7F6F2]",
+            "focus:outline-none focus:ring-2 focus:ring-[#0B1526]/15 focus:border-[#0B1526]",
+            isDisabled ? "bg-slate-100 text-slate-500 cursor-not-allowed border-slate-200" : "",
+          ].join(" ")}
         >
           <option value="" disabled>
             {placeholder}

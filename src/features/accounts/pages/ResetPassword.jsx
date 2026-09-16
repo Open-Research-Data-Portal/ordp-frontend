@@ -51,10 +51,10 @@ export default function ResetPasswordPage() {
     setSubmitting(true);
     try {
       const res = await authApi.confirmPasswordReset({
-        uid: uid || undefined,
         token,
         new_password: password,
         confirm_password: confirmPassword,
+        uid: uid || undefined,
       });
 
       setSuccess(true);
@@ -92,7 +92,7 @@ export default function ResetPasswordPage() {
           </div>
           <h1 className="text-2xl font-bold text-[#0B1526] mb-2">Password configured!</h1>
           <p className="text-sm text-slate-500 max-w-sm">
-            Your credentials have been securely updated. Redirecting you now…
+            Your credentials have been securely updated. Redirecting you now...
           </p>
         </div>
       ) : (
@@ -124,7 +124,7 @@ export default function ResetPasswordPage() {
                   to="/forgot-password"
                   className="mt-2 inline-block text-xs font-semibold text-red-800 underline hover:text-red-950"
                 >
-                  Request a new password reset link &rarr;
+                  Request a new password reset link -&gt;
                 </Link>
               )}
             </div>
@@ -140,7 +140,7 @@ export default function ResetPasswordPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               showToggle
-              placeholder="••••••••"
+              placeholder="********"
               helperText="At least 8 characters."
             />
             <TextInput
@@ -152,7 +152,7 @@ export default function ResetPasswordPage() {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               showToggle
-              placeholder="••••••••"
+              placeholder="********"
             />
             <Button type="submit" loading={submitting} disabled={!token} icon={ArrowRight}>
               Set Password & Continue

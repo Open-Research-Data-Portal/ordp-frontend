@@ -20,11 +20,17 @@ import DatasetListPage from "../features/datasets/pages/DatasetListPage.jsx";
 import ResearcherDashboardPage from "../features/datasets/pages/ResearcherDashboardPage.jsx";
 import AdminDashboardPage from "../features/datasets/pages/AdminDashboardPage.jsx";
 import AdminAuditLogPage from "../features/datasets/pages/AdminAuditLogPage.jsx";
+import AdminDeletionRequestsPage from "../features/datasets/pages/AdminDeletionRequestsPage.jsx";
 import ReviewerDashboardPage from "../features/datasets/pages/ReviewerDashboardPage.jsx";
+import ReviewerQueuePage from "../features/datasets/pages/ReviewerQueuePage.jsx";
+import ReviewerArchiveRequestsPage from "../features/datasets/pages/ReviewerArchiveRequestsPage.jsx";
+import AdminArchivedDatasetsPage from "../features/datasets/pages/AdminArchivedDatasetsPage.jsx";
+import ReviewDatasetPage from "../features/datasets/pages/ReviewDatasetPage.jsx";
 import DatasetDetailPage from "../features/datasets/pages/Datasetdetailpage.jsx";
 import BrowseDatasetsPage from "../pages/BrowseDatasetsPage.jsx";
 import DatasetViewPage from "../pages/DatasetViewPage";
 import BookmarksPage from "../features/datasets/pages/BookmarksPage";
+import NotificationsPage from "../pages/NotificationsPage";
 
 import { useAuth } from "../context/useAuth";
 import { isProfileComplete } from "../utils/userRoles";
@@ -128,8 +134,32 @@ export default function AppRoutes() {
       <Route path="/reviewer-dashboard" element={
         <ProtectedRoute><ReviewerDashboardPage /></ProtectedRoute>
       } />
+      <Route path="/reviewer/review-queue" element={
+        <ProtectedRoute><ReviewerQueuePage /></ProtectedRoute>
+      } />
+      <Route path="/reviewer/review/:id" element={
+        <ProtectedRoute><ReviewDatasetPage /></ProtectedRoute>
+      } />
+      <Route path="/reviewer/archive-requests" element={
+        <ProtectedRoute><ReviewerArchiveRequestsPage /></ProtectedRoute>
+      } />
+      <Route path="/archived-datasets" element={
+        <ProtectedRoute><DatasetListPage defaultStatusFilter="published" title="Archived Datasets" subtitle="Browse datasets that have been archived." /></ProtectedRoute>
+      } />
+      <Route path="/admin/archived-datasets" element={
+        <ProtectedRoute><AdminArchivedDatasetsPage /></ProtectedRoute>
+      } />
       <Route path="/admin-dashboard" element={
         <ProtectedRoute><AdminDashboardPage /></ProtectedRoute>
+      } />
+      {/* Dedicated admin sub-pages. These MUST stay registered — previously
+          /admin/audit-log was linked from the sidebar but had no route, so it
+          fell through to the catch-all and kicked admins back to /login. */}
+      <Route path="/admin/audit-log" element={
+        <ProtectedRoute><AdminAuditLogPage /></ProtectedRoute>
+      } />
+      <Route path="/admin/deletion-requests" element={
+        <ProtectedRoute><AdminDeletionRequestsPage /></ProtectedRoute>
       } />
       <Route path="/profile" element={
         <ProtectedRoute><ProfilePage /></ProtectedRoute>
@@ -157,6 +187,9 @@ export default function AppRoutes() {
       } />
       <Route path="/bookmarks" element={
         <ProtectedRoute><BookmarksPage /></ProtectedRoute>
+      } />
+      <Route path="/notifications" element={
+        <ProtectedRoute><NotificationsPage /></ProtectedRoute>
       } />
 
       {/* Catch-all — kept last on purpose */}

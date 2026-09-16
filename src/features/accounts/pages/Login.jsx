@@ -9,6 +9,7 @@ import AuthLayout from "../components/AuthLayout";
 import TextInput from "../../../components/ui/TextInput";
 import Button from "../../../components/ui/Button";
 import logo from "../../../assets/aastulogo.png";
+import { searchDatasets } from "../../../api/search";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -22,6 +23,40 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState(null);
   const [apiError, setApiError] = useState(null);
+  const [researchersCount, setResearchersCount] = useState("…");
+  const [datasetsCount, setDatasetsCount] = useState("…");
+
+  useEffect(() => {
+    let active = true;
+    async function loadStats() {
+      try {
+        const datasets = await searchDatasets({});
+        if (!active) return;
+        const list = Array.isArray(datasets) ? datasets : [];
+        const uniqueResearchers = new Set();
+        list.forEach((d) => {
+          if (d.owner) uniqueResearchers.add(String(d.owner));
+          else if (d.owner_name) uniqueResearchers.add(String(d.owner_name).trim().toLowerCase());
+          if (Array.isArray(d.contributors)) {
+            d.contributors.forEach((c) => {
+              if (c.user) uniqueResearchers.add(String(c.user));
+              else if (c.name) uniqueResearchers.add(String(c.name).trim().toLowerCase());
+            });
+          }
+        });
+        setResearchersCount(uniqueResearchers.size.toString());
+        setDatasetsCount(list.length.toString());
+      } catch (err) {
+        if (!active) return;
+        setResearchersCount("0");
+        setDatasetsCount("0");
+      }
+    }
+    loadStats();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   function validate() {
     if (!identifier.trim()) return "Please enter your email or username.";
@@ -137,8 +172,8 @@ export default function LoginPage() {
             tools, and peer-reviewed publications.
           </p>
           <div className="flex gap-4">
-            <StatCard value="0" label="Researchers" />
-            <StatCard value="0" label="Publications" />
+            <StatCard value={researchersCount} label="Researchers" />
+            <StatCard value={datasetsCount} label="Datasets" />
           </div>
         </>
       }

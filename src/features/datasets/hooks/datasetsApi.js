@@ -563,6 +563,15 @@ export async function adminRestoreDataset(datasetId) {
 }
 
 /**
+ * Fetch archive/unarchive lifecycle events for a dataset.
+ * @param {string} datasetId
+ */
+export async function getDatasetArchiveHistory(datasetId) {
+  const { data } = await client.get(`/admin-panel/datasets/${datasetId}/archive-history/`);
+  return data;
+}
+
+/**
  * Admin fetches list of archived datasets across the platform.
  */
 export async function getAdminArchivedDatasets() {

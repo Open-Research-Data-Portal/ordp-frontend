@@ -339,7 +339,7 @@ export default function useDatasetSubmission(draftId = null) {
     }
   };
 
-  const inviteCoauthor = async ({ email, title }) => {
+  const inviteCoauthor = async ({ email, title, permission = "view" }) => {
     setIsSubmitting(true);
     setSubmitError(null);
     try {
@@ -351,7 +351,7 @@ export default function useDatasetSubmission(draftId = null) {
         setDatasetId(did);
         setUploadSessionId(result.upload_session_id);
       }
-      await sendCoauthorInvitation(did, { email, permission: "edit" });
+      await sendCoauthorInvitation(did, { email, permission });
     } catch (err) {
       const message = extractError(err);
       setSubmitError(message);

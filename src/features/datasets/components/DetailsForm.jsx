@@ -36,6 +36,10 @@ export default function DetailsForm({ initialValues = {}, onNext, onInvite, isSu
   const [languagesList, setLanguagesList] = useState([]);
   const [coAuthors, setCoAuthors] = useState(initialValues.coAuthors || []);
   const [coAuthorEmail, setCoAuthorEmail] = useState("");
+  const [invitePermission, setInvitePermission] = useState("view");
+  const [userMatches, setUserMatches] = useState([]);
+  const [searchingUsers, setSearchingUsers] = useState(false);
+  const [selectedInviteUser, setSelectedInviteUser] = useState(null);
   const [inviting, setInviting] = useState(false);
   const [inviteMsg, setInviteMsg] = useState("");
   const [relatedResources, setRelatedResources] = useState(initialValues.relatedResources || []);
@@ -74,6 +78,56 @@ export default function DetailsForm({ initialValues = {}, onNext, onInvite, isSu
       active = false;
     };
   }, [initialValues.language, initialValues.languageId, initialValues.language_id]);
+
+  useEffect(() => {
+    const query = coAuthorEmail.trim();
+    if (query.length < 2) {
+      return undefined;
+    }
+
+    let active = true;
+    const timer = window.setTimeout(async () => {
+      if (active) {
+        setSearchingUsers(true);
+      }
+      try {
+        const results = await datasetsApi.searchUsers(query);
+        if (!active) return;
+        setUserMatches(
+          results.filter((result) => result?.email?.toLowerCase() !== user?.email?.toLowerCase())
+        );
+      } catch {
+        if (active) {
+          setUserMatches([]);
+        }
+      } finally {
+        if (active) {
+          setSearchingUsers(false);
+        }
+      }
+    }, 250);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [coAuthorEmail, user?.email]);
+
+  const handleInviteEmailChange = (value) => {
+    setCoAuthorEmail(value);
+    setInviteMsg("");
+    if (value.trim().length < 2) {
+      setUserMatches([]);
+      setSearchingUsers(false);
+    }
+    if (selectedInviteUser && selectedInviteUser.email !== value) {
+      setSelectedInviteUser(null);
+    }
+  };
+
+  const selectedInviteName = selectedInviteUser?.full_name || selectedInviteUser?.name || "";
+  const selectedInviteEmail = selectedInviteUser?.email || coAuthorEmail.trim();
+  const selectedPermissionLabel = invitePermission === "edit" ? "Edit" : "View";
 
   const handleContinue = async (e) => {
     e.preventDefault();
@@ -156,14 +210,88 @@ export default function DetailsForm({ initialValues = {}, onNext, onInvite, isSu
 
       {/* Co-Author Email & Invite Button */}
       <FormField label="Invite Co-Author by Email (Optional)">
-        <div className="flex gap-2">
-          <input
-            type="email"
-            value={coAuthorEmail}
-            onChange={(e) => setCoAuthorEmail(e.target.value)}
-            placeholder="colleague@aastu.edu.et"
-            className={inputClass}
-          />
+        <div className="grid gap-3">
+          <div className="relative">
+            <input
+              type="email"
+              value={coAuthorEmail}
+              onChange={(e) => handleInviteEmailChange(e.target.value)}
+              placeholder="colleague@aastu.edu.et"
+              className={inputClass}
+              autoComplete="off"
+            />
+            {coAuthorEmail.trim().length >= 2 && (userMatches.length > 0 || searchingUsers) && (
+              <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-20 overflow-hidden rounded-md border border-[#D9D6CD] bg-white shadow-lg">
+                {searchingUsers && (
+                  <div className="px-4 py-3 text-sm text-gray-500">Searching users...</div>
+                )}
+                {!searchingUsers && userMatches.map((match) => (
+                  <button
+                    key={match.id || match.email}
+                    type="button"
+                    onClick={() => {
+                      setSelectedInviteUser(match);
+                      setCoAuthorEmail(match.email);
+                      setUserMatches([]);
+                      setSearchingUsers(false);
+                    }}
+                    className="block w-full px-4 py-3 text-left text-sm hover:bg-[#F7F6F2] focus:bg-[#F7F6F2] focus:outline-none"
+                  >
+                    <span className="block font-semibold text-[#0B1526]">
+                      {match.full_name || match.name || match.email}
+                    </span>
+                    <span className="block text-xs text-gray-500">{match.email}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {coAuthorEmail.trim().length >= 2 && !searchingUsers && userMatches.length === 0 && !selectedInviteUser && (
+            <p className="text-xs text-gray-500">
+              No matching account selected. You can still invite this email address.
+            </p>
+          )}
+
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-sm font-medium text-[#0B1526]">Access</span>
+            {[
+              { value: "view", label: "View" },
+              { value: "edit", label: "Edit" },
+            ].map((option) => (
+              <label
+                key={option.value}
+                className={`inline-flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm ${
+                  invitePermission === option.value
+                    ? "border-[#A67A0D] bg-[#FFF7E0] text-[#0B1526]"
+                    : "border-[#E3E1DA] bg-white text-gray-600"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="coauthor-permission"
+                  value={option.value}
+                  checked={invitePermission === option.value}
+                  onChange={(e) => setInvitePermission(e.target.value)}
+                  className="h-4 w-4 accent-[#A67A0D]"
+                />
+                {option.label}
+              </label>
+            ))}
+          </div>
+
+          {selectedInviteEmail && (
+            <div className="rounded-md border border-[#E3E1DA] bg-[#F7F6F2] px-4 py-3 text-sm">
+              <div className="font-semibold text-[#0B1526]">
+                {selectedInviteName || selectedInviteEmail}
+              </div>
+              <div className="text-gray-600">{selectedInviteEmail}</div>
+              <div className="mt-1 text-xs font-semibold uppercase text-[#A67A0D]">
+                {selectedPermissionLabel} access
+              </div>
+            </div>
+          )}
+
           <button
             type="button"
             disabled={inviting || !coAuthorEmail.trim()}
@@ -172,9 +300,20 @@ export default function DetailsForm({ initialValues = {}, onNext, onInvite, isSu
               setInviting(true);
               setInviteMsg("");
               try {
-                await onInvite?.({ email: coAuthorEmail.trim(), title: title.trim() || "Untitled dataset" });
-                setCoAuthors((prev) => [...prev, coAuthorEmail.trim()]);
+                await onInvite?.({
+                  email: selectedInviteEmail,
+                  title: title.trim() || "Untitled dataset",
+                  permission: invitePermission,
+                });
+                setCoAuthors((prev) => [
+                  ...prev,
+                  `${selectedInviteName ? `${selectedInviteName} ` : ""}<${selectedInviteEmail}> (${selectedPermissionLabel} access)`,
+                ]);
                 setCoAuthorEmail("");
+                setSelectedInviteUser(null);
+                setUserMatches([]);
+                setSearchingUsers(false);
+                setInvitePermission("view");
                 setInviteMsg("Co-author invitation sent successfully!");
               } catch (err) {
                 setInviteMsg(err?.message || "Failed to invite co-author.");
@@ -182,7 +321,7 @@ export default function DetailsForm({ initialValues = {}, onNext, onInvite, isSu
                 setInviting(false);
               }
             }}
-            className="px-5 py-3 bg-[#A67A0D] hover:bg-[#8f690b] text-white text-sm font-semibold rounded-md disabled:opacity-50 shrink-0 transition-colors"
+            className="w-fit px-5 py-3 bg-[#A67A0D] hover:bg-[#8f690b] text-white text-sm font-semibold rounded-md disabled:opacity-50 shrink-0 transition-colors"
           >
             {inviting ? "Inviting…" : "Invite"}
           </button>

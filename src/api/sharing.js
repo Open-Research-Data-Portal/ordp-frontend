@@ -39,7 +39,7 @@ export async function decideAccessRequestAsOwner(requestId, decision) {
   return data;
 }
 
-export async function inviteCoauthor(datasetId, { email, permission = "edit" }) {
+export async function inviteCoauthor(datasetId, { email, permission = "view" }) {
   const { data } = await client.post(`/sharing/${datasetId}/invite-coauthor/`, {
     email,
     permission,

@@ -30,6 +30,13 @@ export async function listLanguages() {
   return Array.isArray(data) ? data : (data?.results || data?.languages || []);
 }
 
+export async function searchUsers(query) {
+  const { data } = await client.get("/accounts/search-users/", {
+    params: { q: query },
+  });
+  return Array.isArray(data) ? data : (data?.results || []);
+}
+
 export async function attachMetadata(datasetId, metadataPayload) {
   const { data } = await client.post(`${METADATA_BASE}/${datasetId}/attach/`, metadataPayload);
   return data;
@@ -134,6 +141,11 @@ export async function getDatasetDetail(datasetId) {
 }
 export const getDatasetById = getDatasetDetail;
 
+export async function getDatasetReviewers(datasetId) {
+  const { data } = await client.get(`${DATASETS_BASE}/${datasetId}/reviewers/`);
+  return data;
+}
+
 export async function updateDataset(datasetId, payload) {
   const { data } = await client.patch(`${DATASETS_BASE}/${datasetId}/update/`, payload);
   return data;
@@ -161,6 +173,11 @@ export async function getDashboardFeed() {
 
 export async function getDashboardMyContributions() {
   const { data } = await client.get(`${DATASETS_BASE}/dashboard/my-contributions/`);
+  return data;
+}
+
+export async function getDatasetVersions(datasetId) {
+  const { data } = await client.get(`${DATASETS_BASE}/${datasetId}/versions/`);
   return data;
 }
 
@@ -266,8 +283,30 @@ export async function voteContentUpdate(updateId, payload) {
   return data;
 }
 
+export async function getContentUpdateComparison(updateId) {
+  const { data } = await client.get(`${DATASETS_BASE}/content-updates/${updateId}/comparison/`);
+  return data;
+}
+
 export async function voteRevisionRequest(requestId, payload) {
   const { data } = await client.post(`/admin-panel/revision-requests/${requestId}/vote/`, payload);
+  return data;
+}
+
+export async function requestRevisionPermission(datasetId, payload) {
+  const { data } = await client.post(`${DATASETS_BASE}/${datasetId}/request-revision-permission/`, payload);
+  return data;
+}
+
+export async function decideRevisionRequestAsOwner(requestId, decision) {
+  const { data } = await client.post(`${DATASETS_BASE}/revision-requests/${requestId}/decide/`, {
+    decision,
+  });
+  return data;
+}
+
+export async function proposeRevision(datasetId, payload) {
+  const { data } = await client.post(`${DATASETS_BASE}/${datasetId}/propose-revision/`, payload);
   return data;
 }
 

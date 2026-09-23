@@ -35,11 +35,11 @@ export async function fetchNotifications(user) {
   try {
     const res = await client.get("/notifications/history/");
     backendList = Array.isArray(res.data) ? res.data : (res.data?.results || res.data?.notifications || []);
-  } catch (err) {
+  } catch {
     try {
       const resBell = await client.get("/notifications/bell/");
       backendList = Array.isArray(resBell.data) ? resBell.data : (resBell.data?.notifications || []);
-    } catch (err2) {
+    } catch {
       // Backend endpoint not active or returned error
     }
   }
@@ -97,10 +97,10 @@ export async function markNotificationAsRead(user, notificationId) {
   const userId = user?.id || user?.user_id || "user";
   try {
     await client.post(`/notifications/${notificationId}/read/`);
-  } catch (err) {
+  } catch {
     try {
       await client.patch(`/notifications/${notificationId}/`, { is_read: true });
-    } catch (e) {
+    } catch {
       // Fallback to local
     }
   }
@@ -125,6 +125,11 @@ export async function markAllNotificationsAsRead(user) {
 
 export async function deleteNotificationItem(user, notificationId) {
   const userId = user?.id || user?.user_id || "user";
+  try {
+    await client.delete(`/notifications/${notificationId}/`);
+  } catch {
+    // Keep the local fallback behavior for seeded/offline notifications.
+  }
   const current = getLocalNotifications(userId) || [];
   const updated = current.filter((n) => String(n.id) !== String(notificationId));
   saveLocalNotifications(userId, updated);

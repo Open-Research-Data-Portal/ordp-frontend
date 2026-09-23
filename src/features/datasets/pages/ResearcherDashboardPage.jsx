@@ -24,6 +24,37 @@ function normalizeList(data) {
   return data?.results || [];
 }
 
+function formatRelativeTime(value) {
+  if (!value) return "Unknown";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+
+  const diffMs = Date.now() - date.getTime();
+  const minute = 60 * 1000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+
+  if (diffMs < minute) return "Just now";
+  if (diffMs < hour) return `${Math.floor(diffMs / minute)}m ago`;
+  if (diffMs < day) return `${Math.floor(diffMs / hour)}h ago`;
+  if (diffMs < 2 * day) return "Yesterday";
+  if (diffMs < 7 * day) return `${Math.floor(diffMs / day)}d ago`;
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function activityBadgeClass(action) {
+  const normalized = String(action || "").toLowerCase();
+  if (normalized.includes("download")) return "bg-slate-100 text-slate-700";
+  if (normalized.includes("request") || normalized.includes("share")) return "bg-blue-50 text-blue-700";
+  if (normalized.includes("modify") || normalized.includes("update")) return "bg-amber-50 text-amber-700";
+  if (normalized.includes("upload")) return "bg-emerald-50 text-emerald-700";
+  return "bg-gray-100 text-gray-700";
+}
+
+function formatAction(action) {
+  return String(action || "activity").replace(/_/g, " ").toUpperCase();
+}
+
 export default function ResearcherDashboardPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -40,25 +71,24 @@ export default function ResearcherDashboardPage() {
   const [loadingBookmarks, setLoadingBookmarks] = useState(true);
   const [statsError, setStatsError] = useState(null);
   const [datasetsError, setDatasetsError] = useState(null);
+  const [recentActivity, setRecentActivity] = useState([]);
+  const [loadingActivity, setLoadingActivity] = useState(true);
+  const [activityError, setActivityError] = useState(null);
 
-  const [discoverFeed, setDiscoverFeed] = useState([]);
-  const [loadingDiscover, setLoadingDiscover] = useState(false);
+  const [discoverFeed, setDiscoverFeed] = useState(null);
 
   // Single source of truth — mirrors the backend's is_profile_complete() exactly.
   const profileComplete = checkProfileComplete(user);
-  const [showProfileBanner, setShowProfileBanner] = useState(!profileComplete);
+  const [profileBannerDismissed, setProfileBannerDismissed] = useState(false);
 
   // Came here bounced off the upload route (ProfileCompleteRoute) — show the
   // specific "you need this to upload" message instead of the generic one.
   const blockedFromUpload = searchParams.get("incomplete") === "1";
-
-  useEffect(() => {
-    setShowProfileBanner(!profileComplete);
-  }, [profileComplete]);
+  const showProfileBanner = !profileComplete && (!profileBannerDismissed || blockedFromUpload);
 
   function handleNewDatasetClick() {
     if (!profileComplete) {
-      setShowProfileBanner(true);
+      setProfileBannerDismissed(false);
       setSearchParams({ incomplete: "1" }, { replace: true });
       return;
     }
@@ -72,15 +102,18 @@ export default function ResearcherDashboardPage() {
       setLoadingDatasets(true);
       setLoadingFeed(true);
       setLoadingBookmarks(true);
+      setLoadingActivity(true);
       setStatsError(null);
       setDatasetsError(null);
+      setActivityError(null);
 
-      const [statsResult, datasetsResult, pendingResult, feedResult, bookmarksResult] = await Promise.allSettled([
+      const [statsResult, datasetsResult, pendingResult, feedResult, bookmarksResult, activityResult] = await Promise.allSettled([
         datasetsApi.getDashboardStats(),
         datasetsApi.getMyDatasets(),
         datasetsApi.getMyDatasets({ status: "pending" }),
         datasetsApi.getDashboardFeed(),
         datasetsApi.getMyBookmarks?.() ?? Promise.resolve([]),
+        datasetsApi.getDashboardRecentActivity(),
       ]);
 
       if (!active) return;
@@ -105,11 +138,17 @@ export default function ResearcherDashboardPage() {
 
       if (feedResult.status === "fulfilled") setFeed(normalizeList(feedResult.value));
       if (bookmarksResult.status === "fulfilled") setBookmarks(normalizeList(bookmarksResult.value));
+      if (activityResult.status === "fulfilled") {
+        setRecentActivity(normalizeList(activityResult.value));
+      } else {
+        setActivityError("Failed to load recent activity.");
+      }
 
       setLoadingStats(false);
       setLoadingDatasets(false);
       setLoadingFeed(false);
       setLoadingBookmarks(false);
+      setLoadingActivity(false);
     }
     load();
     return () => { active = false; };
@@ -120,14 +159,12 @@ export default function ResearcherDashboardPage() {
   useEffect(() => {
     if (loadingFeed || feed.length > 0) return;
     let active = true;
-    setLoadingDiscover(true);
     getDiscoverFeed()
       .then((items) => {
         if (active) setDiscoverFeed(Array.isArray(items) ? items : []);
       })
-      .catch(() => {})
-      .finally(() => {
-        if (active) setLoadingDiscover(false);
+      .catch(() => {
+        if (active) setDiscoverFeed([]);
       });
     return () => { active = false; };
   }, [loadingFeed, feed.length]);
@@ -162,7 +199,7 @@ export default function ResearcherDashboardPage() {
             </button>
             <button
               type="button"
-              onClick={() => setShowProfileBanner(false)}
+              onClick={() => setProfileBannerDismissed(true)}
               aria-label="Dismiss"
               className="text-gray-400 hover:text-gray-600"
             >
@@ -229,6 +266,66 @@ export default function ResearcherDashboardPage() {
         </div>
       )}
 
+      <section className="mb-8 animate-fade-in-up" style={{ animationDelay: "225ms" }}>
+        <div className="bg-white rounded-xl border border-border shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-border">
+            <h2 className="text-lg font-serif font-bold text-navy">Recent Activity</h2>
+            <p className="text-sm text-gray-500 mt-0.5">Live activity from datasets you own or co-own.</p>
+          </div>
+
+          {loadingActivity ? (
+            <p className="px-5 py-6 text-sm text-gray-500">Loading recent activity...</p>
+          ) : activityError ? (
+            <p className="px-5 py-6 text-sm text-red-600">{activityError}</p>
+          ) : recentActivity.length === 0 ? (
+            <p className="px-5 py-6 text-sm text-gray-500">No recent activity yet.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+                  <tr>
+                    <th className="px-5 py-3 font-semibold">Action</th>
+                    <th className="px-5 py-3 font-semibold">Dataset</th>
+                    <th className="px-5 py-3 font-semibold">User</th>
+                    <th className="px-5 py-3 font-semibold">Timestamp</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentActivity.slice(0, 8).map((item, index) => {
+                    const datasetId = item.dataset_id || item.dataset;
+                    const title = item.dataset_title || item.title || "Untitled dataset";
+                    return (
+                      <tr key={`${item.action}-${datasetId || title}-${item.timestamp || index}`} className="border-t border-border">
+                        <td className="px-5 py-3">
+                          <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${activityBadgeClass(item.action)}`}>
+                            {formatAction(item.action)}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3">
+                          {datasetId ? (
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/my-datasets/${datasetId}`)}
+                              className="font-semibold text-navy hover:text-gold text-left"
+                            >
+                              {title}
+                            </button>
+                          ) : (
+                            <span className="font-semibold text-navy">{title}</span>
+                          )}
+                        </td>
+                        <td className="px-5 py-3 text-gray-600">{item.user || "Unknown"}</td>
+                        <td className="px-5 py-3 text-gray-500">{formatRelativeTime(item.timestamp)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </section>
+
       <section className="mb-8 animate-fade-in-up" style={{ animationDelay: "250ms" }}>
         <div className="flex items-end justify-between mb-4">
           <div>
@@ -248,7 +345,7 @@ export default function ResearcherDashboardPage() {
         {loadingFeed ? (
           <p className="text-sm text-gray-500">Loading…</p>
         ) : feed.length === 0 ? (
-          loadingDiscover ? (
+          discoverFeed === null ? (
             <p className="text-sm text-gray-500">Loading…</p>
           ) : discoverFeed.length === 0 ? (
             <div className="bg-white rounded-xl border border-border shadow-sm py-14 flex flex-col items-center text-center px-6">

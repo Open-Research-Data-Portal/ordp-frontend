@@ -12,16 +12,14 @@ import {
   User,
   HardDrive,
   Archive,
-  Table,
   Loader2,
-  Info,
 } from "lucide-react";
 import TopBar from "../../../layouts/TopBar";
 import { useAuth } from "../../../context/useAuth";
 import { useToast } from "../../../context/ToastContext";
 import { getDashboardPath } from "../../../utils/userRoles";
 import * as datasetsApi from "../hooks/datasetsApi";
-import { getDownloadUrl } from "../../../api/sharing";
+import { getDownloadUrl, shareDatasetWith } from "../../../api/sharing";
 import TabularPreview from "../../../components/ui/TabularPreview";
 import { getDatasetImage } from "../../../utils/datasetImage";
 
@@ -69,6 +67,7 @@ function formatBytes(bytes) {
 // ---------------------------------------------------------------------
 
 
+// eslint-disable-next-line no-unused-vars
 function ImagePreview({ url, filename, fileType }) {
   const [zoomed, setZoomed] = useState(false);
   return (
@@ -306,6 +305,116 @@ function StatusBadge({ status }) {
   );
 }
 
+function ShareDatasetModal({ dataset, onClose, onShared }) {
+  const [email, setEmail] = useState("");
+  const [purpose, setPurpose] = useState("");
+  const [justification, setJustification] = useState("");
+  const [durationDays, setDurationDays] = useState(30);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+  const isRestricted = dataset?.visibility === "restricted";
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    setSubmitting(true);
+    setError(null);
+    try {
+      const result = await shareDatasetWith(dataset.id, {
+        email,
+        purpose,
+        purpose_type: "read",
+        justification: isRestricted ? justification : "",
+        requested_duration_days: Number(durationDays) || undefined,
+      });
+      onShared(result);
+    } catch (err) {
+      setError(err?.response?.data?.detail || "Failed to share this dataset.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold text-slate-900">Share Dataset</h2>
+          <button type="button" onClick={onClose} aria-label="Close" className="text-gray-400 hover:text-slate-900">
+            <X size={18} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">
+              Recipient AASTU email <span className="text-red-500">*</span>
+            </label>
+            <input
+              required
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+              placeholder="recipient@aastu.edu.et"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">
+              Purpose <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              required
+              value={purpose}
+              onChange={(e) => setPurpose(e.target.value)}
+              rows={2}
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+              placeholder="Research, teaching, replication, or academic evaluation..."
+            />
+          </div>
+
+          {isRestricted && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">
+                Restricted access justification <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                required
+                value={justification}
+                onChange={(e) => setJustification(e.target.value)}
+                rows={2}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+                placeholder="Why should this recipient access restricted data?"
+              />
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">Requested duration (days)</label>
+            <input
+              type="number"
+              min={1}
+              value={durationDays}
+              onChange={(e) => setDurationDays(e.target.value)}
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+            />
+          </div>
+
+          {error && <p className="text-xs text-red-500">{error}</p>}
+
+          <button
+            type="submit"
+            disabled={submitting}
+            className="w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+          >
+            {submitting ? "Sharing..." : "Share Dataset"}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function DatasetDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -327,6 +436,7 @@ export default function DatasetDetailPage() {
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState(null);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
 
   // Archival Request Modal state (5 form fields)
   const [showArchiveModal, setShowArchiveModal] = useState(false);
@@ -344,13 +454,6 @@ export default function DatasetDetailPage() {
   const [submittingUnarchive, setSubmittingUnarchive] = useState(false);
   const [isUnarchivingRequested, setIsUnarchivingRequested] = useState(false);
 
-
-  // Sync user email when user object is loaded
-  useEffect(() => {
-    if (user?.email && !contactEmail) {
-      setContactEmail(user.email);
-    }
-  }, [user, contactEmail]);
 
   useEffect(() => {
     let isMounted = true;
@@ -497,6 +600,14 @@ export default function DatasetDetailPage() {
   }
 
   async function handleShare() {
+    if (dataset.visibility === "private") {
+      addToast("Private datasets cannot be shared.", "error");
+      return;
+    }
+    if (dataset.visibility === "public" || dataset.visibility === "restricted") {
+      setShowShareModal(true);
+      return;
+    }
     try {
       await navigator.clipboard.writeText(window.location.href);
       setLinkCopied(true);
@@ -751,7 +862,14 @@ export default function DatasetDetailPage() {
                     {isOwner && (
                       <button
                         type="button"
-                        onClick={() => dataset.is_archived ? setShowUnarchiveModal(true) : setShowArchiveModal(true)}
+                        onClick={() => {
+                          if (dataset.is_archived) {
+                            setShowUnarchiveModal(true);
+                            return;
+                          }
+                          if (!contactEmail && user?.email) setContactEmail(user.email);
+                          setShowArchiveModal(true);
+                        }}
                         disabled={dataset.is_archived ? isUnarchivingRequested : isArchivingRequested}
                         className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-5 py-2.5 text-sm font-semibold text-amber-900 hover:bg-amber-100 transition shadow-2xs disabled:opacity-60"
                       >
@@ -1551,6 +1669,24 @@ export default function DatasetDetailPage() {
             </form>
           </div>
         </div>
+      )}
+
+      {showShareModal && (
+        <ShareDatasetModal
+          dataset={dataset}
+          onClose={() => setShowShareModal(false)}
+          onShared={(result) => {
+            setShowShareModal(false);
+            setLinkCopied(true);
+            setTimeout(() => setLinkCopied(false), 2000);
+            addToast(
+              result?.status === "approved"
+                ? "Share link sent. The recipient can claim access from their email."
+                : "Share request submitted for approval.",
+              "success"
+            );
+          }}
+        />
       )}
 
     </div>

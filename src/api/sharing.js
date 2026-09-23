@@ -22,7 +22,42 @@ export async function requestShareAccess(datasetId, payload) {
   return data;
 }
 
-export async function inviteCoauthor(datasetId, email) {
-  const { data } = await client.post(`/sharing/${datasetId}/invite-coauthor/`, { email });
+export async function shareDatasetWith(datasetId, payload) {
+  const { data } = await client.post(`/sharing/${datasetId}/share-with/`, payload);
+  return data;
+}
+
+export async function claimShareAccess(token, payload = {}) {
+  const { data } = await client.post(`/sharing/claim-access/${token}/`, payload);
+  return data;
+}
+
+export async function decideAccessRequestAsOwner(requestId, decision) {
+  const { data } = await client.post(`/sharing/access-requests/${requestId}/owner-decision/`, {
+    decision,
+  });
+  return data;
+}
+
+export async function inviteCoauthor(datasetId, { email, permission = "edit" }) {
+  const { data } = await client.post(`/sharing/${datasetId}/invite-coauthor/`, {
+    email,
+    permission,
+  });
+  return data;
+}
+
+export async function getDatasetInvitation(token) {
+  const { data } = await client.get(`/sharing/invitations/${token}/`);
+  return data;
+}
+
+export async function acceptDatasetInvitation(token) {
+  const { data } = await client.post(`/sharing/invitations/${token}/`);
+  return data;
+}
+
+export async function revokeDatasetInvitation(datasetId, invitationId) {
+  const { data } = await client.post(`/sharing/${datasetId}/invitations/${invitationId}/revoke/`);
   return data;
 }

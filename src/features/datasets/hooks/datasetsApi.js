@@ -169,6 +169,11 @@ export async function getDashboardMyContributions() {
   return data;
 }
 
+export async function getDatasetVersions(datasetId) {
+  const { data } = await client.get(`${DATASETS_BASE}/${datasetId}/versions/`);
+  return data;
+}
+
 export async function getAdminPendingReviews() {
   const { data } = await client.get(`${DATASETS_BASE}/admin/pending-reviews/`);
   return data;
@@ -271,8 +276,30 @@ export async function voteContentUpdate(updateId, payload) {
   return data;
 }
 
+export async function getContentUpdateComparison(updateId) {
+  const { data } = await client.get(`${DATASETS_BASE}/content-updates/${updateId}/comparison/`);
+  return data;
+}
+
 export async function voteRevisionRequest(requestId, payload) {
   const { data } = await client.post(`/admin-panel/revision-requests/${requestId}/vote/`, payload);
+  return data;
+}
+
+export async function requestRevisionPermission(datasetId, payload) {
+  const { data } = await client.post(`${DATASETS_BASE}/${datasetId}/request-revision-permission/`, payload);
+  return data;
+}
+
+export async function decideRevisionRequestAsOwner(requestId, decision) {
+  const { data } = await client.post(`${DATASETS_BASE}/revision-requests/${requestId}/decide/`, {
+    decision,
+  });
+  return data;
+}
+
+export async function proposeRevision(datasetId, payload) {
+  const { data } = await client.post(`${DATASETS_BASE}/${datasetId}/propose-revision/`, payload);
   return data;
 }
 

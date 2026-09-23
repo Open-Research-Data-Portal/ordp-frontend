@@ -116,6 +116,7 @@ export default function ReviewerDashboardPage() {
         const archiveReqs = await datasetsApi.getArchiveRequestsQueue().catch(() => []);
         const pendingArchive = (Array.isArray(archiveReqs) ? archiveReqs : []).filter(r => r.status === "pending");
         setArchiveRequestCount(pendingArchive.length);
+        if (results[3].status === "fulfilled") setContentUpdates(normalizeList(results[3].value));
         if (results[4].status === "fulfilled") setRevisionRequests(normalizeList(results[4].value));
         if (results[5].status === "fulfilled") setAccessRequests(normalizeList(results[5].value));
         if (results[6].status === "fulfilled") setMyReviews(myReviewsList);
@@ -142,19 +143,24 @@ export default function ReviewerDashboardPage() {
 
   // ── Computed stats ───────────────────────────────────────────────────
   const pendingCounts = useMemo(() => ({
-    datasets: datasetQueue.length,
-    contentUpdates: contentUpdates.length,
-    revisionRequests: revisionRequests.length,
-    accessRequests: accessRequests.length,
-    total: datasetQueue.length + contentUpdates.length + revisionRequests.length + accessRequests.length,
-  }), [datasetQueue, contentUpdates, revisionRequests, accessRequests]);
+    datasets: overview?.assigned_datasets_pending ?? datasetQueue.length,
+    contentUpdates: overview?.content_updates_pending ?? contentUpdates.length,
+    revisionRequests: overview?.revision_requests_awaiting_my_vote ?? revisionRequests.length,
+    accessRequests: overview?.access_requests_awaiting_my_vote ?? accessRequests.length,
+    total:
+      (overview?.assigned_datasets_pending ?? datasetQueue.length)
+      + (overview?.content_updates_pending ?? contentUpdates.length)
+      + (overview?.revision_requests_awaiting_my_vote ?? revisionRequests.length)
+      + (overview?.access_requests_awaiting_my_vote ?? accessRequests.length),
+  }), [overview, datasetQueue, contentUpdates, revisionRequests, accessRequests]);
 
   const reviewStats = useMemo(() => {
-    const approved = metrics?.approved ?? myReviews.filter(r => String(r.decision || r.vote || r.status || "").toLowerCase() === "approved").length;
-    const rejected = metrics?.rejected ?? myReviews.filter(r => String(r.decision || r.vote || r.status || "").toLowerCase() === "rejected").length;
+    const approved = metrics?.approved ?? metrics?.total_approved ?? myReviews.filter(r => String(r.decision || r.vote || r.status || "").toLowerCase() === "approved").length;
+    const rejected = metrics?.rejected ?? metrics?.total_rejected ?? myReviews.filter(r => String(r.decision || r.vote || r.status || "").toLowerCase() === "rejected").length;
     const total = metrics?.total_reviewed ?? myReviews.length;
-    return { total, approved, rejected, pending: pendingCounts.datasets };
-  }, [metrics, myReviews, pendingCounts.datasets]);
+    const pending = metrics?.assigned_pending ?? overview?.assigned_datasets_pending ?? pendingCounts.datasets;
+    return { total, approved, rejected, pending };
+  }, [metrics, overview, myReviews, pendingCounts.datasets]);
 
   // ── 403 Forbidden screen ─────────────────────────────────────────────
   if (forbidden) {

@@ -134,6 +134,11 @@ export async function getDatasetDetail(datasetId) {
 }
 export const getDatasetById = getDatasetDetail;
 
+export async function getDatasetReviewers(datasetId) {
+  const { data } = await client.get(`${DATASETS_BASE}/${datasetId}/reviewers/`);
+  return data;
+}
+
 export async function updateDataset(datasetId, payload) {
   const { data } = await client.patch(`${DATASETS_BASE}/${datasetId}/update/`, payload);
   return data;

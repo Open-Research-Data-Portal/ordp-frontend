@@ -338,25 +338,30 @@ function DownloadsChart({ data }) {
   );
 }
 
-function ShareAccessModal({ datasetId, onClose }) {
+function ShareAccessModal({ dataset, onClose, onDownloadReady }) {
   const [purpose, setPurpose] = useState("");
   const [justification, setJustification] = useState("");
   const [durationDays, setDurationDays] = useState(30);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [submitted, setSubmitted] = useState(false);
+  const isRestricted = dataset?.visibility === "restricted";
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
     try {
-      await requestShareAccess(datasetId, {
+      const result = await requestShareAccess(dataset.id, {
         purpose,
         purpose_type: "read",
-        justification,
+        justification: isRestricted ? justification : "",
         requested_duration_days: Number(durationDays) || undefined,
       });
+      if (result?.download_url) {
+        onDownloadReady(result.download_url);
+        return;
+      }
       setSubmitted(true);
     } catch (err) {
       console.error("Failed to submit access request:", err);
@@ -374,7 +379,7 @@ function ShareAccessModal({ datasetId, onClose }) {
       <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-slate-900">
-            {submitted ? "Request Sent" : "Request Access"}
+            {submitted ? "Request Sent" : isRestricted ? "Request Access" : "Download Request Form"}
           </h2>
           <button type="button" onClick={onClose} aria-label="Close" className="text-gray-400 hover:text-slate-900">
             <X size={18} />
@@ -398,7 +403,7 @@ function ShareAccessModal({ datasetId, onClose }) {
           <form onSubmit={handleSubmit} className="mt-4 space-y-4">
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">
-                Purpose <span className="text-red-500">*</span>
+                Purpose of download <span className="text-red-500">*</span>
               </label>
               <textarea
                 required
@@ -406,22 +411,25 @@ function ShareAccessModal({ datasetId, onClose }) {
                 onChange={(e) => setPurpose(e.target.value)}
                 rows={2}
                 className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
-                placeholder="e.g. Research and academic evaluation of..."
+                placeholder="e.g. Research, teaching, replication, or academic evaluation..."
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">
-                Justification (required for restricted datasets)
-              </label>
-              <textarea
-                value={justification}
-                onChange={(e) => setJustification(e.target.value)}
-                rows={2}
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
-                placeholder="Why do you need access to this restricted data?"
-              />
-            </div>
+            {isRestricted && (
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">
+                  Restricted access justification <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  required
+                  value={justification}
+                  onChange={(e) => setJustification(e.target.value)}
+                  rows={2}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+                  placeholder="Why do you need access to this restricted data?"
+                />
+              </div>
+            )}
 
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">
@@ -537,6 +545,11 @@ export default function DatasetViewPage() {
   };
 
   const handleDownload = async () => {
+    if (dataset.visibility === "public" || dataset.visibility === "restricted") {
+      setShareModalOpen(true);
+      return;
+    }
+
     setDownloading(true);
     setDownloadError(null);
     try {
@@ -554,6 +567,12 @@ export default function DatasetViewPage() {
     } finally {
       setDownloading(false);
     }
+  };
+
+  const handleDownloadReady = (url) => {
+    setShareModalOpen(false);
+    setDownloadError(null);
+    window.location.assign(url);
   };
 
   const handleShare = async () => {
@@ -807,8 +826,9 @@ export default function DatasetViewPage() {
 
     {shareModalOpen && (
       <ShareAccessModal
-        datasetId={dataset.id}
+        dataset={dataset}
         onClose={() => setShareModalOpen(false)}
+        onDownloadReady={handleDownloadReady}
       />
     )}
   </div>

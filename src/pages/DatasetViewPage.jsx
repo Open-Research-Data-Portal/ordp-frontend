@@ -9,6 +9,8 @@ import {
   Eye,
   TrendingUp,
   TrendingDown,
+  Edit3,
+  CheckCircle2,
 } from "lucide-react";
 import {
   LineChart,
@@ -21,6 +23,7 @@ import {
 } from "recharts";
 import { getDatasetById } from "../api/datasets";
 import { getDownloadUrl, requestShareAccess, shareDatasetWith } from "../api/sharing";
+import * as datasetsApi from "../features/datasets/hooks/datasetsApi";
 import TopBar from "../layouts/TopBar";
 import { getDatasetImage } from "../utils/datasetImage";
 import { useAuth } from "../context/useAuth";
@@ -487,6 +490,131 @@ function ShareAccessModal({ dataset, mode = "download", onClose, onDownloadReady
   );
 }
 
+function RevisionRequestModal({ dataset, onClose }) {
+  const [reason, setReason] = useState("");
+  const [additionalJustification, setAdditionalJustification] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(false);
+  const isRestricted = dataset?.visibility === "restricted";
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!reason.trim()) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const payload = {
+        reason: reason.trim(),
+        ...(isRestricted && additionalJustification.trim() ? { additional_justification: additionalJustification.trim() } : {}),
+      };
+      await datasetsApi.requestRevisionPermission(dataset.id, payload);
+      setSuccess(true);
+    } catch (err) {
+      setError(
+        err.response?.data?.detail ||
+        err.response?.data?.message ||
+        "Failed to request revision permission. Please try again."
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 animate-fade-in" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl border border-border animate-fade-in-up" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between pb-3 border-b border-border">
+          <h2 className="text-base font-bold text-navy">
+            {success ? "Request Submitted" : "Request Revision Permission"}
+          </h2>
+          <button type="button" onClick={onClose} className="p-1 rounded-lg text-gray-400 hover:text-navy">
+            <X size={18} />
+          </button>
+        </div>
+
+        {success ? (
+          <div className="py-6 text-center space-y-2">
+            <CheckCircle2 className="w-10 h-10 text-emerald-600 mx-auto" />
+            <h3 className="text-sm font-bold text-navy">Revision Permission Requested</h3>
+            <p className="text-xs text-gray-500">
+              Your request has been forwarded to the dataset owner for approval.
+            </p>
+            <button
+              type="button"
+              onClick={onClose}
+              className="mt-4 px-4 py-2 bg-navy text-white text-xs font-semibold rounded-xl"
+            >
+              Done
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+            <p className="text-xs text-gray-600 leading-relaxed">
+              To propose modifications or upload revised files to &ldquo;{dataset?.title}&rdquo;, request permission from the dataset owner.
+            </p>
+
+            {error && (
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700">
+                {error}
+              </div>
+            )}
+
+            <div>
+              <label htmlFor="rev-reason" className="block text-xs font-semibold text-gray-700 mb-1">
+                Reason for Revision <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                id="rev-reason"
+                required
+                rows={3}
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="Explain the updates or corrections you wish to propose…"
+                className="w-full text-xs rounded-xl border border-border p-3 focus:outline-none focus:border-gold resize-none"
+              />
+            </div>
+
+            {isRestricted && (
+              <div>
+                <label htmlFor="rev-just" className="block text-xs font-semibold text-gray-700 mb-1">
+                  Additional Institutional Justification <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  id="rev-just"
+                  required
+                  rows={2}
+                  value={additionalJustification}
+                  onChange={(e) => setAdditionalJustification(e.target.value)}
+                  placeholder="Restricted datasets require justification for the reviewer committee…"
+                  className="w-full text-xs rounded-xl border border-border p-3 focus:outline-none focus:border-gold resize-none"
+                />
+              </div>
+            )}
+
+            <div className="pt-2 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={submitting || !reason.trim() || (isRestricted && !additionalJustification.trim())}
+                className="px-4 py-2 bg-navy text-white text-xs font-semibold rounded-xl hover:bg-navy/90 disabled:opacity-50 transition"
+              >
+                {submitting ? "Submitting…" : "Submit Request"}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function DatasetViewPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -503,6 +631,7 @@ export default function DatasetViewPage() {
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [shareModalMode, setShareModalMode] = useState("download");
   const [linkCopied, setLinkCopied] = useState(false);
+  const [revisionModalOpen, setRevisionModalOpen] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -697,6 +826,18 @@ export default function DatasetViewPage() {
                     ? "Request Access"
                     : "Share"}
                 </button>
+
+                {isAuthenticated && (
+                  <button
+                    type="button"
+                    onClick={() => setRevisionModalOpen(true)}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 px-5 py-2.5 text-sm font-semibold text-slate-900 hover:border-gray-300 transition"
+                    title="Request permission to propose revisions to this dataset"
+                  >
+                    <Edit3 size={16} />
+                    Propose Revision
+                  </button>
+                )}
               </div>
               {downloadError && (
                 <p className="mt-2 text-xs text-red-500">{downloadError}</p>
@@ -864,6 +1005,13 @@ export default function DatasetViewPage() {
           setLinkCopied(true);
           setTimeout(() => setLinkCopied(false), 2000);
         }}
+      />
+    )}
+
+    {revisionModalOpen && (
+      <RevisionRequestModal
+        dataset={dataset}
+        onClose={() => setRevisionModalOpen(false)}
       />
     )}
   </div>

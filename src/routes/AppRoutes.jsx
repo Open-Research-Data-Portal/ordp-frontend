@@ -31,6 +31,8 @@ import BrowseDatasetsPage from "../pages/BrowseDatasetsPage.jsx";
 import DatasetViewPage from "../pages/DatasetViewPage";
 import BookmarksPage from "../features/datasets/pages/BookmarksPage";
 import NotificationsPage from "../pages/NotificationsPage";
+import ClaimAccessPage from "../pages/ClaimAccessPage.jsx";
+import AcceptInvitationPage from "../pages/AcceptInvitationPage.jsx";
 
 import { useAuth } from "../context/useAuth";
 import { isProfileComplete } from "../utils/userRoles";
@@ -107,6 +109,12 @@ export default function AppRoutes() {
       <Route path="/set-password/:token" element={<ResetPasswordPage />} />
       <Route path="/activate" element={<ResetPasswordPage />} />
       <Route path="/activate/:token" element={<ResetPasswordPage />} />
+
+      {/* Sharing & Access Claims */}
+      <Route path="/claim-access/:token" element={<ClaimAccessPage />} />
+      <Route path="/sharing/claim-access/:token" element={<ClaimAccessPage />} />
+      <Route path="/invitations/:token" element={<AcceptInvitationPage />} />
+      <Route path="/sharing/invitations/:token" element={<AcceptInvitationPage />} />
 
       {/* Public dataset browsing */}
       <Route path="/datasets" element={<BrowseDatasetsPage />} />

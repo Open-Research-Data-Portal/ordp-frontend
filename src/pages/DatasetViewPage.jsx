@@ -20,11 +20,12 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { getDatasetById } from "../api/datasets";
-import { getDownloadUrl, requestShareAccess } from "../api/sharing";
+import { getDownloadUrl, requestShareAccess, shareDatasetWith } from "../api/sharing";
 import TopBar from "../layouts/TopBar";
 import { getDatasetImage } from "../utils/datasetImage";
 import { useAuth } from "../context/useAuth";
 import { getDashboardPath } from "../utils/userRoles";
+import TabularPreview from "../components/ui/TabularPreview";
 
 // ---------------------------------------------------------------------
 // DatasetViewPage — the PUBLIC read-only view a researcher lands on when
@@ -188,13 +189,25 @@ function normalizeDataset(raw) {
       ? {
           name: primaryFile.original_filename || primaryFile.file_key || "data file",
           sizeLabel: formatBytes(primaryFile.file_size),
-          // The backend doesn't return a row preview yet — this stays
-          // empty until a "preview rows" endpoint exists, rather than
-          // showing MOCK_DATASET's unrelated sample rows as if real.
-          columns: primaryFile.columns || [],
-          rows: primaryFile.preview_rows || [],
+          columns: (primaryFile.preview_rows && typeof primaryFile.preview_rows === "object" && Array.isArray(primaryFile.preview_rows.columns) && primaryFile.preview_rows.columns.length > 0)
+            ? primaryFile.preview_rows.columns
+            : (Array.isArray(primaryFile.columns) && primaryFile.columns.length > 0
+                ? primaryFile.columns
+                : (Array.isArray(raw.data_preview?.columns) ? raw.data_preview.columns : [])),
+          rows: Array.isArray(primaryFile.preview_rows) 
+            ? primaryFile.preview_rows 
+            : (primaryFile.preview_rows && typeof primaryFile.preview_rows === "object" && Array.isArray(primaryFile.preview_rows.rows) 
+                ? primaryFile.preview_rows.rows 
+                : (Array.isArray(raw.data_preview?.rows) ? raw.data_preview.rows : [])),
         }
-      : MOCK_DATASET.dataFile, // FIXME: no files on this dataset yet — using mock as placeholder
+      : (raw.data_preview && raw.data_preview.available
+          ? {
+              name: "data preview",
+              sizeLabel: "—",
+              columns: Array.isArray(raw.data_preview.columns) ? raw.data_preview.columns : [],
+              rows: Array.isArray(raw.data_preview.rows) ? raw.data_preview.rows : [],
+            }
+          : MOCK_DATASET.dataFile),
     dataExplorer: {
       version: raw.version ? String(raw.version) : MOCK_DATASET.dataExplorer.version, // FIXME: no per-file version breakdown from backend yet
       sizeLabel: formatBytes(files.reduce((acc, f) => acc + (f.file_size || 0), 0)),
@@ -211,6 +224,8 @@ function normalizeDataset(raw) {
     },
     viewsSeries: MOCK_DATASET.viewsSeries, // FIXME: no per-dataset views time-series endpoint yet
     downloadsSeries: MOCK_DATASET.downloadsSeries, // FIXME: no per-dataset downloads time-series endpoint yet
+    is_archived: raw.is_archived ?? false,
+    archived_at: raw.archived_at ?? null,
   };
 }
 
@@ -323,25 +338,36 @@ function DownloadsChart({ data }) {
   );
 }
 
-function ShareAccessModal({ datasetId, onClose }) {
+function ShareAccessModal({ dataset, mode = "download", onClose, onDownloadReady, onShared }) {
+  const [email, setEmail] = useState("");
   const [purpose, setPurpose] = useState("");
   const [justification, setJustification] = useState("");
   const [durationDays, setDurationDays] = useState(30);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [submitted, setSubmitted] = useState(false);
+  const isRestricted = dataset?.visibility === "restricted";
+  const isShareMode = mode === "share";
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
     setError(null);
     try {
-      await requestShareAccess(datasetId, {
+      const payload = {
         purpose,
         purpose_type: "read",
-        justification,
+        justification: isRestricted ? justification : "",
         requested_duration_days: Number(durationDays) || undefined,
-      });
+      };
+      const result = isShareMode
+        ? await shareDatasetWith(dataset.id, { ...payload, email })
+        : await requestShareAccess(dataset.id, payload);
+      if (result?.download_url) {
+        onDownloadReady(result.download_url);
+        return;
+      }
+      if (isShareMode) onShared?.(result);
       setSubmitted(true);
     } catch (err) {
       console.error("Failed to submit access request:", err);
@@ -359,7 +385,10 @@ function ShareAccessModal({ datasetId, onClose }) {
       <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-slate-900">
-            {submitted ? "Request Sent" : "Request Access"}
+            {submitted
+              ? isShareMode ? "Share Sent" : "Request Sent"
+              : isShareMode ? "Share Dataset"
+              : isRestricted ? "Request Access" : "Download Request Form"}
           </h2>
           <button type="button" onClick={onClose} aria-label="Close" className="text-gray-400 hover:text-slate-900">
             <X size={18} />
@@ -369,7 +398,9 @@ function ShareAccessModal({ datasetId, onClose }) {
         {submitted ? (
           <div className="mt-4">
             <p className="text-sm text-gray-600">
-              Your access request has been submitted for review. You'll be notified once a decision is made.
+              {isShareMode
+                ? "The recipient will receive a claim link. Restricted datasets may still need owner or reviewer approval."
+                : "Your access request has been submitted for review. You'll be notified once a decision is made."}
             </p>
             <button
               type="button"
@@ -381,9 +412,25 @@ function ShareAccessModal({ datasetId, onClose }) {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+            {isShareMode && (
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">
+                  Recipient AASTU email <span className="text-red-500">*</span>
+                </label>
+                <input
+                  required
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+                  placeholder="recipient@aastu.edu.et"
+                />
+              </div>
+            )}
+
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">
-                Purpose <span className="text-red-500">*</span>
+                {isShareMode ? "Purpose of share" : "Purpose of download"} <span className="text-red-500">*</span>
               </label>
               <textarea
                 required
@@ -391,22 +438,25 @@ function ShareAccessModal({ datasetId, onClose }) {
                 onChange={(e) => setPurpose(e.target.value)}
                 rows={2}
                 className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
-                placeholder="e.g. Research and academic evaluation of..."
+                placeholder="e.g. Research, teaching, replication, or academic evaluation..."
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">
-                Justification (required for restricted datasets)
-              </label>
-              <textarea
-                value={justification}
-                onChange={(e) => setJustification(e.target.value)}
-                rows={2}
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
-                placeholder="Why do you need access to this restricted data?"
-              />
-            </div>
+            {isRestricted && (
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">
+                  Restricted access justification <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  required
+                  value={justification}
+                  onChange={(e) => setJustification(e.target.value)}
+                  rows={2}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+                  placeholder="Why do you need access to this restricted data?"
+                />
+              </div>
+            )}
 
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">
@@ -428,7 +478,7 @@ function ShareAccessModal({ datasetId, onClose }) {
               disabled={submitting}
               className="w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
             >
-              {submitting ? "Submitting…" : "Submit Request"}
+              {submitting ? "Submitting..." : isShareMode ? "Share Dataset" : "Submit Request"}
             </button>
           </form>
         )}
@@ -451,6 +501,7 @@ export default function DatasetViewPage() {
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState(null);
   const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [shareModalMode, setShareModalMode] = useState("download");
   const [linkCopied, setLinkCopied] = useState(false);
 
   useEffect(() => {
@@ -522,6 +573,12 @@ export default function DatasetViewPage() {
   };
 
   const handleDownload = async () => {
+    if (dataset.visibility === "public" || dataset.visibility === "restricted") {
+      setShareModalMode("download");
+      setShareModalOpen(true);
+      return;
+    }
+
     setDownloading(true);
     setDownloadError(null);
     try {
@@ -541,8 +598,15 @@ export default function DatasetViewPage() {
     }
   };
 
+  const handleDownloadReady = (url) => {
+    setShareModalOpen(false);
+    setDownloadError(null);
+    window.location.assign(url);
+  };
+
   const handleShare = async () => {
-    if (dataset.visibility === "restricted") {
+    if (dataset.visibility === "public" || dataset.visibility === "restricted") {
+      setShareModalMode("share");
       setShareModalOpen(true);
       return;
     }
@@ -657,7 +721,7 @@ export default function DatasetViewPage() {
 
       {/* Data preview + Data Explorer */}
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_260px]">
-        <div className="rounded-2xl border border-gray-200 bg-white p-5">
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 min-w-0 overflow-hidden">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-semibold text-slate-900">{dataset.dataFile.name}</p>
@@ -668,25 +732,13 @@ export default function DatasetViewPage() {
             </button>
           </div>
 
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 text-xs font-semibold uppercase text-gray-400">
-                  {dataset.dataFile.columns.map((col) => (
-                    <th key={col} className="px-3 py-2 text-amber-700">{col}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {dataset.dataFile.rows.map((row, i) => (
-                  <tr key={i} className="border-b border-gray-50 last:border-0">
-                    {row.map((cell, j) => (
-                      <td key={j} className="px-3 py-2 text-gray-700">{cell}</td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="mt-4">
+            <TabularPreview
+              columns={dataset.dataFile.columns}
+              rows={dataset.dataFile.rows}
+              maxRows={10}
+              maxHeight={320}
+            />
           </div>
         </div>
 
@@ -804,8 +856,14 @@ export default function DatasetViewPage() {
 
     {shareModalOpen && (
       <ShareAccessModal
-        datasetId={dataset.id}
+        dataset={dataset}
+        mode={shareModalMode}
         onClose={() => setShareModalOpen(false)}
+        onDownloadReady={handleDownloadReady}
+        onShared={() => {
+          setLinkCopied(true);
+          setTimeout(() => setLinkCopied(false), 2000);
+        }}
       />
     )}
   </div>

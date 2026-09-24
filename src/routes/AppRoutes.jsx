@@ -23,6 +23,8 @@ import AdminAuditLogPage from "../features/datasets/pages/AdminAuditLogPage.jsx"
 import AdminDeletionRequestsPage from "../features/datasets/pages/AdminDeletionRequestsPage.jsx";
 import ReviewerDashboardPage from "../features/datasets/pages/ReviewerDashboardPage.jsx";
 import ReviewerQueuePage from "../features/datasets/pages/ReviewerQueuePage.jsx";
+import ReviewerArchiveRequestsPage from "../features/datasets/pages/ReviewerArchiveRequestsPage.jsx";
+import AdminArchivedDatasetsPage from "../features/datasets/pages/AdminArchivedDatasetsPage.jsx";
 import ReviewDatasetPage from "../features/datasets/pages/ReviewDatasetPage.jsx";
 import DatasetDetailPage from "../features/datasets/pages/Datasetdetailpage.jsx";
 import BrowseDatasetsPage from "../pages/BrowseDatasetsPage.jsx";
@@ -89,17 +91,22 @@ function VerifyEmailRoute() {
 export default function AppRoutes() {
   return (
     <Routes>
-      {/* Public */}
+      {/* Public Auth & Activation */}
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/verify-email" element={<VerifyEmailRoute />} />
+      <Route path="/verify-email/:token" element={<EmailVerifyConfirmPage />} />
       <Route path="/verify-email/confirm" element={<EmailVerifyConfirmPage />} />
+      <Route path="/verify-email/confirm/:token" element={<EmailVerifyConfirmPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/check-email" element={<CheckEmailPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
       <Route path="/set-password" element={<ResetPasswordPage />} />
+      <Route path="/set-password/:token" element={<ResetPasswordPage />} />
       <Route path="/activate" element={<ResetPasswordPage />} />
+      <Route path="/activate/:token" element={<ResetPasswordPage />} />
 
       {/* Public dataset browsing */}
       <Route path="/datasets" element={<BrowseDatasetsPage />} />
@@ -134,13 +141,13 @@ export default function AppRoutes() {
         <ProtectedRoute><ReviewDatasetPage /></ProtectedRoute>
       } />
       <Route path="/reviewer/archive-requests" element={
-        <ProtectedRoute><DatasetListPage defaultStatusFilter="published" title="Archive Requests" subtitle="Manage and review dataset archival requests." /></ProtectedRoute>
+        <ProtectedRoute><ReviewerArchiveRequestsPage /></ProtectedRoute>
       } />
       <Route path="/archived-datasets" element={
         <ProtectedRoute><DatasetListPage defaultStatusFilter="published" title="Archived Datasets" subtitle="Browse datasets that have been archived." /></ProtectedRoute>
       } />
       <Route path="/admin/archived-datasets" element={
-        <ProtectedRoute><DatasetListPage defaultStatusFilter="published" title="Archived Datasets" subtitle="Browse archived datasets across the platform." /></ProtectedRoute>
+        <ProtectedRoute><AdminArchivedDatasetsPage /></ProtectedRoute>
       } />
       <Route path="/admin-dashboard" element={
         <ProtectedRoute><AdminDashboardPage /></ProtectedRoute>

@@ -12,16 +12,15 @@ import {
   User,
   HardDrive,
   Archive,
-  Table,
   Loader2,
-  Info,
 } from "lucide-react";
 import TopBar from "../../../layouts/TopBar";
 import { useAuth } from "../../../context/useAuth";
 import { useToast } from "../../../context/ToastContext";
 import { getDashboardPath } from "../../../utils/userRoles";
 import * as datasetsApi from "../hooks/datasetsApi";
-import { getDownloadUrl } from "../../../api/sharing";
+import { getDownloadUrl, shareDatasetWith } from "../../../api/sharing";
+import TabularPreview from "../../../components/ui/TabularPreview";
 import { getDatasetImage } from "../../../utils/datasetImage";
 
 // ---------------------------------------------------------------------
@@ -66,115 +65,9 @@ function formatBytes(bytes) {
 // ---------------------------------------------------------------------
 // Data File Previews (Tabular CSV & Image)
 // ---------------------------------------------------------------------
-function TabularPreview({ columns, rows, filename }) {
-  const [viewMode, setViewMode] = useState("detail"); // "detail" | "compact" | "column"
 
-  const defaultCols = ["user_id", "user_name", "persona", "age", "fitness_goal", "weekly_sessions", "avg_heart_rate", "active_minutes"];
-  const displayCols = Array.isArray(columns) && columns.length > 0 ? columns : defaultCols;
 
-  const defaultRows = [
-    ["U0363", "Emily Rivera", "low_stress", "53.0", "FAT_LOSS", "4", "138", "145"],
-    ["U0280", "Aiden Perez", "high_stress_low_support", "46.0", "mobility", "3", "142", "120"],
-    ["U0043", "Emma Lopez", "moderate_stress", "21.0", "endurance", "5", "155", "210"],
-    ["U0007", "Ashley Campbell", "high_stress_low_support", "56.0", "mobility", "2", "128", "90"],
-    ["U0112", "Marcus Vance", "low_stress", "34.0", "muscle_gain", "4", "148", "180"],
-    ["U0421", "Sophia Martinez", "high_stress", "29.0", "endurance", "6", "162", "240"],
-    ["U0589", "Daniel Kim", "moderate_stress", "41.0", "FAT_LOSS", "3", "135", "110"],
-    ["U0632", "Olivia Taylor", "low_stress", "27.0", "mobility", "4", "140", "150"],
-    ["U0714", "Ethan Wright", "moderate_stress", "38.0", "muscle_gain", "5", "152", "195"],
-    ["U0825", "Ava Robinson", "low_stress", "31.0", "endurance", "4", "146", "165"],
-    ["U0911", "Liam Thomas", "high_stress", "49.0", "FAT_LOSS", "2", "130", "85"],
-    ["U1042", "Isabella Jackson", "moderate_stress", "24.0", "mobility", "5", "150", "200"],
-    ["U1153", "Noah White", "low_stress", "36.0", "muscle_gain", "4", "144", "175"],
-    ["U1264", "Mia Harris", "high_stress_low_support", "43.0", "endurance", "3", "138", "130"],
-    ["U1375", "Lucas Martin", "moderate_stress", "30.0", "FAT_LOSS", "5", "158", "220"],
-    ["U1486", "Charlotte Clark", "low_stress", "28.0", "mobility", "4", "141", "155"],
-    ["U1597", "Benjamin Lewis", "high_stress", "52.0", "muscle_gain", "3", "132", "105"],
-    ["U1708", "Amelia Walker", "moderate_stress", "33.0", "endurance", "4", "149", "170"],
-    ["U1819", "James Hall", "low_stress", "45.0", "FAT_LOSS", "4", "137", "140"],
-    ["U1930", "Harper Allen", "high_stress", "26.0", "mobility", "5", "154", "205"],
-  ];
-
-  const displayRows = Array.isArray(rows) && rows.length > 0 ? rows.slice(0, 20) : defaultRows;
-
-  return (
-    <div className="p-4 bg-white border-t border-gray-100">
-      <div className="flex items-center justify-between gap-4 mb-3 pb-2 border-b border-gray-100 flex-wrap">
-        <div className="flex items-center gap-4 text-xs font-semibold text-gray-600">
-          <button
-            type="button"
-            onClick={() => setViewMode("detail")}
-            className={`pb-1 border-b-2 transition-colors ${viewMode === "detail" ? "border-slate-900 text-slate-900 font-bold" : "border-transparent text-gray-400 hover:text-gray-600"}`}
-          >
-            Detail
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode("compact")}
-            className={`pb-1 border-b-2 transition-colors ${viewMode === "compact" ? "border-slate-900 text-slate-900 font-bold" : "border-transparent text-gray-400 hover:text-gray-600"}`}
-          >
-            Compact
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode("column")}
-            className={`pb-1 border-b-2 transition-colors ${viewMode === "column" ? "border-slate-900 text-slate-900 font-bold" : "border-transparent text-gray-400 hover:text-gray-600"}`}
-          >
-            Column Summary
-          </button>
-        </div>
-        <div className="flex items-center gap-3 text-xs text-gray-500 font-mono">
-          <span>Showing 20 sample rows</span>
-          <span>·</span>
-          <span className="font-semibold text-slate-700 bg-gray-100 px-2 py-0.5 rounded border border-gray-200">
-            {displayCols.length} columns
-          </span>
-        </div>
-      </div>
-
-      {viewMode === "column" ? (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 max-h-64 overflow-y-auto p-1 font-mono text-xs">
-          {displayCols.map((c, i) => (
-            <div key={i} className="p-2.5 bg-gray-50 rounded-lg border border-gray-200 flex flex-col justify-between">
-              <span className="font-bold text-slate-800 truncate">{c}</span>
-              <span className="text-[10px] text-gray-400 mt-1">Text / Categorical</span>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="overflow-x-auto max-h-80 rounded-lg border border-gray-200 shadow-2xs">
-          <table className={`w-full text-xs text-left border-collapse font-mono ${viewMode === "compact" ? "py-1" : ""}`}>
-            <thead className="bg-gray-50 sticky top-0 border-b border-gray-200 text-slate-700">
-              <tr>
-                <th className="px-3 py-2 border-r border-gray-200 w-10 text-center text-gray-400 bg-gray-100/50">#</th>
-                {displayCols.map((col, idx) => (
-                  <th key={idx} className="px-3 py-2 font-bold border-r border-gray-200 last:border-r-0 whitespace-nowrap bg-gray-50">
-                    {col}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 text-slate-800 bg-white">
-              {displayRows.map((row, rIdx) => (
-                <tr key={rIdx} className="hover:bg-slate-50/80 transition-colors">
-                  <td className="px-3 py-1.5 text-center text-gray-400 border-r border-gray-200 bg-gray-50/40 text-[10px]">
-                    {rIdx + 1}
-                  </td>
-                  {(Array.isArray(row) ? row : Object.values(row)).map((cell, cIdx) => (
-                    <td key={cIdx} className="px-3 py-1.5 border-r border-gray-100 last:border-r-0 truncate max-w-[180px]">
-                      {String(cell ?? "—")}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
-}
-
+// eslint-disable-next-line no-unused-vars
 function ImagePreview({ url, filename, fileType }) {
   const [zoomed, setZoomed] = useState(false);
   return (
@@ -211,18 +104,35 @@ function ImagePreview({ url, filename, fileType }) {
 // backend nests fields, same role as DatasetViewPage's normalizeDataset.
 // ---------------------------------------------------------------------
 function normalizeFile(f) {
+  if (!f) return {};
+  const pr = f.preview_rows;
+  let columns = (Array.isArray(f.columns) && f.columns.length > 0) ? f.columns : [];
+  let rows = [];
+
+  if (pr && typeof pr === "object" && !Array.isArray(pr)) {
+    if (Array.isArray(pr.columns) && pr.columns.length > 0) {
+      columns = pr.columns;
+    }
+    if (Array.isArray(pr.rows)) {
+      rows = pr.rows;
+    }
+  } else if (Array.isArray(pr)) {
+    rows = pr;
+  }
+
+  const origName = f.original_filename || f.filename || f.file_key || "";
   return {
-    id: f.id,
-    filename: f.original_filename || f.file_key || f.filename || "data file",
+    id: f.id || Math.random().toString(),
+    filename: origName || (f.file_type ? `data_file.${f.file_type}` : "data file"),
     file_type:
       f.file_type ||
-      (f.original_filename ? f.original_filename.split(".").pop()?.toUpperCase() : null),
-    file_size: f.file_size,
+      (origName ? origName.split(".").pop()?.toUpperCase() : "CSV"),
+    file_size: f.file_size || 0,
     download_url: f.download_url || f.file_key || null,
-    columns: f.columns || [],
-    preview_rows: f.preview_rows || [],
+    columns,
+    preview_rows: rows,
     item_count: f.item_count ?? f.row_count ?? null,
-    column_count: f.column_count ?? (Array.isArray(f.columns) ? f.columns.length : null),
+    column_count: f.column_count ?? (Array.isArray(columns) ? columns.length : null),
     has_missing_values: f.has_missing_values ?? null,
   };
 }
@@ -230,35 +140,30 @@ function normalizeFile(f) {
 function normalizeDataset(raw) {
   if (!raw) return null;
   const meta = raw.metadata || {};
-  const files = (raw.files || []).map(normalizeFile);
+  const files = Array.isArray(raw.files) ? raw.files.map(normalizeFile) : [];
 
   return {
     id: raw.id,
-    title: raw.title,
-    visibility: raw.visibility,
-    status: raw.status,
+    title: raw.title || "Untitled Dataset",
+    visibility: raw.visibility || "public",
+    status: raw.status || "published",
     owner: raw.owner,
-    is_owner: raw.is_owner,
+    is_owner: raw.is_owner ?? false,
     owner_name: raw.author || raw.owner_name || null,
-    updated_at: raw.updated_at,
+    updated_at: raw.updated_at || raw.created_at || new Date().toISOString(),
     thumbnail_url: getDatasetImage(raw),
 
     description: meta.description ?? raw.description ?? "",
-    keywords: meta.keywords ?? raw.keywords ?? [],
+    keywords: Array.isArray(meta.keywords) ? meta.keywords : (Array.isArray(raw.keywords) ? raw.keywords : []),
 
     subject_name: meta.subject_name ?? raw.subject_name ?? "",
     associated_tasks: meta.associated_tasks ?? raw.associated_tasks ?? "",
     feature_type: meta.feature_type ?? raw.feature_type ?? "",
-    characteristics: meta.characteristics ?? raw.characteristics ?? [],
-    // FIXME: dataset-level has_missing_values vs. per-file — backend may only
-    // expose this on the file record. Falls back to the first file's value
-    // in the render below if this is null.
+    characteristics: Array.isArray(meta.characteristics) ? meta.characteristics : (Array.isArray(raw.characteristics) ? raw.characteristics : []),
     has_missing_values: meta.has_missing_values ?? raw.has_missing_values ?? null,
 
     creators: meta.creators ?? raw.creators ?? [],
 
-    // FIXME: no confirmed backend field for these three yet — confirm with
-    // backend and adjust the metadata key names here + in buildPatch.
     collaborators_note: meta.collaborators_note ?? raw.collaborators_note ?? "",
     coverage: meta.coverage ?? raw.coverage ?? "",
     doi: meta.doi ?? raw.doi ?? null,
@@ -266,6 +171,8 @@ function normalizeDataset(raw) {
     citation_notes: meta.citation_notes ?? raw.citation_notes ?? "",
 
     files,
+    is_archived: raw.is_archived ?? false,
+    archived_at: raw.archived_at ?? null,
   };
 }
 
@@ -398,6 +305,116 @@ function StatusBadge({ status }) {
   );
 }
 
+function ShareDatasetModal({ dataset, onClose, onShared }) {
+  const [email, setEmail] = useState("");
+  const [purpose, setPurpose] = useState("");
+  const [justification, setJustification] = useState("");
+  const [durationDays, setDurationDays] = useState(30);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+  const isRestricted = dataset?.visibility === "restricted";
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    setSubmitting(true);
+    setError(null);
+    try {
+      const result = await shareDatasetWith(dataset.id, {
+        email,
+        purpose,
+        purpose_type: "read",
+        justification: isRestricted ? justification : "",
+        requested_duration_days: Number(durationDays) || undefined,
+      });
+      onShared(result);
+    } catch (err) {
+      setError(err?.response?.data?.detail || "Failed to share this dataset.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lg">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold text-slate-900">Share Dataset</h2>
+          <button type="button" onClick={onClose} aria-label="Close" className="text-gray-400 hover:text-slate-900">
+            <X size={18} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">
+              Recipient AASTU email <span className="text-red-500">*</span>
+            </label>
+            <input
+              required
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+              placeholder="recipient@aastu.edu.et"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">
+              Purpose <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              required
+              value={purpose}
+              onChange={(e) => setPurpose(e.target.value)}
+              rows={2}
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+              placeholder="Research, teaching, replication, or academic evaluation..."
+            />
+          </div>
+
+          {isRestricted && (
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">
+                Restricted access justification <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                required
+                value={justification}
+                onChange={(e) => setJustification(e.target.value)}
+                rows={2}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+                placeholder="Why should this recipient access restricted data?"
+              />
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">Requested duration (days)</label>
+            <input
+              type="number"
+              min={1}
+              value={durationDays}
+              onChange={(e) => setDurationDays(e.target.value)}
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+            />
+          </div>
+
+          {error && <p className="text-xs text-red-500">{error}</p>}
+
+          <button
+            type="submit"
+            disabled={submitting}
+            className="w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+          >
+            {submitting ? "Sharing..." : "Share Dataset"}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function DatasetDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -419,6 +436,7 @@ export default function DatasetDetailPage() {
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState(null);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
 
   // Archival Request Modal state (5 form fields)
   const [showArchiveModal, setShowArchiveModal] = useState(false);
@@ -437,13 +455,6 @@ export default function DatasetDetailPage() {
   const [isUnarchivingRequested, setIsUnarchivingRequested] = useState(false);
 
 
-  // Sync user email when user object is loaded
-  useEffect(() => {
-    if (user?.email && !contactEmail) {
-      setContactEmail(user.email);
-    }
-  }, [user, contactEmail]);
-
   useEffect(() => {
     let isMounted = true;
     const load = async () => {
@@ -453,7 +464,8 @@ export default function DatasetDetailPage() {
         const raw = await datasetsApi.getDatasetDetail(id);
         if (isMounted) setDataset(normalizeDataset(raw));
       } catch (err) {
-        if (isMounted) setError(err.response?.data?.detail || "Failed to load this dataset.");
+        console.error("Dataset detail load error:", err);
+        if (isMounted) setError(err.response?.data?.detail || err.message || "Failed to load this dataset.");
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -588,6 +600,14 @@ export default function DatasetDetailPage() {
   }
 
   async function handleShare() {
+    if (dataset.visibility === "private") {
+      addToast("Private datasets cannot be shared.", "error");
+      return;
+    }
+    if (dataset.visibility === "public" || dataset.visibility === "restricted") {
+      setShowShareModal(true);
+      return;
+    }
     try {
       await navigator.clipboard.writeText(window.location.href);
       setLinkCopied(true);
@@ -842,7 +862,14 @@ export default function DatasetDetailPage() {
                     {isOwner && (
                       <button
                         type="button"
-                        onClick={() => dataset.is_archived ? setShowUnarchiveModal(true) : setShowArchiveModal(true)}
+                        onClick={() => {
+                          if (dataset.is_archived) {
+                            setShowUnarchiveModal(true);
+                            return;
+                          }
+                          if (!contactEmail && user?.email) setContactEmail(user.email);
+                          setShowArchiveModal(true);
+                        }}
                         disabled={dataset.is_archived ? isUnarchivingRequested : isArchivingRequested}
                         className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-5 py-2.5 text-sm font-semibold text-amber-900 hover:bg-amber-100 transition shadow-2xs disabled:opacity-60"
                       >
@@ -892,8 +919,8 @@ export default function DatasetDetailPage() {
         </div>
 
         {/* Files + Dataset Details */}
-        <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_300px]">
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 space-y-6">
+        <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_260px]">
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 space-y-6 min-w-0 overflow-hidden">
             <p className="text-sm font-bold text-slate-900">data file</p>
             {files.length === 0 ? (
               <p className="text-sm text-gray-400">No files uploaded yet.</p>
@@ -904,7 +931,7 @@ export default function DatasetDetailPage() {
                 const isTabular = ["csv", "xlsx", "xls", "tsv", "json", "parquet", "sqlite"].includes(fType) || (f.preview_rows && f.preview_rows.length > 0);
 
                 return (
-                  <div key={f.id || idx} className="border border-gray-100 rounded-xl overflow-hidden bg-gray-50/50">
+                  <div key={f.id || idx} className="border border-gray-100 rounded-xl overflow-hidden bg-gray-50/50 min-w-0">
                     <div className="p-4 flex items-center justify-between gap-4 border-b border-gray-100 bg-white">
                       <div className="flex items-center gap-3 min-w-0">
                         <span className="w-9 h-9 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-center shrink-0">
@@ -933,7 +960,14 @@ export default function DatasetDetailPage() {
 
                     {/* Content View Based on Data Type */}
                     {isTabular && f.preview_rows && f.preview_rows.length > 0 ? (
-                      <TabularPreview columns={f.columns} rows={f.preview_rows} />
+                      <div className="p-4">
+                        <TabularPreview
+                          columns={f.columns}
+                          rows={f.preview_rows}
+                          maxRows={10}
+                          maxHeight={320}
+                        />
+                      </div>
                     ) : isImage && f.download_url ? (
                       <div className="p-4 flex flex-col items-center justify-center bg-gray-900/5">
                         <div className="max-h-96 max-w-full overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
@@ -1635,6 +1669,24 @@ export default function DatasetDetailPage() {
             </form>
           </div>
         </div>
+      )}
+
+      {showShareModal && (
+        <ShareDatasetModal
+          dataset={dataset}
+          onClose={() => setShowShareModal(false)}
+          onShared={(result) => {
+            setShowShareModal(false);
+            setLinkCopied(true);
+            setTimeout(() => setLinkCopied(false), 2000);
+            addToast(
+              result?.status === "approved"
+                ? "Share link sent. The recipient can claim access from their email."
+                : "Share request submitted for approval.",
+              "success"
+            );
+          }}
+        />
       )}
 
     </div>

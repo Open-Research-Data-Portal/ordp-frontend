@@ -17,8 +17,8 @@ import { useMemo } from "react";
 export default function TabularPreview({
   columns = [],
   rows = [],
-  maxRows = 20,
-  maxHeight = 420,
+  maxRows = 10,
+  maxHeight = 320,
 }) {
   const resolvedColumns = useMemo(() => {
     if (columns.length > 0) return columns;
@@ -38,12 +38,12 @@ export default function TabularPreview({
   }
 
   return (
-    <div>
+    <div className="w-full max-w-full overflow-hidden">
       <div
-        className="overflow-auto border-t border-gray-100"
+        className="overflow-x-auto overflow-y-auto border-t border-gray-100 w-full"
         style={{ maxHeight }}
       >
-        <table className="w-full border-collapse text-xs">
+        <table className="min-w-full border-collapse text-xs table-auto">
           <thead className="sticky top-0 z-10">
             <tr className="bg-gray-50">
               <th className="sticky left-0 z-20 bg-gray-50 border-b border-r border-gray-200 px-3 py-2 text-right font-semibold text-gray-400 w-12">

@@ -30,6 +30,13 @@ export async function listLanguages() {
   return Array.isArray(data) ? data : (data?.results || data?.languages || []);
 }
 
+export async function searchUsers(query) {
+  const { data } = await client.get("/accounts/search-users/", {
+    params: { q: query },
+  });
+  return Array.isArray(data) ? data : (data?.results || []);
+}
+
 export async function attachMetadata(datasetId, metadataPayload) {
   const { data } = await client.post(`${METADATA_BASE}/${datasetId}/attach/`, metadataPayload);
   return data;
@@ -134,6 +141,11 @@ export async function getDatasetDetail(datasetId) {
 }
 export const getDatasetById = getDatasetDetail;
 
+export async function getDatasetReviewers(datasetId) {
+  const { data } = await client.get(`${DATASETS_BASE}/${datasetId}/reviewers/`);
+  return data;
+}
+
 export async function updateDataset(datasetId, payload) {
   const { data } = await client.patch(`${DATASETS_BASE}/${datasetId}/update/`, payload);
   return data;
@@ -161,6 +173,11 @@ export async function getDashboardFeed() {
 
 export async function getDashboardMyContributions() {
   const { data } = await client.get(`${DATASETS_BASE}/dashboard/my-contributions/`);
+  return data;
+}
+
+export async function getDatasetVersions(datasetId) {
+  const { data } = await client.get(`${DATASETS_BASE}/${datasetId}/versions/`);
   return data;
 }
 
@@ -266,8 +283,30 @@ export async function voteContentUpdate(updateId, payload) {
   return data;
 }
 
+export async function getContentUpdateComparison(updateId) {
+  const { data } = await client.get(`${DATASETS_BASE}/content-updates/${updateId}/comparison/`);
+  return data;
+}
+
 export async function voteRevisionRequest(requestId, payload) {
   const { data } = await client.post(`/admin-panel/revision-requests/${requestId}/vote/`, payload);
+  return data;
+}
+
+export async function requestRevisionPermission(datasetId, payload) {
+  const { data } = await client.post(`${DATASETS_BASE}/${datasetId}/request-revision-permission/`, payload);
+  return data;
+}
+
+export async function decideRevisionRequestAsOwner(requestId, decision) {
+  const { data } = await client.post(`${DATASETS_BASE}/revision-requests/${requestId}/decide/`, {
+    decision,
+  });
+  return data;
+}
+
+export async function proposeRevision(datasetId, payload) {
+  const { data } = await client.post(`${DATASETS_BASE}/${datasetId}/propose-revision/`, payload);
   return data;
 }
 
@@ -301,6 +340,33 @@ export async function getAdminAuditLog() {
   return data;
 }
 
+export async function getAdminAuditPeakHours(params) {
+  const { data } = await client.get("/admin-panel/dashboard/admin/audit-log/peak-hours/", { params });
+  return data;
+}
+
+export async function getAdminAuditMostAccessedDatasets(params) {
+  const { data } = await client.get("/admin-panel/dashboard/admin/audit-log/most-accessed-datasets/", { params });
+  return data;
+}
+
+export async function getAdminAuditFlagged(params) {
+  const { data } = await client.get("/admin-panel/dashboard/admin/audit-log/flagged/", { params });
+  return data;
+}
+
+export async function getAdminGraphs() {
+  const { data } = await client.get("/admin-panel/dashboard/admin/graphs/");
+  return data;
+}
+export async function exportAdminAuditLog(format = "csv") {
+  const { data } = await client.get(`/admin-panel/dashboard/admin/audit-log/export/?export_format=${format}`, {
+    responseType: "blob",
+  });
+  return data;
+}
+
+
 export async function getAdminDeletionQueue() {
   const { data } = await client.get("/admin-panel/deletion-requests/queue/");
   return data;
@@ -327,6 +393,31 @@ export async function deleteAdminUser(userId) {
     }
     throw err;
   }
+}
+
+export async function getInactiveUsers(params = {}) {
+  const { data } = await client.get("/admin-panel/users/inactive/", { params });
+  return data;
+}
+
+export async function permanentlyDeleteInactiveUser(userId) {
+  const { data } = await client.delete(`/admin-panel/users/${userId}/delete-inactive/`);
+  return data;
+}
+
+export async function getDraftExpirationPreview(params = {}) {
+  const { data } = await client.get("/admin-panel/draft-expiration/", { params });
+  return data;
+}
+
+export async function runDraftExpiration(payload = {}) {
+  const { data } = await client.post("/admin-panel/draft-expiration/", payload);
+  return data;
+}
+
+export async function runAdminSuccession(payload) {
+  const { data } = await client.post("/admin-panel/admin-succession/", payload);
+  return data;
 }
 
 export async function getAdminQueue() {
@@ -504,6 +595,8 @@ export async function voteArchiveRequest(requestId, vote) {
   throw lastErr;
 }
 
+export const voteOnArchiveRequest = voteArchiveRequest;
+
 /**
  * Admin fetches queue of pending dataset unarchiving/restoration requests.
  */
@@ -511,6 +604,8 @@ export async function getUnarchiveRequestsQueue() {
   const { data } = await client.get(`/admin-panel/unarchive-requests/queue/`);
   return data;
 }
+
+export const getAdminUnarchiveRequestQueue = getUnarchiveRequestsQueue;
 
 /**
  * Admin decides on a pending unarchive request ("approve" or "reject").
@@ -528,6 +623,15 @@ export async function decideUnarchiveRequest(requestId, decision) {
  */
 export async function adminRestoreDataset(datasetId) {
   const { data } = await client.post(`/admin-panel/datasets/${datasetId}/restore/`);
+  return data;
+}
+
+/**
+ * Fetch archive/unarchive lifecycle events for a dataset.
+ * @param {string} datasetId
+ */
+export async function getDatasetArchiveHistory(datasetId) {
+  const { data } = await client.get(`/admin-panel/datasets/${datasetId}/archive-history/`);
   return data;
 }
 

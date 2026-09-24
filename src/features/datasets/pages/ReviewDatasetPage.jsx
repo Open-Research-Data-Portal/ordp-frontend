@@ -15,8 +15,10 @@ import {
   Calendar,
   User,
   Tag,
+  BookOpen,
   X,
   Trash2,
+  Upload,
 } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import { StatusBadge } from "../../../components/dashboard/dashboardUi";
@@ -58,6 +60,14 @@ const EVALUATION_QUESTIONS = [
   },
 ];
 
+const SCORE_LABELS = {
+  1: "1 · Poor",
+  2: "2 · Fair",
+  3: "3 · Satisfactory",
+  4: "4 · Good",
+  5: "5 · Excellent",
+};
+
 function formatDate(dateString) {
   if (!dateString) return "—";
   const d = new Date(dateString);
@@ -92,7 +102,7 @@ function downloadPreviewCsv(file, datasetTitle) {
 }
 
 export default function ReviewDatasetPage() {
-  const { datasetId } = useParams();
+  const { id: datasetId } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
   const { addToast } = useToast();
@@ -214,18 +224,12 @@ export default function ReviewDatasetPage() {
       navigate("/reviewer/review-queue");
     } catch (err) {
       console.error("Decision submission error:", err);
-      if (err?.response?.status === 404) {
-        addToast("This dataset has already been reviewed or is no longer pending evaluation.", "info");
-        navigate("/reviewer/review-queue");
-        return;
-      }
-      const rawData = err?.response?.data;
-      const isHtml = typeof rawData === "string" && (rawData.includes("<html>") || rawData.includes("<h1>Not Found"));
       const serverMsg =
         err?.response?.data?.detail ||
         err?.response?.data?.message ||
         err?.response?.data?.error ||
-        (!isHtml && typeof rawData === "string" ? rawData : null) ||
+        (typeof err?.response?.data === "string" ? err.response.data : null) ||
+        (err?.response?.data ? JSON.stringify(err.response.data) : null) ||
         err?.message ||
         "Failed to submit decision.";
       addToast(serverMsg, "error");
@@ -667,6 +671,19 @@ export default function ReviewDatasetPage() {
                 >
                   <XCircle className="w-3.5 h-3.5" />
                   Reject Dataset
+                </button>
+
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => {
+                    setDecisionModal("changes_requested");
+                    setModalReason("");
+                  }}
+                  className="inline-flex items-center justify-center gap-1.5 bg-amber-100 hover:bg-amber-200 text-amber-800 text-xs font-bold rounded-xl py-2.5 transition disabled:opacity-40"
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  Request Changes
                 </button>
               </div>
             </div>

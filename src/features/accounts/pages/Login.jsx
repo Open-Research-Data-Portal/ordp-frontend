@@ -46,7 +46,7 @@ export default function LoginPage() {
         });
         setResearchersCount(uniqueResearchers.size.toString());
         setDatasetsCount(list.length.toString());
-      } catch (err) {
+      } catch {
         if (!active) return;
         setResearchersCount("0");
         setDatasetsCount("0");

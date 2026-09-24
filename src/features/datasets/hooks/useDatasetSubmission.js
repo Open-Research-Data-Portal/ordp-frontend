@@ -331,7 +331,7 @@ export default function useDatasetSubmission(draftId = null) {
         }
       }
       setStep(2);
-    } catch (err) {
+    } catch {
       setFormData((prev) => ({ ...prev, details: detailsData }));
       setStep(2);
     } finally {
@@ -339,7 +339,7 @@ export default function useDatasetSubmission(draftId = null) {
     }
   };
 
-  const inviteCoauthor = async ({ email, title }) => {
+  const inviteCoauthor = async ({ email, title, permission = "view" }) => {
     setIsSubmitting(true);
     setSubmitError(null);
     try {
@@ -351,7 +351,7 @@ export default function useDatasetSubmission(draftId = null) {
         setDatasetId(did);
         setUploadSessionId(result.upload_session_id);
       }
-      await sendCoauthorInvitation(did, email);
+      await sendCoauthorInvitation(did, { email, permission });
     } catch (err) {
       const message = extractError(err);
       setSubmitError(message);
@@ -428,7 +428,7 @@ export default function useDatasetSubmission(draftId = null) {
         }
       }
       setStep(3);
-    } catch (err) {
+    } catch {
       setFormData((prev) => ({ ...prev, metadata: metadataData }));
       setStep(3);
     } finally {

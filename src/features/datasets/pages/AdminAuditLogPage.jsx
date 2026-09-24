@@ -1,321 +1,319 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Download } from "lucide-react";
+import { ArrowLeft, Download, Clock, Database, AlertTriangle, TrendingUp, BarChart3, ShieldAlert } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import * as datasetsApi from "../hooks/datasetsApi";
 
-const PAGE_SIZE = 20;
-
-const ACTION_COLORS = {
-  "Dataset Update": "bg-blue-50 text-blue-700",
-  "Access Granted": "bg-gray-100 text-gray-700",
-  Backup: "bg-indigo-50 text-indigo-700",
-  "Role Change": "bg-amber-50 text-amber-700",
-  Upload: "bg-emerald-50 text-emerald-700",
-  "Record Deletion": "bg-red-50 text-red-700",
-  "User Created": "bg-emerald-50 text-emerald-700",
-  "User Deleted": "bg-red-50 text-red-700",
-};
-
-const ROLE_BADGES = {
-  admin: "bg-gold-light text-gold border border-gold/30",
-  reviewer: "bg-violet-50 text-violet-700 border border-violet-200",
-  researcher: "bg-blue-50 text-blue-700 border border-blue-200",
-  public: "bg-gray-100 text-gray-700 border border-gray-200",
-  user: "bg-gray-100 text-gray-700 border border-gray-200",
-};
-
-// The backend audit rows only carry the actor's full name — the role isn't
-// included. Resolve it by matching against the admin users list (which returns
-// each user's `roles` array) so the table can show the actor's role.
-function roleOf(row, roleByUser) {
-  const key = String(row.user || row.user_name || "").trim().toLowerCase();
-  if (!key) return "";
-  const matched = roleByUser.get(key);
-  if (!matched) return "";
-  return Array.isArray(matched) && matched.length ? matched[0] : "user";
-}
-
-function formatAuditDate(value) {
-  if (!value) return null;
-  const d = new Date(value);
-  return isNaN(d.getTime()) ? null : d;
-}
-
 export default function AdminAuditLogPage() {
   const navigate = useNavigate();
-  const [items, setItems] = useState([]);
-  const [roleByUser, setRoleByUser] = useState(() => new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const [page, setPage] = useState(1);
-  const [sortDir, setSortDir] = useState("desc");
-  const [actionFilter, setActionFilter] = useState("");
-  const [userFilter, setUserFilter] = useState("");
+  const [peakHours, setPeakHours] = useState([]);
+  const [mostAccessed, setMostAccessed] = useState([]);
+  const [flagged, setFlagged] = useState({ bursts: [], off_hours: [] });
+  const [graphs, setGraphs] = useState({ uploads: [], downloads: [], views: [] });
+  const [daysWindow, setDaysWindow] = useState("30");
 
   useEffect(() => {
     let cancelled = false;
-    async function load() {
+    async function loadData() {
       setLoading(true);
       setError("");
       try {
-        const data = await datasetsApi.getAdminAuditLog();
-        const list = Array.isArray(data) ? data : Array.isArray(data?.results) ? data.results : [];
-        if (!cancelled) setItems(list);
+        const days = parseInt(daysWindow, 10) || 30;
+        const [peakRes, mostRes, flaggedRes, graphsRes] = await Promise.allSettled([
+          datasetsApi.getAdminAuditPeakHours({ days }),
+          datasetsApi.getAdminAuditMostAccessedDatasets({ days, limit: 8 }),
+          datasetsApi.getAdminAuditFlagged({ days: Math.min(days, 7) }),
+          datasetsApi.getAdminGraphs(),
+        ]);
+
+        if (cancelled) return;
+
+        if (peakRes.status === "fulfilled") setPeakHours(Array.isArray(peakRes.value) ? peakRes.value : []);
+        if (mostRes.status === "fulfilled") setMostAccessed(Array.isArray(mostRes.value) ? mostRes.value : []);
+        if (flaggedRes.status === "fulfilled") setFlagged(flaggedRes.value || { bursts: [], off_hours: [] });
+        if (graphsRes.status === "fulfilled") setGraphs(graphsRes.value || { uploads: [], downloads: [], views: [] });
       } catch (err) {
-        if (!cancelled) setError(err?.message || "Failed to load audit log.");
+        if (!cancelled) setError(err?.message || "Failed to load audit analytics.");
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
-    load();
-    return () => { cancelled = true; };
-  }, []);
+    loadData();
+    return () => {
+      cancelled = true;
+    };
+  }, [daysWindow]);
 
-  // Load each user's role so we can show the actor's role per audit row.
-  // Best-effort — the table still renders fine if this fails.
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      try {
-        const data = await datasetsApi.getAdminUsers();
-        if (!active) return;
-        const list = Array.isArray(data) ? data : (data?.results || []);
-        const map = new Map();
-        list.forEach((u) => {
-          const roles = Array.isArray(u.roles) ? u.roles : (u.role ? [u.role] : []);
-          if (u.full_name) map.set(String(u.full_name).trim().toLowerCase(), roles);
-          if (u.email) map.set(String(u.email).trim().toLowerCase(), roles);
-        });
-        setRoleByUser(map);
-      } catch {
-        // ignore — role column will just show "—"
-      }
-    })();
-    return () => { active = false; };
-  }, []);
-
-  const uniqueActions = useMemo(() => {
-    const set = new Set(items.map((i) => i.action).filter(Boolean));
-    return Array.from(set).sort();
-  }, [items]);
-
-  const filtered = useMemo(() => {
-    let out = items;
-    if (actionFilter) out = out.filter((i) => i.action === actionFilter);
-    if (userFilter.trim()) {
-      const q = userFilter.trim().toLowerCase();
-      out = out.filter(
-        (i) =>
-          String(i.user || i.user_name || "").toLowerCase().includes(q) ||
-          String(i.resource || i.resource_id || "").toLowerCase().includes(q)
-      );
+  const handleExport = async (format) => {
+    try {
+      const data = await datasetsApi.exportAdminAuditLog(format);
+      const blob = new Blob([data], { type: format === "pdf" ? "application/pdf" : "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `audit-log-export.${format}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("Failed to export audit log.");
     }
-    out = out.slice().sort((a, b) => {
-      const ta = new Date(a.timestamp || a.created_at || 0).getTime();
-      const tb = new Date(b.timestamp || b.created_at || 0).getTime();
-      return sortDir === "asc" ? ta - tb : tb - ta;
-    });
-    return out;
-  }, [items, actionFilter, userFilter, sortDir]);
+  };
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const safePage = Math.min(page, totalPages);
-  const pageItems = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
-
-  function exportCsv() {
-    const header = "Timestamp,User,Action,Resource\n";
-    const rows = filtered
-      .map(
-        (i) =>
-          `${i.timestamp || i.created_at || ""},${i.user || i.user_name || ""},${i.action || ""},${i.resource || i.resource_id || ""}`
-      )
-      .join("\n");
-    const blob = new Blob([header + rows], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "audit-log.csv";
-    a.click();
-    URL.revokeObjectURL(url);
-  }
+  const peakHourItem = peakHours.reduce((max, curr) => (curr.count > (max?.count || 0) ? curr : max), null);
+  const totalPeakCount = peakHours.reduce((acc, curr) => acc + (curr.count || 0), 0);
+  const maxPeakCount = peakHours.reduce((max, curr) => Math.max(max, curr.count || 0), 1);
 
   return (
-    <DashboardShell title="ORDP Admin Console" subtitle="System status and key metrics">
-      <button
-        type="button"
-        onClick={() => navigate("/admin-dashboard")}
-        className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold text-slate-600 hover:text-navy transition"
-      >
-        <ArrowLeft className="w-4 h-4" /> Back to Dashboard
-      </button>
-
-      <div className="flex items-end justify-between gap-4 mb-4">
-        <div>
-          <h1 className="text-2xl font-serif font-bold text-navy">Audit Log</h1>
-          <p className="text-sm text-gray-500 mt-1">System activity and admin actions.</p>
-        </div>
-        <button
-          type="button"
-          onClick={exportCsv}
-          className="inline-flex items-center gap-2 bg-navy hover:bg-navy-light text-white text-xs font-semibold rounded-lg px-3 py-2 transition-colors"
-        >
-          <Download className="w-3.5 h-3.5" /> Export CSV
-        </button>
-      </div>
-
-      {error && (
-        <div role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
-      )}
-
-      <section className="bg-white rounded-xl border border-border shadow-sm overflow-hidden animate-fade-in-up">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-5 py-4 border-b border-border">
-          <div className="flex items-center gap-2">
-            <label className="text-xs font-semibold text-gray-600" htmlFor="actionFilter">
-              Action
-            </label>
-            <select
-              id="actionFilter"
-              value={actionFilter}
-              onChange={(e) => {
-                setActionFilter(e.target.value);
-                setPage(1);
-              }}
-              className="rounded-lg border border-slate-200 text-sm py-2 pl-3 pr-8 bg-[#F7F6F2]"
-            >
-              <option value="">All</option>
-              {uniqueActions.map((a) => (
-                <option key={a} value={a}>
-                  {a}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex items-center gap-2">
-            <label className="text-xs font-semibold text-gray-600" htmlFor="userFilter">
-              User / Resource
-            </label>
-            <input
-              id="userFilter"
-              type="text"
-              value={userFilter}
-              onChange={(e) => {
-                setUserFilter(e.target.value);
-                setPage(1);
-              }}
-              placeholder="Search..."
-              className="w-56 rounded-lg border border-slate-200 text-sm py-2 pl-3 pr-3 bg-white"
-            />
+    <DashboardShell role="admin">
+      <section className="space-y-6 max-w-7xl mx-auto pb-12">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-border shadow-sm">
+          <div>
             <button
               type="button"
-              onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
-              className="text-xs font-semibold text-gold border border-gold rounded-md px-3 py-2 hover:bg-gold-light transition-colors"
+              onClick={() => navigate("/admin-dashboard")}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-navy mb-2 transition-colors"
             >
-              Date {sortDir === "asc" ? "↑" : "↓"}
+              <ArrowLeft className="w-4 h-4" /> Back to Dashboard
             </button>
-          </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="text-xs uppercase text-gray-500 bg-gray-50">
-              <tr>
-                <th className="px-5 py-3 text-left font-semibold">Timestamp</th>
-                <th className="px-5 py-3 text-left font-semibold">User</th>
-                <th className="px-5 py-3 text-left font-semibold">Role</th>
-                <th className="px-5 py-3 text-left font-semibold">Action</th>
-                <th className="px-5 py-3 text-left font-semibold">Resource</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan={5} className="px-5 py-10 text-center text-sm text-gray-500">
-                    Loading audit log…
-                  </td>
-                </tr>
-              ) : pageItems.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-5 py-10 text-center text-sm text-gray-500">
-                    No entries match your filters.
-                  </td>
-                </tr>
-              ) : (
-                pageItems.map((row) => {
-                  const ts = row.timestamp || row.created_at;
-                  const date = formatAuditDate(ts);
-                  const role = roleOf(row, roleByUser).toLowerCase();
-                  return (
-                    <tr key={row.id} className="border-t border-gray-100 hover:bg-bg/50">
-                      <td className="px-5 py-3 whitespace-nowrap">
-                        {date ? (
-                          <>
-                            <span className="block text-sm font-bold text-navy">
-                              {date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
-                            </span>
-                            <span className="block text-xs font-medium text-gray-500">
-                              {date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
-                            </span>
-                          </>
-                        ) : (
-                          <span className="text-sm font-semibold text-gray-400">{ts || "—"}</span>
-                        )}
-                      </td>
-                      <td className="px-5 py-3 font-medium text-navy">{row.user || row.user_name || "—"}</td>
-                      <td className="px-5 py-3">
-                        {role ? (
-                          <span
-                            className={`inline-block text-[10px] font-bold uppercase px-2 py-0.5 rounded ${ROLE_BADGES[role] || ROLE_BADGES.user}`}
-                          >
-                            {role}
-                          </span>
-                        ) : (
-                          <span className="text-xs text-gray-400">—</span>
-                        )}
-                      </td>
-                      <td className="px-5 py-3">
-                        <span
-                          className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${ACTION_COLORS[row.action] || "bg-gray-100 text-gray-700"}`}
-                        >
-                          {row.action || "—"}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3 font-mono text-xs text-gray-600">{row.resource || row.resource_id || "—"}</td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {!loading && filtered.length > PAGE_SIZE && (
-          <div className="flex items-center justify-between px-5 py-3 border-t border-border">
-            <p className="text-xs text-gray-500">
-              Page {safePage} of {totalPages} — {filtered.length} entries
+            <h1 className="text-2xl font-bold text-navy flex items-center gap-2">
+              <BarChart3 className="w-7 h-7 text-gold" /> Audit Log & Platform Analytics
+            </h1>
+            <p className="text-sm text-gray-600 mt-1">
+              Aggregated platform activity patterns, peak usage hours, top accessed datasets, and security heuristics. Individual logs are available via CSV/PDF export.
             </p>
+          </div>
+          <div className="flex items-center gap-3 flex-wrap">
+            <select
+              value={daysWindow}
+              onChange={(e) => setDaysWindow(e.target.value)}
+              className="px-3 py-2 text-sm border border-border rounded-lg bg-white font-medium text-navy focus:outline-none focus:ring-2 focus:ring-gold"
+            >
+              <option value="7">Last 7 Days</option>
+              <option value="30">Last 30 Days</option>
+              <option value="90">Last 90 Days</option>
+            </select>
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                disabled={safePage <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="text-xs font-semibold text-gold border border-gold rounded-md px-3 py-1.5 disabled:opacity-50 hover:bg-gold-light transition-colors"
+                onClick={() => handleExport("csv")}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-navy text-white rounded-lg hover:bg-navy-dark transition-colors shadow-sm"
               >
-                Previous
+                <Download className="w-3.5 h-3.5" /> Export CSV
               </button>
               <button
                 type="button"
-                disabled={safePage >= totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                className="text-xs font-semibold text-gold border border-gold rounded-md px-3 py-1.5 disabled:opacity-50 hover:bg-gold-light transition-colors"
+                onClick={() => handleExport("pdf")}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold border border-gold text-gold rounded-lg hover:bg-gold-light transition-colors shadow-sm"
               >
-                Next
+                <Download className="w-3.5 h-3.5" /> Export PDF
               </button>
             </div>
           </div>
+        </div>
+
+        {error && (
+          <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm font-medium">
+            {error}
+          </div>
+        )}
+
+        {loading ? (
+          <div className="py-20 text-center text-sm font-medium text-gray-500 bg-white rounded-xl border border-border">
+            Loading analytics and audit insights...
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-white p-6 rounded-xl border border-border shadow-sm space-y-2">
+                <div className="flex items-center justify-between text-gray-500 text-xs font-semibold uppercase tracking-wider">
+                  <span>Peak Activity Hour</span>
+                  <Clock className="w-4 h-4 text-gold" />
+                </div>
+                <div className="text-2xl font-extrabold text-navy">
+                  {peakHourItem ? `${String(peakHourItem.hour).padStart(2, "0")}:00` : "—"}
+                </div>
+                <p className="text-xs text-gray-500">
+                  {peakHourItem ? `${peakHourItem.count} events recorded at this hour (${Math.round((peakHourItem.count / (totalPeakCount || 1)) * 100)}% of total peak volume)` : "No peak activity recorded"}
+                </p>
+              </div>
+
+              <div className="bg-white p-6 rounded-xl border border-border shadow-sm space-y-2">
+                <div className="flex items-center justify-between text-gray-500 text-xs font-semibold uppercase tracking-wider">
+                  <span>Top Accessed Dataset</span>
+                  <Database className="w-4 h-4 text-emerald-600" />
+                </div>
+                <div className="text-lg font-bold text-navy truncate" title={mostAccessed[0]?.title || "None"}>
+                  {mostAccessed[0]?.title || "No datasets accessed"}
+                </div>
+                <p className="text-xs text-gray-500">
+                  {mostAccessed[0] ? `${mostAccessed[0].total_activity} combined views & downloads` : "0 interactions"}
+                </p>
+              </div>
+
+              <div className="bg-white p-6 rounded-xl border border-border shadow-sm space-y-2">
+                <div className="flex items-center justify-between text-gray-500 text-xs font-semibold uppercase tracking-wider">
+                  <span>Security Heuristics (Flagged)</span>
+                  <ShieldAlert className="w-4 h-4 text-amber-600" />
+                </div>
+                <div className="text-2xl font-extrabold text-navy">
+                  {(flagged.bursts?.length || 0) + (flagged.off_hours?.length || 0)} Alerts
+                </div>
+                <p className="text-xs text-gray-500">
+                  {flagged.bursts?.length || 0} download bursts, {flagged.off_hours?.length || 0} off-hours patterns
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-xl border border-border shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-bold text-navy">Activity by Hour of Day (0–23)</h2>
+                  <p className="text-xs text-gray-500">Hourly volume distribution across the trailing {daysWindow} days window.</p>
+                </div>
+              </div>
+              <div className="pt-4">
+                <div className="grid grid-cols-12 md:grid-cols-24 gap-1.5 items-end h-48 pt-6 border-b border-border pb-2">
+                  {Array.from({ length: 24 }).map((_, h) => {
+                    const found = peakHours.find((item) => item.hour === h);
+                    const count = found ? found.count : 0;
+                    const heightPct = Math.max(8, Math.round((count / maxPeakCount) * 100));
+                    return (
+                      <div key={h} className="flex flex-col items-center h-full justify-end group relative">
+                        <div className="absolute -top-10 bg-navy text-white text-[10px] font-medium px-2 py-1 rounded shadow-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+                          {String(h).padStart(2, "0")}:00 — {count} events
+                        </div>
+                        <div
+                          style={{ height: `${heightPct}%` }}
+                          className={`w-full rounded-t transition-all ${
+                            peakHourItem?.hour === h ? "bg-gold" : "bg-navy/80 hover:bg-navy"
+                          }`}
+                        />
+                        <span className="text-[10px] font-mono text-gray-500 mt-1">{h}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="flex items-center justify-between text-xs text-gray-500 pt-3">
+                  <span>00:00 (Midnight)</span>
+                  <span>12:00 (Noon)</span>
+                  <span>23:00 (11 PM)</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="bg-white p-6 rounded-xl border border-border shadow-sm space-y-4 flex flex-col">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-bold text-navy flex items-center gap-2">
+                    <Database className="w-5 h-5 text-emerald-600" /> Top Datasets by Views & Downloads
+                  </h2>
+                </div>
+                <div className="overflow-x-auto flex-1">
+                  {mostAccessed.length === 0 ? (
+                    <p className="text-sm text-gray-500 py-8 text-center">No dataset access activity recorded.</p>
+                  ) : (
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-border text-xs text-gray-500 uppercase">
+                          <th className="py-2.5 px-3">Dataset Title</th>
+                          <th className="py-2.5 px-3 text-right">Views</th>
+                          <th className="py-2.5 px-3 text-right">Downloads</th>
+                          <th className="py-2.5 px-3 text-right">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 text-sm">
+                        {mostAccessed.map((item, idx) => (
+                          <tr key={idx} className="hover:bg-bg/50">
+                            <td className="py-3 px-3 font-medium text-navy max-w-[220px] truncate" title={item.title}>
+                              {item.title}
+                            </td>
+                            <td className="py-3 px-3 text-right text-gray-600 font-mono text-xs">{item.views}</td>
+                            <td className="py-3 px-3 text-right text-gray-600 font-mono text-xs">{item.downloads}</td>
+                            <td className="py-3 px-3 text-right font-bold text-navy font-mono text-xs">{item.total_activity}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-white p-6 rounded-xl border border-border shadow-sm space-y-4 flex flex-col">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-bold text-navy flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5 text-amber-600" /> Flagged Activity & Heuristics
+                  </h2>
+                </div>
+                <div className="space-y-4 flex-1">
+                  <div>
+                    <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Download Bursts (Hourly)</h3>
+                    {(!flagged.bursts || flagged.bursts.length === 0) ? (
+                      <p className="text-xs text-gray-500 bg-bg p-3 rounded-lg">No abnormal download bursts detected.</p>
+                    ) : (
+                      <div className="space-y-2 max-h-40 overflow-y-auto">
+                        {flagged.bursts.map((b, i) => (
+                          <div key={i} className="flex items-center justify-between text-xs bg-amber-50/60 border border-amber-200 p-2.5 rounded-lg">
+                            <span className="font-medium text-navy">{b.user_name || `User #${b.user_id}`}</span>
+                            <span className="font-mono text-amber-800 font-bold">{b.count} downloads in hour</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Off-Hours Access (Midnight – 5 AM)</h3>
+                    {(!flagged.off_hours || flagged.off_hours.length === 0) ? (
+                      <p className="text-xs text-gray-500 bg-bg p-3 rounded-lg">No unusual off-hours access patterns detected.</p>
+                    ) : (
+                      <div className="space-y-2 max-h-40 overflow-y-auto">
+                        {flagged.off_hours.map((o, i) => (
+                          <div key={i} className="flex items-center justify-between text-xs bg-red-50/60 border border-red-200 p-2.5 rounded-lg">
+                            <span className="font-medium text-navy">{o.user_name || `User #${o.user_id}`}</span>
+                            <span className="font-mono text-red-800 font-bold">{o.count} off-hours requests</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-xl border border-border shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-bold text-navy flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5 text-gold" /> Platform Trends (Past 30 Days)
+                </h2>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                <div className="bg-bg p-4 rounded-xl border border-border">
+                  <span className="text-xs font-semibold text-gray-500 uppercase">Total Uploads</span>
+                  <div className="text-2xl font-extrabold text-navy mt-1">
+                    {graphs.uploads?.reduce((sum, d) => sum + (d.count || 0), 0) || 0}
+                  </div>
+                  <p className="text-[11px] text-gray-500 mt-1">Files uploaded in the last 30 days</p>
+                </div>
+                <div className="bg-bg p-4 rounded-xl border border-border">
+                  <span className="text-xs font-semibold text-gray-500 uppercase">Total Downloads</span>
+                  <div className="text-2xl font-extrabold text-navy mt-1">
+                    {graphs.downloads?.reduce((sum, d) => sum + (d.count || 0), 0) || 0}
+                  </div>
+                  <p className="text-[11px] text-gray-500 mt-1">Dataset downloads in the last 30 days</p>
+                </div>
+                <div className="bg-bg p-4 rounded-xl border border-border">
+                  <span className="text-xs font-semibold text-gray-500 uppercase">Total Views</span>
+                  <div className="text-2xl font-extrabold text-navy mt-1">
+                    {graphs.views?.reduce((sum, d) => sum + (d.count || 0), 0) || 0}
+                  </div>
+                  <p className="text-[11px] text-gray-500 mt-1">Dataset detail views in the last 30 days</p>
+                </div>
+              </div>
+            </div>
+          </>
         )}
       </section>
     </DashboardShell>

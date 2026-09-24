@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Archive, Clock, CheckCircle2, XCircle, Inbox, RotateCcw, X, Loader2, Send } from "lucide-react";
+import { Archive, Clock, CheckCircle2, XCircle, Inbox, RotateCcw, X, Loader2, Send, Eye } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import { useAuth } from "../../../context/useAuth";
 import { getDashboardPath, getDisplayName } from "../../../utils/userRoles";
@@ -8,6 +8,7 @@ import { getDatasetImage } from "../../../utils/datasetImage";
 import * as datasetsApi from "../hooks/datasetsApi";
 import * as archiveApi from "../../../api/archiveRequests";
 import { useToast } from "../../../context/ToastContext.jsx";
+import DatasetPreviewModal from "../../../components/dashboard/DatasetPreviewModal";
 
 function formatDate(value) {
   if (!value) return "—";
@@ -54,6 +55,7 @@ export default function UserArchivedDatasetsPage() {
   const [requestsMap, setRequestsMap] = useState(() => new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [previewDataset, setPreviewDataset] = useState(null);
 
   // Unarchive (restore) request state — routed to admins only.
   const [unarchiveTarget, setUnarchiveTarget] = useState(null);
@@ -226,7 +228,18 @@ export default function UserArchivedDatasetsPage() {
                     )}
                   </div>
                   <div className="p-4">
-                    <p className="text-sm font-semibold text-navy line-clamp-2">{dataset.title}</p>
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sm font-semibold text-navy line-clamp-2">{dataset.title}</p>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setPreviewDataset(dataset); }}
+                        className="p-1.5 text-gray-400 hover:text-navy rounded-full hover:bg-gray-100 transition shrink-0"
+                        title="Preview dataset details"
+                        aria-label="Preview dataset details"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                    </div>
                     <div className="mt-2">
                       <RequestBadge request={request} />
                     </div>
@@ -269,7 +282,6 @@ export default function UserArchivedDatasetsPage() {
           </div>
         )}
       </div>
-
       {unarchiveTarget && (
         <div
           className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 px-4"
@@ -339,6 +351,13 @@ export default function UserArchivedDatasetsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {previewDataset && (
+        <DatasetPreviewModal
+          dataset={previewDataset}
+          onClose={() => setPreviewDataset(null)}
+        />
       )}
     </DashboardShell>
   );

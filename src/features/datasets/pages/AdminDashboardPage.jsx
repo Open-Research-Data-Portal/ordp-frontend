@@ -9,7 +9,7 @@ import {
   ShieldCheck,
   Search,
 } from "lucide-react";
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis } from "recharts";
+import { Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis } from "recharts";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import StatCard from "../../../components/dashboard/StatCard";
 import { SectionHeader, StatusBadge, ProfileSavedNotice, EmptyState } from "../../../components/dashboard/dashboardUi";
@@ -21,8 +21,6 @@ function normalizeList(data) {
   if (Array.isArray(data)) return data;
   return data?.results || [];
 }
-
-const CHART_COLORS = ["#B8860B", "#0B1526", "#ef4444", "#10b981", "#6366f1", "#f59e0b"];
 
 const ROLE_OPTIONS = [
   { value: "public", label: "User" },
@@ -53,11 +51,11 @@ export default function AdminDashboardPage() {
 
   const [cards, setCards] = useState(null);
   const [auditLog, setAuditLog] = useState([]);
-  const [deletions, setDeletions] = useState([]);
   const [users, setUsers] = useState([]);
+  const [inactiveUsers, setInactiveUsers] = useState([]);
+  const [draftExpiration, setDraftExpiration] = useState(null);
   const [queue, setQueue] = useState([]);
   const [reviews, setReviews] = useState([]);
-  const [unarchiveRequests, setUnarchiveRequests] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const [userSearch, setUserSearch] = useState("");
@@ -71,28 +69,32 @@ export default function AdminDashboardPage() {
 
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
+  const [opsLoading, setOpsLoading] = useState(false);
+  const [successionPreviousId, setSuccessionPreviousId] = useState("");
+  const [successionEmail, setSuccessionEmail] = useState("");
+  const [successionFullName, setSuccessionFullName] = useState("");
 
   useEffect(() => {
     let active = true;
     async function load() {
       setLoading(true);
-      const [cardsRes, auditRes, delRes, usersRes, queueRes, reviewsRes, unarchiveRes] = await Promise.allSettled([
+      const [cardsRes, auditRes, usersRes, queueRes, reviewsRes, inactiveRes, draftRes] = await Promise.allSettled([
         datasetsApi.getAdminCards?.() ?? Promise.resolve(null),
         datasetsApi.getAdminAuditLog?.() ?? Promise.resolve([]),
-        datasetsApi.getAdminDeletionQueue?.() ?? Promise.resolve([]),
         datasetsApi.getAdminUsers?.() ?? Promise.resolve([]),
         datasetsApi.getAdminQueue?.() ?? Promise.resolve([]),
         datasetsApi.getMyReviews?.() ?? Promise.resolve([]),
-        datasetsApi.getAdminUnarchiveRequestQueue?.() ?? Promise.resolve([]),
+        datasetsApi.getInactiveUsers?.() ?? Promise.resolve({ users: [] }),
+        datasetsApi.getDraftExpirationPreview?.() ?? Promise.resolve(null),
       ]);
       if (!active) return;
       if (cardsRes.status === "fulfilled") setCards(cardsRes.value);
       if (auditRes.status === "fulfilled") setAuditLog(normalizeList(auditRes.value));
-      if (delRes.status === "fulfilled") setDeletions(normalizeList(delRes.value));
       if (usersRes.status === "fulfilled") setUsers(normalizeList(usersRes.value));
       if (queueRes.status === "fulfilled") setQueue(normalizeList(queueRes.value));
       if (reviewsRes.status === "fulfilled") setReviews(normalizeList(reviewsRes.value));
-      if (unarchiveRes.status === "fulfilled") setUnarchiveRequests(normalizeList(unarchiveRes.value));
+      if (inactiveRes.status === "fulfilled") setInactiveUsers(normalizeList(inactiveRes.value?.users || inactiveRes.value));
+      if (draftRes.status === "fulfilled") setDraftExpiration(draftRes.value);
 
       // The moderation queue can be empty/unavailable even when datasets
       // exist — fall back to the full directory so the datasets tab always
@@ -147,28 +149,6 @@ export default function AdminDashboardPage() {
       rejectedPct: Math.round((rejected / total) * 100),
       pendingPct: Math.round((pending / total) * 100),
     };
-  }, [reviews]);
-
-  const pieData = useMemo(() => {
-    const queueItems = normalizeList(queue);
-    const pendingCount = queueItems.length || reviewStats.pending || 0;
-    return [
-      { name: "Pending", value: pendingCount },
-      { name: "Approved", value: reviewStats.approved },
-      { name: "Rejected", value: reviewStats.rejected },
-    ].filter((d) => d.value > 0);
-  }, [queue, reviewStats]);
-
-  const barData = useMemo(() => {
-    const map = new Map();
-    const list = normalizeList(reviews);
-    list.forEach((r) => {
-      const day = new Date(r.decided_at || r.created_at || r.timestamp || 0).toLocaleDateString();
-      map.set(day, (map.get(day) || 0) + 1);
-    });
-    return Array.from(map.entries())
-      .map(([name, count]) => ({ name, count }))
-      .slice(-14);
   }, [reviews]);
 
   async function handleCreateUser(e) {
@@ -228,6 +208,74 @@ export default function AdminDashboardPage() {
       alert(err?.message || "Failed to delete user.");
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  async function refreshAdminOps() {
+    setOpsLoading(true);
+    try {
+      const [inactive, drafts] = await Promise.all([
+        datasetsApi.getInactiveUsers(),
+        datasetsApi.getDraftExpirationPreview(),
+      ]);
+      setInactiveUsers(normalizeList(inactive?.users || inactive));
+      setDraftExpiration(drafts);
+    } finally {
+      setOpsLoading(false);
+    }
+  }
+
+  async function handlePermanentInactiveDelete(user) {
+    const id = user.id || user.user_id;
+    if (!id || !window.confirm(`Permanently delete inactive user ${user.email}?`)) return;
+    setOpsLoading(true);
+    try {
+      await datasetsApi.permanentlyDeleteInactiveUser(id);
+      setUsers((list) => list.filter((u) => (u.id || u.user_id) !== id));
+      setInactiveUsers((list) => list.filter((u) => (u.id || u.user_id) !== id));
+      addToast("Inactive user permanently deleted.", "success");
+    } catch (err) {
+      addToast(err?.response?.data?.detail || "Failed to permanently delete inactive user.", "error");
+    } finally {
+      setOpsLoading(false);
+    }
+  }
+
+  async function handleRunDraftExpiration() {
+    if (!window.confirm("Delete expired inactive drafts now?")) return;
+    setOpsLoading(true);
+    try {
+      const result = await datasetsApi.runDraftExpiration({});
+      addToast(`${result.deleted_count || 0} expired draft(s) deleted.`, "success");
+      await refreshAdminOps();
+    } catch (err) {
+      addToast(err?.response?.data?.detail || "Failed to expire drafts.", "error");
+    } finally {
+      setOpsLoading(false);
+    }
+  }
+
+  async function handleAdminSuccession(e) {
+    e.preventDefault();
+    setOpsLoading(true);
+    try {
+      await datasetsApi.runAdminSuccession({
+        previous_admin_id: successionPreviousId,
+        email: successionEmail.trim(),
+        full_name: successionFullName.trim(),
+        deactivate_previous: true,
+      });
+      addToast("Admin succession completed.", "success");
+      setSuccessionPreviousId("");
+      setSuccessionEmail("");
+      setSuccessionFullName("");
+      const freshUsers = await datasetsApi.getAdminUsers();
+      setUsers(normalizeList(freshUsers));
+      await refreshAdminOps();
+    } catch (err) {
+      addToast(err?.response?.data?.detail || "Admin succession failed.", "error");
+    } finally {
+      setOpsLoading(false);
     }
   }
 
@@ -366,6 +414,94 @@ export default function AdminDashboardPage() {
               </div>
             </form>
           )}
+
+          <div className="mx-5 my-4 grid gap-4 lg:grid-cols-3">
+            <section className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-navy">Inactive Users</p>
+                  <p className="mt-1 text-xs text-gray-500">Accounts are kept inactive by default. Permanently delete only when appropriate.</p>
+                </div>
+                <button type="button" onClick={refreshAdminOps} disabled={opsLoading} className="text-xs font-semibold text-gold disabled:opacity-50">
+                  Refresh
+                </button>
+              </div>
+              <p className="mt-4 text-2xl font-bold text-navy">{inactiveUsers.length}</p>
+              <div className="mt-3 space-y-2">
+                {inactiveUsers.slice(0, 3).map((u) => (
+                  <div key={u.id || u.user_id} className="flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-semibold text-navy">{u.full_name || u.email}</p>
+                      <p className="truncate text-[11px] text-gray-500">{u.email}</p>
+                    </div>
+                    {u.eligible_for_delete && (
+                      <button
+                        type="button"
+                        onClick={() => handlePermanentInactiveDelete(u)}
+                        disabled={opsLoading}
+                        className="shrink-0 rounded-md bg-red-600 px-2 py-1 text-[11px] font-semibold text-white disabled:opacity-50"
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="rounded-xl border border-slate-200 bg-white p-4">
+              <p className="text-sm font-semibold text-navy">Draft Expiration</p>
+              <p className="mt-1 text-xs text-gray-500">Automatically remove inactive draft datasets after the configured period.</p>
+              <p className="mt-4 text-2xl font-bold text-navy">{draftExpiration?.expired_count ?? 0}</p>
+              <p className="text-xs text-gray-500">Expired draft(s), {draftExpiration?.days ?? 30} day window</p>
+              <button
+                type="button"
+                onClick={handleRunDraftExpiration}
+                disabled={opsLoading || !draftExpiration?.expired_count}
+                className="mt-4 rounded-lg bg-navy px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+              >
+                Delete expired drafts
+              </button>
+            </section>
+
+            <form onSubmit={handleAdminSuccession} className="rounded-xl border border-slate-200 bg-white p-4">
+              <p className="text-sm font-semibold text-navy">Admin Succession</p>
+              <p className="mt-1 text-xs text-gray-500">Create a successor admin, revoke the previous admin role, and block old credentials.</p>
+              <div className="mt-3 grid gap-2">
+                <select
+                  required
+                  value={successionPreviousId}
+                  onChange={(e) => setSuccessionPreviousId(e.target.value)}
+                  className="rounded-lg border border-slate-200 px-3 py-2 text-xs"
+                >
+                  <option value="">Previous admin</option>
+                  {users.filter((u) => Array.isArray(u.roles) && u.roles.includes("admin")).map((u) => (
+                    <option key={u.id || u.user_id} value={u.id || u.user_id}>
+                      {u.full_name || u.email}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  required
+                  type="email"
+                  value={successionEmail}
+                  onChange={(e) => setSuccessionEmail(e.target.value)}
+                  placeholder="new.admin@aastu.edu.et"
+                  className="rounded-lg border border-slate-200 px-3 py-2 text-xs"
+                />
+                <input
+                  required
+                  value={successionFullName}
+                  onChange={(e) => setSuccessionFullName(e.target.value)}
+                  placeholder="New admin full name"
+                  className="rounded-lg border border-slate-200 px-3 py-2 text-xs"
+                />
+              </div>
+              <button type="submit" disabled={opsLoading} className="mt-3 rounded-lg bg-gold px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">
+                Complete succession
+              </button>
+            </form>
+          </div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

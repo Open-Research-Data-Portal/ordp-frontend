@@ -395,6 +395,31 @@ export async function deleteAdminUser(userId) {
   }
 }
 
+export async function getInactiveUsers(params = {}) {
+  const { data } = await client.get("/admin-panel/users/inactive/", { params });
+  return data;
+}
+
+export async function permanentlyDeleteInactiveUser(userId) {
+  const { data } = await client.delete(`/admin-panel/users/${userId}/delete-inactive/`);
+  return data;
+}
+
+export async function getDraftExpirationPreview(params = {}) {
+  const { data } = await client.get("/admin-panel/draft-expiration/", { params });
+  return data;
+}
+
+export async function runDraftExpiration(payload = {}) {
+  const { data } = await client.post("/admin-panel/draft-expiration/", payload);
+  return data;
+}
+
+export async function runAdminSuccession(payload) {
+  const { data } = await client.post("/admin-panel/admin-succession/", payload);
+  return data;
+}
+
 export async function getAdminQueue() {
   const { data } = await client.get("/admin-panel/queue/");
   return data;

@@ -8,6 +8,12 @@ import {
   Activity,
   ShieldCheck,
   Search,
+  AlertTriangle,
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  UserCheck,
+  X,
 } from "lucide-react";
 import { Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis } from "recharts";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
@@ -73,6 +79,9 @@ export default function AdminDashboardPage() {
   const [successionPreviousId, setSuccessionPreviousId] = useState("");
   const [successionEmail, setSuccessionEmail] = useState("");
   const [successionFullName, setSuccessionFullName] = useState("");
+  const [deactivateWarningModal, setDeactivateWarningModal] = useState(null);
+  const [togglingActiveId, setTogglingActiveId] = useState(null);
+  const [roleUpdatingId, setRoleUpdatingId] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -194,20 +203,88 @@ export default function AdminDashboardPage() {
     }
   }
 
-  async function handleDeleteUser(user) {
-    const id = user.id || user.user_id;
-    if (!id || deletingId) return;
-    const previous = users;
-    setDeletingId(id);
-    setUsers((s) => s.filter((u) => (u.id || u.user_id) !== id));
-    setDeleteConfirmId(null);
+  function hasUploadedDatasets(targetUser) {
+    if (!targetUser) return false;
+    const uid = String(targetUser.id || targetUser.user_id || "");
+    const uemail = String(targetUser.email || "").toLowerCase();
+    if (
+      targetUser.dataset_count > 0 ||
+      targetUser.uploaded_datasets_count > 0 ||
+      (Array.isArray(targetUser.datasets) && targetUser.datasets.length > 0)
+    ) {
+      return true;
+    }
+    return queue.some((d) => {
+      const dOwnerId = String(d.owner_id || d.owner?.id || d.user || d.created_by || "");
+      const dOwnerEmail = String(d.owner_email || d.owner?.email || d.owner || "").toLowerCase();
+      return (uid && dOwnerId === uid) || (uemail && dOwnerEmail === uemail);
+    });
+  }
+
+  async function handleUpdateUserRole(targetUser, newRole) {
+    const id = targetUser.id || targetUser.user_id;
+    if (!id || roleUpdatingId) return;
+    setRoleUpdatingId(id);
     try {
-      await datasetsApi.deleteAdminUser(id);
+      await datasetsApi.updateAdminUserRole(id, newRole);
+      setUsers((prev) =>
+        prev.map((u) => {
+          if ((u.id || u.user_id) === id) {
+            return { ...u, role: newRole, roles: [newRole] };
+          }
+          return u;
+        })
+      );
+      addToast(
+        `Updated role for ${targetUser.full_name || targetUser.email} to ${newRole === "reviewer" ? "Reviewer" : newRole}.`,
+        "success"
+      );
     } catch (err) {
-      setUsers(previous);
-      alert(err?.message || "Failed to delete user.");
+      addToast(err?.response?.data?.detail || "Failed to update user role.", "error");
     } finally {
-      setDeletingId(null);
+      setRoleUpdatingId(null);
+    }
+  }
+
+  function handleToggleUserActiveClick(targetUser) {
+    const isCurrentlyActive = targetUser.is_active !== false;
+    if (isCurrentlyActive) {
+      // Trying to DEACTIVATE -> check datasets
+      const userHasData = hasUploadedDatasets(targetUser);
+      setDeactivateWarningModal({
+        user: targetUser,
+        hasDatasets: userHasData,
+        step: 1,
+      });
+    } else {
+      // Trying to ACTIVATE -> execute directly
+      executeToggleActive(targetUser, true);
+    }
+  }
+
+  async function executeToggleActive(targetUser, newActiveState) {
+    const id = targetUser.id || targetUser.user_id;
+    if (!id) return;
+    setTogglingActiveId(id);
+    try {
+      await datasetsApi.toggleAdminUserActive(id, newActiveState);
+      setUsers((prev) =>
+        prev.map((u) => {
+          if ((u.id || u.user_id) === id) {
+            return { ...u, is_active: newActiveState };
+          }
+          return u;
+        })
+      );
+      addToast(
+        `User ${targetUser.full_name || targetUser.email} is now ${newActiveState ? "Active" : "Inactive"}.`,
+        "success"
+      );
+      setDeactivateWarningModal(null);
+    } catch (err) {
+      addToast(err?.response?.data?.detail || "Failed to update account status.", "error");
+    } finally {
+      setTogglingActiveId(null);
     }
   }
 
@@ -510,7 +587,7 @@ export default function AdminDashboardPage() {
                   <th className="px-5 py-3 text-left font-semibold">User</th>
                   <th className="px-5 py-3 text-left font-semibold">Role</th>
                   <th className="px-5 py-3 text-left font-semibold">Status</th>
-                  <th className="px-5 py-3 text-right font-semibold">Actions</th>
+                  <th className="px-5 py-3 text-right font-semibold">Account Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -521,58 +598,93 @@ export default function AdminDashboardPage() {
                     </td>
                   </tr>
                 ) : (
-                  filteredUsers.map((u) => (
-                    <tr key={u.id || u.user_id} className="border-t border-gray-100 hover:bg-bg/50">
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-3">
-                          <span className="w-9 h-9 rounded-full bg-navy text-white text-xs font-bold flex items-center justify-center">
-                            {(u.full_name || u.name || u.email || "U").slice(0, 2).toUpperCase()}
-                          </span>
-                          <div>
-                            <p className="font-medium text-navy">{u.full_name || u.name || "—"}</p>
-                            <p className="text-xs text-gray-500">{u.email}</p>
+                  filteredUsers.map((u) => {
+                    const uid = u.id || u.user_id;
+                    const isUpdatingRole = roleUpdatingId === uid;
+                    const isTogglingActive = togglingActiveId === uid;
+                    const currentRole = displayRoleOf(u);
+                    const isActive = u.is_active !== false;
+
+                    return (
+                      <tr key={uid} className="border-t border-gray-100 hover:bg-bg/50">
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-3">
+                            <span className="w-9 h-9 rounded-full bg-navy text-white text-xs font-bold flex items-center justify-center shrink-0">
+                              {(u.full_name || u.name || u.email || "U").slice(0, 2).toUpperCase()}
+                            </span>
+                            <div className="min-w-0">
+                              <p className="font-medium text-navy truncate">{u.full_name || u.name || "—"}</p>
+                              <p className="text-xs text-gray-500 truncate">{u.email}</p>
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-5 py-4">
-                        <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${roleBadge[displayRoleOf(u)] || "bg-gray-100 text-gray-700"}`}>{displayRoleOf(u)}</span>
-                      </td>
-                      <td className="px-5 py-4">
-                        <StatusBadge status={u.is_active === false ? "inactive" : "active"} />
-                      </td>
-                      <td className="px-5 py-4 text-right">
-                        {deleteConfirmId === (u.id || u.user_id) ? (
-                          <div className="flex items-center justify-end gap-2">
-                            <span className="text-xs text-gray-600">Delete?</span>
+                        </td>
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={currentRole}
+                              disabled={isUpdatingRole}
+                              onChange={(e) => handleUpdateUserRole(u, e.target.value)}
+                              className={`text-xs font-semibold px-2.5 py-1 rounded-lg border bg-white focus:outline-none focus:ring-1 focus:ring-gold cursor-pointer transition ${
+                                currentRole === "reviewer"
+                                  ? "border-violet-300 text-violet-700 bg-violet-50/60"
+                                  : currentRole === "admin"
+                                  ? "border-gold/40 text-gold-dark bg-gold-light/40"
+                                  : "border-slate-200 text-slate-700"
+                              }`}
+                              title="Assign user role"
+                            >
+                              <option value="public">User</option>
+                              <option value="reviewer">Reviewer</option>
+                              <option value="researcher">Researcher</option>
+                              <option value="admin">Admin</option>
+                            </select>
+                            {currentRole !== "reviewer" && (
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateUserRole(u, "reviewer")}
+                                disabled={isUpdatingRole}
+                                className="text-[11px] font-semibold text-violet-700 hover:text-white bg-violet-50 hover:bg-violet-600 border border-violet-200 px-2.5 py-1 rounded-lg transition shadow-2xs whitespace-nowrap cursor-pointer disabled:opacity-50"
+                                title="Grant Reviewer privileges"
+                              >
+                                {isUpdatingRole ? "Updating…" : "+ Reviewer"}
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-5 py-4">
+                          <StatusBadge status={isActive ? "active" : "inactive"} />
+                        </td>
+                        <td className="px-5 py-4 text-right">
+                          <div className="flex items-center justify-end gap-2.5">
                             <button
                               type="button"
-                              onClick={() => handleDeleteUser(u)}
-                              disabled={deletingId === (u.id || u.user_id)}
-                              className="text-xs font-semibold bg-red-600 text-white rounded-md px-2.5 py-1.5 disabled:opacity-50"
+                              onClick={() => handleToggleUserActiveClick(u)}
+                              disabled={isTogglingActive}
+                              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                isActive ? "bg-emerald-600" : "bg-slate-300"
+                              }`}
+                              role="switch"
+                              aria-checked={isActive}
+                              title={isActive ? "Click to deactivate" : "Click to activate"}
                             >
-                              {deletingId === (u.id || u.user_id) ? "…" : "Yes"}
+                              <span
+                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                                  isActive ? "translate-x-5" : "translate-x-0"
+                                }`}
+                              />
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => setDeleteConfirmId(null)}
-                              className="text-xs font-semibold text-gray-600 hover:text-navy px-2 py-1.5"
+                            <span
+                              className={`text-xs font-semibold w-14 text-left ${
+                                isActive ? "text-emerald-700" : "text-slate-400"
+                              }`}
                             >
-                              No
-                            </button>
+                              {isActive ? "Active" : "Inactive"}
+                            </span>
                           </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setDeleteConfirmId(u.id || u.user_id)}
-                            className="text-gray-400 hover:text-red-600 transition-colors"
-                            aria-label={`Delete ${u.email}`}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -582,7 +694,7 @@ export default function AdminDashboardPage() {
         <section className="bg-white rounded-xl border border-border shadow-sm overflow-hidden animate-fade-in-up">
           <div className="px-5 py-4 border-b border-border">
             <h2 className="text-base font-semibold text-navy">Datasets</h2>
-            <p className="text-xs text-gray-500 mt-1">Review pending submissions or remove datasets.</p>
+            <p className="text-xs text-gray-500 mt-1">View datasets and browse repository records.</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -595,7 +707,7 @@ export default function AdminDashboardPage() {
               </thead>
               <tbody>
                 {queue.length === 0 ? (
-                  <tr><td colSpan={3} className="px-5 py-8 text-center text-sm text-gray-500">No datasets require review.</td></tr>
+                  <tr><td colSpan={3} className="px-5 py-8 text-center text-sm text-gray-500">No datasets available.</td></tr>
                 ) : queue.map((dataset) => {
                   const id = dataset.id || dataset.dataset_id;
                   return (
@@ -604,7 +716,7 @@ export default function AdminDashboardPage() {
                       <td className="px-5 py-3"><StatusBadge status={dataset.status || "pending"} /></td>
                       <td className="px-5 py-3">
                         <div className="flex justify-end gap-2">
-                          <button type="button" onClick={() => navigate(`/datasets/${id}`)} className="border border-gold text-gold-dark rounded-md px-3 py-1.5 text-xs font-semibold hover:bg-gold-light">Review</button>
+                          <button type="button" onClick={() => navigate(`/datasets/${id}`)} className="border border-gold text-gold-dark rounded-md px-3 py-1.5 text-xs font-semibold hover:bg-gold-light cursor-pointer">View</button>
                         </div>
                       </td>
                     </tr>
@@ -759,6 +871,118 @@ export default function AdminDashboardPage() {
             </section>
           </div>
         </>
+      )}
+
+      {/* Deactivation Confirmation Modal with Dataset Warning and Second Confirmation */}
+      {deactivateWarningModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy/60 backdrop-blur-xs animate-fade-in">
+          <div className="relative w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl border border-slate-200 animate-scale-up">
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div
+                  className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${
+                    deactivateWarningModal.hasDatasets
+                      ? "bg-amber-100 text-amber-600"
+                      : "bg-slate-100 text-slate-600"
+                  }`}
+                >
+                  <AlertTriangle className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-navy">
+                    {deactivateWarningModal.step === 2
+                      ? "Second Confirmation Required"
+                      : "Deactivate User Account"}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    {deactivateWarningModal.user.full_name || deactivateWarningModal.user.email}
+                  </p>
+                </div>
+              </div>
+
+              {deactivateWarningModal.hasDatasets ? (
+                deactivateWarningModal.step === 1 ? (
+                  <div className="space-y-3">
+                    <div className="p-3.5 rounded-xl border border-amber-300 bg-amber-50 text-amber-950 text-xs font-medium leading-relaxed">
+                      ⚠️ <strong>This user has uploaded datasets — are you sure?</strong>
+                      <p className="mt-1.5 text-[11px] text-amber-800">
+                        Deactivating their account will restrict their ability to log in or submit updates, but their uploaded datasets will remain preserved in the institutional portal.
+                      </p>
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      Please confirm if you want to proceed. A second confirmation step will be required before this action takes effect.
+                    </p>
+                    <div className="mt-5 flex items-center justify-end gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => setDeactivateWarningModal(null)}
+                        className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:text-navy border border-slate-200 bg-white cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeactivateWarningModal((prev) => ({ ...prev, step: 2 }))}
+                        className="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 shadow-xs cursor-pointer"
+                      >
+                        I'm Sure, Proceed →
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="p-3.5 rounded-xl border border-red-300 bg-red-50 text-red-950 text-xs font-medium leading-relaxed">
+                      🛑 <strong>Second & Final Confirmation:</strong>
+                      <p className="mt-1 text-[11px] text-red-800">
+                        Are you completely certain you want to deactivate <strong>{deactivateWarningModal.user.full_name || deactivateWarningModal.user.email}</strong>?
+                      </p>
+                    </div>
+                    <div className="mt-5 flex items-center justify-end gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => setDeactivateWarningModal((prev) => ({ ...prev, step: 1 }))}
+                        className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:text-navy border border-slate-200 bg-white cursor-pointer"
+                      >
+                        ← Back
+                      </button>
+                      <button
+                        type="button"
+                        disabled={togglingActiveId === (deactivateWarningModal.user.id || deactivateWarningModal.user.user_id)}
+                        onClick={() => executeToggleActive(deactivateWarningModal.user, false)}
+                        className="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-red-600 hover:bg-red-700 shadow-xs disabled:opacity-50 cursor-pointer"
+                      >
+                        {togglingActiveId ? "Deactivating…" : "Confirm Deactivation"}
+                      </button>
+                    </div>
+                  </div>
+                )
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-xs text-slate-600">
+                    Are you sure you want to deactivate <strong>{deactivateWarningModal.user.full_name || deactivateWarningModal.user.email}</strong>? They will not be able to log in until reactivated.
+                  </p>
+                  <div className="mt-5 flex items-center justify-end gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setDeactivateWarningModal(null)}
+                      className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:text-navy border border-slate-200 bg-white cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      disabled={togglingActiveId === (deactivateWarningModal.user.id || deactivateWarningModal.user.user_id)}
+                      onClick={() => executeToggleActive(deactivateWarningModal.user, false)}
+                      className="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-red-600 hover:bg-red-700 shadow-xs disabled:opacity-50 cursor-pointer"
+                    >
+                      {togglingActiveId ? "Deactivating…" : "Confirm Deactivation"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </DashboardShell>
   );

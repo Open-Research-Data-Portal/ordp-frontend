@@ -73,6 +73,7 @@ const ROLE_CONFIG = {
       { label: "Audit Log", icon: ScrollText, to: "/admin/audit-log" },
       { label: "Archived Datasets", icon: Archive, to: "/admin/archived-datasets" },
       { label: "Users", icon: Users, to: "/admin-dashboard?tab=users" },
+      { label: "Settings", icon: Settings, to: "/admin/settings" },
       { label: "Notifications", icon: Bell, to: "/notifications" },
     ],
   },
@@ -88,6 +89,7 @@ function getRoleKey(user) {
 function isNavActive(to, pathname, search) {
   const [path, query] = to.split("?");
   if (to === "/reviewer/review-queue" && pathname.startsWith("/reviewer/review")) return true;
+  if (to === "/admin/settings" && pathname.startsWith("/admin/settings")) return true;
   if (pathname !== path) return false;
   if (!query) return !search;
   return search === `?${query}`;

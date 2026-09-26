@@ -22,6 +22,7 @@ import { SectionHeader, StatusBadge, ProfileSavedNotice, EmptyState } from "../.
 import * as datasetsApi from "../hooks/datasetsApi";
 import { fetchAllDatasets } from "../../../api/datasetsHub";
 import { useToast } from "../../../context/ToastContext.jsx";
+import { getEffectiveRoles } from "../../../utils/userRoles";
 
 function normalizeList(data) {
   if (Array.isArray(data)) return data;
@@ -33,12 +34,30 @@ const ROLE_OPTIONS = [
   { value: "reviewer", label: "Reviewer (Checker)" },
 ];
 
-// The admin users API returns roles as an array (e.g. ["reviewer"]), while
-// freshly-created rows in this page keep a plain `role` string — resolve
-// either into the single label used in the users table.
 function displayRoleOf(user) {
-  if (Array.isArray(user?.roles) && user.roles.length) return user.roles[0];
-  return user?.role || "user";
+  if (!user) return "user";
+  if (user.is_superuser || user.is_staff || user.is_admin) return "admin";
+  const roles = getEffectiveRoles(user);
+  if (roles.includes("admin") || roles.includes("superadmin") || roles.includes("superuser") || roles.includes("staff")) {
+    return "admin";
+  }
+  if (roles.includes("reviewer") || roles.includes("checker")) {
+    return "reviewer";
+  }
+  if (roles.includes("researcher")) {
+    return "researcher";
+  }
+  return "user";
+}
+
+function getUserStatus(user) {
+  if (!user) return "active";
+  if (user.is_active === false) return "inactive";
+  const s = String(user.status || "").toLowerCase().trim();
+  if (s === "inactive" || s === "deactivated" || s === "disabled" || s === "suspended") {
+    return "inactive";
+  }
+  return "active";
 }
 
 const roleBadge = {
@@ -247,7 +266,7 @@ export default function AdminDashboardPage() {
   }
 
   function handleToggleUserActiveClick(targetUser) {
-    const isCurrentlyActive = targetUser.is_active !== false;
+    const isCurrentlyActive = getUserStatus(targetUser) === "active";
     if (isCurrentlyActive) {
       // Trying to DEACTIVATE -> check datasets
       const userHasData = hasUploadedDatasets(targetUser);
@@ -271,7 +290,11 @@ export default function AdminDashboardPage() {
       setUsers((prev) =>
         prev.map((u) => {
           if ((u.id || u.user_id) === id) {
-            return { ...u, is_active: newActiveState };
+            return {
+              ...u,
+              is_active: newActiveState,
+              status: newActiveState ? "active" : "inactive",
+            };
           }
           return u;
         })
@@ -603,7 +626,8 @@ export default function AdminDashboardPage() {
                     const isUpdatingRole = roleUpdatingId === uid;
                     const isTogglingActive = togglingActiveId === uid;
                     const currentRole = displayRoleOf(u);
-                    const isActive = u.is_active !== false;
+                    const userStatus = getUserStatus(u);
+                    const isActive = userStatus === "active";
 
                     return (
                       <tr key={uid} className="border-t border-gray-100 hover:bg-bg/50">
@@ -620,39 +644,47 @@ export default function AdminDashboardPage() {
                         </td>
                         <td className="px-5 py-4">
                           <div className="flex items-center gap-2">
-                            <select
-                              value={currentRole}
-                              disabled={isUpdatingRole}
-                              onChange={(e) => handleUpdateUserRole(u, e.target.value)}
-                              className={`text-xs font-semibold px-2.5 py-1 rounded-lg border bg-white focus:outline-none focus:ring-1 focus:ring-gold cursor-pointer transition ${
-                                currentRole === "reviewer"
-                                  ? "border-violet-300 text-violet-700 bg-violet-50/60"
-                                  : currentRole === "admin"
-                                  ? "border-gold/40 text-gold-dark bg-gold-light/40"
-                                  : "border-slate-200 text-slate-700"
+                            <span
+                              className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border capitalize tracking-wide ${
+                                roleBadge[currentRole] || "bg-gray-100 text-gray-700 border-gray-200"
                               }`}
-                              title="Assign user role"
                             >
-                              <option value="public">User</option>
-                              <option value="reviewer">Reviewer</option>
-                              <option value="researcher">Researcher</option>
-                              <option value="admin">Admin</option>
-                            </select>
-                            {currentRole !== "reviewer" && (
+                              {currentRole === "reviewer"
+                                ? "Reviewer"
+                                : currentRole === "admin"
+                                ? "Admin"
+                                : currentRole === "researcher"
+                                ? "Researcher"
+                                : "User"}
+                            </span>
+
+                            {currentRole !== "reviewer" && currentRole !== "admin" && (
                               <button
                                 type="button"
                                 onClick={() => handleUpdateUserRole(u, "reviewer")}
                                 disabled={isUpdatingRole}
                                 className="text-[11px] font-semibold text-violet-700 hover:text-white bg-violet-50 hover:bg-violet-600 border border-violet-200 px-2.5 py-1 rounded-lg transition shadow-2xs whitespace-nowrap cursor-pointer disabled:opacity-50"
-                                title="Grant Reviewer privileges"
+                                title="Promote user to Reviewer"
                               >
                                 {isUpdatingRole ? "Updating…" : "+ Reviewer"}
+                              </button>
+                            )}
+
+                            {currentRole === "reviewer" && (
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateUserRole(u, "public")}
+                                disabled={isUpdatingRole}
+                                className="text-[11px] font-semibold text-slate-700 hover:text-white bg-slate-100 hover:bg-slate-700 border border-slate-300 px-2.5 py-1 rounded-lg transition shadow-2xs whitespace-nowrap cursor-pointer disabled:opacity-50"
+                                title="Revert role to User"
+                              >
+                                {isUpdatingRole ? "Updating…" : "+ User"}
                               </button>
                             )}
                           </div>
                         </td>
                         <td className="px-5 py-4">
-                          <StatusBadge status={isActive ? "active" : "inactive"} />
+                          <StatusBadge status={userStatus} />
                         </td>
                         <td className="px-5 py-4 text-right">
                           <div className="flex items-center justify-end gap-2.5">

@@ -684,7 +684,7 @@ function MyReviewsTab({ reviews, onUndoToAccept, onReturnToQueue, actionId }) {
         <thead className="text-xs uppercase text-gray-500 bg-gray-50">
           <tr>
             <th className="px-5 py-3 text-left font-semibold">Dataset</th>
-            <th className="px-5 py-3 text-left font-semibold">Decision</th>
+            <th className="px-5 py-3 text-left font-semibold">Action</th>
             <th className="px-5 py-3 text-left font-semibold">Reason / Comment</th>
             <th className="px-5 py-3 text-left font-semibold">Date</th>
             <th className="px-5 py-3 text-right font-semibold">Actions</th>

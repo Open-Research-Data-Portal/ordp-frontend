@@ -13,6 +13,7 @@ import {
   Users,
   Loader2,
   X,
+  Archive,
 } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import { useAuth } from "../../../context/useAuth";
@@ -240,14 +241,25 @@ export default function DatasetListPage({
             <p className="text-sm text-gray-500 mt-1">{subtitle}</p>
           </div>
           {!isArchivedPage && (
-            <button
-              type="button"
-              onClick={() => navigate("/datasets/contribute?new=1")}
-              className="flex items-center gap-2 bg-navy hover:bg-navy-dark text-white rounded-full px-5 py-2.5 text-sm font-semibold shrink-0 transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              New Dataset
-            </button>
+            <div className="flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => navigate("/my-archive")}
+                className="flex items-center gap-2 border border-slate-300 hover:border-navy text-slate-700 hover:text-navy bg-white rounded-full px-4 py-2.5 text-sm font-semibold shrink-0 transition-all shadow-2xs cursor-pointer"
+                title="View your archived datasets"
+              >
+                <Archive className="w-4 h-4 text-slate-500" />
+                My Archive
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate("/datasets/contribute?new=1")}
+                className="flex items-center gap-2 bg-navy hover:bg-navy-dark text-white rounded-full px-5 py-2.5 text-sm font-semibold shrink-0 transition-colors cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                New Dataset
+              </button>
+            </div>
           )}
         </div>
 

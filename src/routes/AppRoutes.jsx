@@ -25,12 +25,15 @@ import ReviewerDashboardPage from "../features/datasets/pages/ReviewerDashboardP
 import ReviewerQueuePage from "../features/datasets/pages/ReviewerQueuePage.jsx";
 import ReviewerArchiveRequestsPage from "../features/datasets/pages/ReviewerArchiveRequestsPage.jsx";
 import AdminArchivedDatasetsPage from "../features/datasets/pages/AdminArchivedDatasetsPage.jsx";
+import AdminSettingsPage from "../features/datasets/pages/AdminSettingsPage.jsx";
 import ReviewDatasetPage from "../features/datasets/pages/ReviewDatasetPage.jsx";
 import DatasetDetailPage from "../features/datasets/pages/Datasetdetailpage.jsx";
 import BrowseDatasetsPage from "../pages/BrowseDatasetsPage.jsx";
 import DatasetViewPage from "../pages/DatasetViewPage";
 import BookmarksPage from "../features/datasets/pages/BookmarksPage";
 import NotificationsPage from "../pages/NotificationsPage";
+import ClaimAccessPage from "../pages/ClaimAccessPage.jsx";
+import AcceptInvitationPage from "../pages/AcceptInvitationPage.jsx";
 
 import { useAuth } from "../context/useAuth";
 import { isProfileComplete } from "../utils/userRoles";
@@ -108,6 +111,12 @@ export default function AppRoutes() {
       <Route path="/activate" element={<ResetPasswordPage />} />
       <Route path="/activate/:token" element={<ResetPasswordPage />} />
 
+      {/* Sharing & Access Claims */}
+      <Route path="/claim-access/:token" element={<ClaimAccessPage />} />
+      <Route path="/sharing/claim-access/:token" element={<ClaimAccessPage />} />
+      <Route path="/invitations/:token" element={<AcceptInvitationPage />} />
+      <Route path="/sharing/invitations/:token" element={<AcceptInvitationPage />} />
+
       {/* Public dataset browsing */}
       <Route path="/datasets" element={<BrowseDatasetsPage />} />
       <Route path="/datasets/:id" element={
@@ -160,6 +169,9 @@ export default function AppRoutes() {
       } />
       <Route path="/admin/deletion-requests" element={
         <ProtectedRoute><AdminDeletionRequestsPage /></ProtectedRoute>
+      } />
+      <Route path="/admin/settings" element={
+        <ProtectedRoute><AdminSettingsPage /></ProtectedRoute>
       } />
       <Route path="/profile" element={
         <ProtectedRoute><ProfilePage /></ProtectedRoute>

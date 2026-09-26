@@ -15,7 +15,7 @@ const STATUS_BADGE = {
   rejected: "bg-red-50 text-red-700 border-red-200",
 };
 
-export default function ArchiveRequestDetailModal({ request, onClose }) {
+export default function ArchiveRequestDetailModal({ request, onClose, footer, votesText }) {
   if (!request) return null;
   const status = request?.status || "pending";
   return (
@@ -66,7 +66,9 @@ export default function ArchiveRequestDetailModal({ request, onClose }) {
               <FileText className="w-4 h-4 text-gold" /> 1. Archival Category
             </div>
             <div className="inline-block bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold px-3 py-1.5 rounded-lg">
-              {archiveApi.reasonLabel(request.reason_category)}
+              {request.type === "unarchive"
+                ? archiveApi.intendedUseLabel(request.intended_use)
+                : archiveApi.reasonLabel(request.reason_category || request.reason)}
             </div>
           </div>
 
@@ -86,7 +88,7 @@ export default function ArchiveRequestDetailModal({ request, onClose }) {
               <FileText className="w-4 h-4 text-gold" /> 3. Detailed Archival Justification
             </div>
             <div className="rounded-xl bg-slate-50 border border-border p-4 text-sm text-gray-700 whitespace-pre-line leading-relaxed">
-              {request.reason || "No detailed justification provided."}
+              {request.comment || request.reason || "No detailed justification provided."}
             </div>
           </div>
 
@@ -118,17 +120,26 @@ export default function ArchiveRequestDetailModal({ request, onClose }) {
               </div>
             </div>
           </div>
+
+          {votesText && (
+            <div className="flex items-center gap-2 rounded-xl bg-violet-50 border border-violet-200 p-3 text-xs font-semibold text-violet-700">
+              <CheckCircle2 className="w-4 h-4" />
+              <span>{votesText}</span>
+            </div>
+          )}
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 bg-slate-50 border-t border-border flex justify-end gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-xl border border-border px-5 py-2.5 text-sm font-semibold text-gray-700 bg-white hover:bg-gray-100 transition shadow-xs"
-          >
-            Close Form
-          </button>
+        <div className="px-6 py-4 bg-slate-50 border-t border-border flex items-center justify-end gap-3">
+          {footer ? footer : (
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl border border-border px-5 py-2.5 text-sm font-semibold text-gray-700 bg-white hover:bg-gray-100 transition shadow-xs"
+            >
+              Close Form
+            </button>
+          )}
         </div>
       </div>
     </div>

@@ -57,6 +57,8 @@ export function StatusBadge({ status }) {
     draft: "bg-gray-100 text-gray-600 border-gray-200",
     under_review: "bg-violet-50 text-violet-700 border-violet-200",
     changes_requested: "bg-orange-50 text-orange-700 border-orange-200",
+    active: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    inactive: "bg-gray-100 text-gray-500 border-gray-200",
   };
   const key = String(status || "pending").toLowerCase().replace(" ", "_");
   return (

@@ -170,7 +170,7 @@ export default function UserArchivedDatasetsPage() {
   }, [datasets, requestsMap]);
 
   return (
-    <DashboardShell title="Archived Datasets" subtitle="Browse datasets that have been archived.">
+    <DashboardShell title="Archived" subtitle="Browse datasets that have been archived.">
       <div className="p-8 lg:p-10 bg-white min-h-full rounded-2xl border border-[#E3E1DA]">
         <button
           type="button"
@@ -181,7 +181,7 @@ export default function UserArchivedDatasetsPage() {
         </button>
         <div className="flex items-start justify-between gap-4 mb-2">
           <div>
-            <h1 className="text-3xl font-serif font-bold text-navy">Archived Datasets</h1>
+            <h1 className="text-3xl font-serif font-bold text-navy">Archived</h1>
             <p className="text-sm text-gray-500 mt-1">
               Archived datasets are preserved for institutional research records and are withdrawn from active discovery.
             </p>
@@ -275,6 +275,7 @@ export default function UserArchivedDatasetsPage() {
                           </button>
                         );
                       })()}
+                    </div>
                   </div>
                 </div>
               );

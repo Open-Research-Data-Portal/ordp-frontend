@@ -28,42 +28,42 @@ const DEFAULT_WEIGHTS = [
     label: "Metadata Completeness",
     description: "Title, abstract, keywords, license, and subject all filled in correctly.",
     weight: 25,
-    color: "#6366f1",
+    color: "#0C1236", // Primary Navy (100% weight)
   },
   {
     id: "data_integrity",
     label: "Data Integrity & Quality",
     description: "Files are readable, uncorrupted, and match described format and size.",
     weight: 25,
-    color: "#0ea5e9",
+    color: "#1A2248", // Navy Muted (80% weight)
   },
   {
     id: "ethical_compliance",
     label: "Ethical Compliance",
     description: "Consent, privacy, and institutional ethics requirements are met.",
     weight: 20,
-    color: "#f59e0b",
+    color: "#8B6914", // Gold Dark
   },
   {
     id: "documentation",
     label: "Documentation & Reproducibility",
     description: "README, methodology, and variable descriptions are adequate.",
     weight: 15,
-    color: "#10b981",
+    color: "#A87E0E", // Primary Gold
   },
   {
     id: "access_licensing",
     label: "Access & Licensing",
     description: "License is appropriate and access level matches data sensitivity.",
     weight: 10,
-    color: "#ec4899",
+    color: "#4C7A3D", // System Forest
   },
   {
     id: "novelty_relevance",
     label: "Novelty & Relevance",
     description: "Dataset contributes new knowledge and fits ORDP research scope.",
     weight: 5,
-    color: "#8b5cf6",
+    color: "#2D3766", // Navy Slate (60% weight)
   },
 ];
 
@@ -166,7 +166,7 @@ function WeightSlider({ criterion, value, onChange, disabled }) {
             value={value}
             disabled={disabled}
             onChange={(e) => onChange(Number(e.target.value))}
-            className="w-16 text-center text-sm font-bold border border-slate-200 rounded-lg py-1 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-transparent disabled:opacity-60 bg-slate-50"
+            className="w-16 text-center text-sm font-bold border border-slate-200 rounded-lg py-1 focus:outline-none focus:ring-2 focus:ring-gold/30 focus:border-gold disabled:opacity-60 bg-slate-50"
             style={{ color: criterion.color }}
           />
           <span className="text-[10px] text-slate-400 mt-0.5">weight</span>
@@ -213,12 +213,12 @@ function CategoryProposalCard({ proposal, allCategories, onApprove, onReject, on
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden hover:border-indigo-200 hover:shadow-sm transition-all duration-200">
+    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden hover:border-navy/30 hover:shadow-sm transition-all duration-200">
       <div className="p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 bg-amber-50 rounded-xl flex items-center justify-center shrink-0">
-              <Tag className="w-4 h-4 text-amber-500" />
+            <div className="w-9 h-9 bg-gold-light/40 rounded-xl flex items-center justify-center shrink-0">
+              <Tag className="w-4 h-4 text-gold" />
             </div>
             <div className="min-w-0">
               <p className="font-semibold text-slate-800 truncate">{proposal.name}</p>
@@ -261,9 +261,9 @@ function CategoryProposalCard({ proposal, allCategories, onApprove, onReject, on
         <button
           onClick={() => { setShowMerge(!showMerge); setShowReject(false); }}
           disabled={busy}
-          className="flex items-center gap-1.5 text-xs font-semibold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 px-3 py-1.5 rounded-lg transition disabled:opacity-50"
+          className="flex items-center gap-1.5 text-xs font-semibold bg-navy/5 text-navy hover:bg-navy/10 border border-navy/20 px-3 py-1.5 rounded-lg transition disabled:opacity-50"
         >
-          <Merge className="w-3 h-3" />
+          <Merge className="w-3 h-3 text-gold" />
           Merge Into…
         </button>
         <button
@@ -304,12 +304,12 @@ function CategoryProposalCard({ proposal, allCategories, onApprove, onReject, on
       )}
 
       {showMerge && (
-        <div className="border-t border-slate-100 bg-indigo-50/50 px-5 py-4">
+        <div className="border-t border-slate-100 bg-[#F8F7F4] px-5 py-4">
           <p className="text-xs font-semibold text-slate-700 mb-2">Merge into existing category</p>
           <select
             value={mergeTarget}
             onChange={(e) => setMergeTarget(e.target.value)}
-            className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white"
+            className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gold/30 bg-white"
           >
             <option value="">Select a category…</option>
             {allCategories
@@ -324,7 +324,7 @@ function CategoryProposalCard({ proposal, allCategories, onApprove, onReject, on
             <button
               onClick={handleMerge}
               disabled={!mergeTarget}
-              className="text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 px-3 py-1.5 rounded-lg transition disabled:opacity-40"
+              className="text-xs font-semibold bg-navy text-white hover:bg-navy-light px-3 py-1.5 rounded-lg transition disabled:opacity-40"
             >
               Confirm Merge
             </button>
@@ -533,11 +533,11 @@ export default function AdminSettingsPage() {
       {/* Page Header */}
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-1">
-          <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-md">
-            <Settings2 className="w-5 h-5 text-white" />
+          <div className="w-10 h-10 bg-navy rounded-xl flex items-center justify-center shadow-md">
+            <Settings2 className="w-5 h-5 text-gold" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Admin Settings</h1>
+            <h1 className="text-2xl font-bold text-navy">Admin Settings</h1>
             <p className="text-sm text-slate-500">
               Configure review criteria weights, category approvals, and system preferences.
             </p>
@@ -570,12 +570,12 @@ export default function AdminSettingsPage() {
                 type="button"
                 onClick={handleSaveWeights}
                 disabled={savingWeights || weightsLoading}
-                className="flex items-center gap-1.5 text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-1.5 rounded-lg shadow-sm transition disabled:opacity-50"
+                className="flex items-center gap-1.5 text-xs font-semibold bg-navy text-white hover:bg-navy-light px-4 py-1.5 rounded-lg shadow-sm transition disabled:opacity-50"
               >
                 {savingWeights ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 ) : (
-                  <Save className="w-3.5 h-3.5" />
+                  <Save className="w-3.5 h-3.5 text-gold" />
                 )}
                 Save Weights
               </button>
@@ -631,11 +631,11 @@ export default function AdminSettingsPage() {
             </div>
           </div>
 
-          <div className="mt-4 flex items-start gap-3 bg-indigo-50 border border-indigo-100 rounded-xl p-4 text-xs text-indigo-700">
-            <Info className="w-4 h-4 shrink-0 mt-0.5 text-indigo-500" />
+          <div className="mt-4 flex items-start gap-3 bg-gold-light/40 border border-gold/30 rounded-xl p-4 text-xs text-navy">
+            <Info className="w-4 h-4 shrink-0 mt-0.5 text-gold-dark" />
             <p>
               The <strong>final review score</strong> is computed as a weighted sum:{" "}
-              <code className="bg-indigo-100 rounded px-1 py-0.5 font-mono">
+              <code className="bg-gold-light text-navy rounded px-1.5 py-0.5 font-mono font-bold">
                 Score = Σ (criteria_score × weight / 100)
               </code>
               . These weights are applied automatically when reviewers submit evaluations.
@@ -761,8 +761,8 @@ export default function AdminSettingsPage() {
                       role="switch"
                       aria-checked={value}
                       onClick={() => onChange(!value)}
-                      className={`relative inline-flex h-5 w-9 items-center rounded-full border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-300 ${
-                        value ? "bg-indigo-600 border-indigo-600" : "bg-slate-200 border-slate-200"
+                      className={`relative inline-flex h-5 w-9 items-center rounded-full border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-gold/30 ${
+                        value ? "bg-emerald-600 border-emerald-600" : "bg-slate-200 border-slate-200"
                       }`}
                     >
                       <span
@@ -782,9 +782,9 @@ export default function AdminSettingsPage() {
               type="button"
               onClick={handleSaveSystem}
               disabled={systemSaving}
-              className="flex items-center gap-1.5 text-sm font-semibold bg-slate-800 text-white hover:bg-slate-700 px-5 py-2 rounded-lg shadow-sm transition disabled:opacity-50"
+              className="flex items-center gap-1.5 text-sm font-semibold bg-navy text-white hover:bg-navy-light px-5 py-2 rounded-xl shadow-xs transition disabled:opacity-50"
             >
-              {systemSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              {systemSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 text-gold" />}
               Save System Settings
             </button>
           </div>

@@ -25,6 +25,7 @@ import ReviewerDashboardPage from "../features/datasets/pages/ReviewerDashboardP
 import ReviewerQueuePage from "../features/datasets/pages/ReviewerQueuePage.jsx";
 import ReviewerArchiveRequestsPage from "../features/datasets/pages/ReviewerArchiveRequestsPage.jsx";
 import AdminArchivedDatasetsPage from "../features/datasets/pages/AdminArchivedDatasetsPage.jsx";
+import AdminSettingsPage from "../features/datasets/pages/AdminSettingsPage.jsx";
 import ReviewDatasetPage from "../features/datasets/pages/ReviewDatasetPage.jsx";
 import DatasetDetailPage from "../features/datasets/pages/Datasetdetailpage.jsx";
 import BrowseDatasetsPage from "../pages/BrowseDatasetsPage.jsx";
@@ -168,6 +169,9 @@ export default function AppRoutes() {
       } />
       <Route path="/admin/deletion-requests" element={
         <ProtectedRoute><AdminDeletionRequestsPage /></ProtectedRoute>
+      } />
+      <Route path="/admin/settings" element={
+        <ProtectedRoute><AdminSettingsPage /></ProtectedRoute>
       } />
       <Route path="/profile" element={
         <ProtectedRoute><ProfilePage /></ProtectedRoute>

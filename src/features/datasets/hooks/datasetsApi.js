@@ -382,6 +382,38 @@ export async function createAdminUser(payload) {
   return data;
 }
 
+export async function updateAdminUserRole(userId, role) {
+  const roles = [role];
+  try {
+    const { data } = await client.patch(`/admin-panel/users/${userId}/`, { role, roles });
+    return data;
+  } catch {
+    try {
+      const { data } = await client.post(`/admin-panel/users/${userId}/roles/`, { role, roles });
+      return data;
+    } catch {
+      const { data } = await client.put(`/admin-panel/users/${userId}/`, { role, roles });
+      return data;
+    }
+  }
+}
+
+export async function toggleAdminUserActive(userId, isActive) {
+  try {
+    const { data } = await client.patch(`/admin-panel/users/${userId}/`, { is_active: isActive });
+    return data;
+  } catch {
+    try {
+      const endpoint = isActive ? "activate" : "deactivate";
+      const { data } = await client.post(`/admin-panel/users/${userId}/${endpoint}/`);
+      return data;
+    } catch {
+      const { data } = await client.put(`/admin-panel/users/${userId}/`, { is_active: isActive });
+      return data;
+    }
+  }
+}
+
 export async function deleteAdminUser(userId) {
   try {
     const { data } = await client.delete(`/admin-panel/users/${userId}/`);

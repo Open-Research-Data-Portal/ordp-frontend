@@ -186,6 +186,14 @@ export default function UserArchivedDatasetsPage() {
               Archived datasets are preserved for institutional research records and are withdrawn from active discovery.
             </p>
           </div>
+          <button
+            type="button"
+            onClick={() => navigate("/my-datasets")}
+            className="flex items-center gap-2 border border-slate-300 hover:border-navy text-slate-700 hover:text-navy bg-white rounded-full px-4 py-2 text-sm font-semibold shrink-0 transition-all shadow-2xs cursor-pointer"
+            title="Return to your active datasets"
+          >
+            My Datasets
+          </button>
         </div>
 
         {error && <p role="alert" className="text-danger mt-4">{error}</p>}

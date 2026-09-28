@@ -25,6 +25,7 @@ import {
   persistSelectedInterests,
   buildProfileCompletionPatch,
   saveProfileCompletion,
+  toInterestSavePayload,
 } from "../onboarding";
 import {
   OCCUPATION_OPTIONS,
@@ -38,6 +39,34 @@ import {
 } from "./constants";
 import { getDashboardPath } from "../../../utils/userRoles";
 import { useNavigate } from "react-router-dom";
+
+const DRAFT_STORAGE_PREFIX = "ordp:profile-draft:";
+
+function getDraftKey(user) {
+  const id = user?.id ?? user?.user_id ?? user?.email ?? user?.username ?? "current";
+  return `${DRAFT_STORAGE_PREFIX}${id}`;
+}
+
+function loadLocalDraft(user) {
+  try {
+    const raw = localStorage.getItem(getDraftKey(user));
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveLocalDraft(user, draft) {
+  try {
+    localStorage.setItem(getDraftKey(user), JSON.stringify(draft));
+  } catch {}
+}
+
+function clearLocalDraft(user) {
+  try {
+    localStorage.removeItem(getDraftKey(user));
+  } catch {}
+}
 
 const PROFILE_VISIBILITY_OPTIONS = [
   { value: "public", label: "Everyone (Public)" },
@@ -176,6 +205,9 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [hasDraft, setHasDraft] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const isLoadedRef = useRef(false);
 
   const [editingSections, setEditingSections] = useState({
     personal: false,
@@ -184,7 +216,70 @@ export default function ProfilePage() {
     visibility: false,
   });
 
+  async function persistSectionPartial(sectionKey) {
+    try {
+      const fullName = [firstName, fatherName, grandFatherName]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+      const occ =
+        toOptionValue(OCCUPATION_OPTIONS, academicRole) || academicRole;
+      const deptId = asEntityId(department);
+
+      const extra = {};
+      if (sectionKey === "personal") {
+        if (firstName) extra.first_name = firstName;
+        if (fatherName) extra.last_name = fatherName;
+        if (grandFatherName) extra.grand_father_name = grandFatherName;
+        if (fullName) extra.full_name = fullName;
+      } else if (sectionKey === "academic") {
+        if (affiliation) extra.affiliation = affiliation;
+        if (deptId) extra.department = deptId;
+        extra.academia = occ || "researcher";
+        extra.occupation = occ || "researcher";
+        if (studentType) extra.student_type = studentType;
+        if (academicTitle)
+          extra.academic_title =
+            toOptionValue(ACADEMIC_TITLE_OPTIONS, academicTitle) ||
+            academicTitle;
+        if (academicRank)
+          extra.academic_rank =
+            toOptionValue(ACADEMIC_RANK_OPTIONS, academicRank) ||
+            academicRank;
+        if (highestDegree)
+          extra.highest_degree =
+            toOptionValue(HIGHEST_DEGREE_OPTIONS, highestDegree) ||
+            highestDegree;
+      } else if (sectionKey === "research") {
+        if (bio) extra.bio = bio;
+        if (orcidId) extra.orcid_id = orcidId;
+        if (projectWork) extra.project_work = projectWork;
+        if (additionalLink) extra.additional_link = additionalLink;
+      } else if (sectionKey === "visibility") {
+        if (profileVisibility) extra.profile_visibility = profileVisibility;
+        extra.terms_accepted = termsAccepted;
+      }
+
+      const payload = buildProfileCompletionPatch({
+        labels: sectionKey === "research" ? researchInterests : [],
+        catalog: interestCatalog,
+        completion: completionRef.current,
+        options: optionsRef.current,
+        extra,
+      });
+
+      await saveProfileCompletion(payload);
+    } catch (err) {
+      console.debug("Partial profile auto-save on lock:", err);
+    }
+  }
+
   const toggleEditSection = (key) => {
+    const isCurrentlyEditing = editingSections[key];
+    if (isCurrentlyEditing) {
+      // User is locking the section — immediately persist to backend and draft!
+      persistSectionPartial(key);
+    }
     setEditingSections((prev) => ({
       ...prev,
       [key]: !prev[key],
@@ -201,12 +296,23 @@ export default function ProfilePage() {
   };
 
   const lockAllEditing = () => {
+    ["personal", "academic", "research", "visibility"].forEach((k) => {
+      if (editingSections[k]) persistSectionPartial(k);
+    });
     setEditingSections({
       personal: false,
       academic: false,
       research: false,
       visibility: false,
     });
+  };
+
+  const handleDiscardDraft = () => {
+    if (window.confirm("Discard all unsaved edits and restore your saved profile?")) {
+      clearLocalDraft(user);
+      setHasDraft(false);
+      window.location.reload();
+    }
   };
 
   useEffect(() => {
@@ -394,6 +500,46 @@ export default function ProfilePage() {
                 false
             )
           );
+
+          const remoteAvatar =
+            merged?.profile_picture_url ||
+            merged?.profile_picture ||
+            user?.profile_picture_url ||
+            user?.profile_picture;
+          if (remoteAvatar) {
+            setAvatarUrl(remoteAvatar);
+          }
+
+          // Restore any unfinished local draft (survives browser refresh and closing the tab)
+          const draft = loadLocalDraft(user);
+          if (draft) {
+            setHasDraft(true);
+            if (draft.firstName !== undefined) setFirstName(draft.firstName);
+            if (draft.fatherName !== undefined) setFatherName(draft.fatherName);
+            if (draft.grandFatherName !== undefined) setGrandFatherName(draft.grandFatherName);
+            if (draft.affiliation !== undefined) setAffiliation(draft.affiliation);
+            if (draft.department !== undefined) setDepartment(draft.department);
+            if (draft.academicRole !== undefined) setAcademicRole(draft.academicRole);
+            if (draft.studentType !== undefined) setStudentType(draft.studentType);
+            if (draft.academicTitle !== undefined) setAcademicTitle(draft.academicTitle);
+            if (draft.academicRank !== undefined) setAcademicRank(draft.academicRank);
+            if (draft.highestDegree !== undefined) setHighestDegree(draft.highestDegree);
+            if (draft.bio !== undefined) setBio(draft.bio);
+            if (draft.orcidId !== undefined) setOrcidId(draft.orcidId);
+            if (draft.projectWork !== undefined) setProjectWork(draft.projectWork);
+            if (draft.additionalLink !== undefined) setAdditionalLink(draft.additionalLink);
+            if (draft.profileVisibility !== undefined) setProfileVisibility(draft.profileVisibility);
+            if (draft.termsAccepted !== undefined) setTermsAccepted(draft.termsAccepted);
+            if (Array.isArray(draft.researchInterests) && draft.researchInterests.length > 0) {
+              setResearchInterests(draft.researchInterests);
+            }
+            if (draft.avatarUrl) setAvatarUrl(draft.avatarUrl);
+            if (draft.editingSections) setEditingSections(draft.editingSections);
+          }
+
+          setTimeout(() => {
+            isLoadedRef.current = true;
+          }, 300);
         }
       )
       .catch(() => {});
@@ -402,6 +548,56 @@ export default function ProfilePage() {
       cancelled = true;
     };
   }, [isAuthenticated, user]);
+
+  // Persist draft on any input change once loaded
+  useEffect(() => {
+    if (!isLoadedRef.current) return;
+    const currentDraft = {
+      firstName,
+      fatherName,
+      grandFatherName,
+      affiliation,
+      department,
+      academicRole,
+      studentType,
+      academicTitle,
+      academicRank,
+      highestDegree,
+      researchInterests,
+      bio,
+      orcidId,
+      projectWork,
+      additionalLink,
+      profileVisibility,
+      termsAccepted,
+      avatarUrl,
+      editingSections,
+      updatedAt: Date.now(),
+    };
+    saveLocalDraft(user, currentDraft);
+    setHasDraft(true);
+  }, [
+    user,
+    firstName,
+    fatherName,
+    grandFatherName,
+    affiliation,
+    department,
+    academicRole,
+    studentType,
+    academicTitle,
+    academicRank,
+    highestDegree,
+    researchInterests,
+    bio,
+    orcidId,
+    projectWork,
+    additionalLink,
+    profileVisibility,
+    termsAccepted,
+    avatarUrl,
+    editingSections,
+  ]);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -414,11 +610,33 @@ export default function ProfilePage() {
     }
   }, [isAuthenticated]);
 
-  function handleAvatarChange(e) {
+  async function handleAvatarChange(e) {
     const file = e.target.files?.[0];
+    if (!file) return;
 
-    if (file) {
-      setAvatarUrl(URL.createObjectURL(file));
+    if (file.size > 2 * 1024 * 1024) {
+      setSaveError("Image must be smaller than 2MB.");
+      return;
+    }
+
+    const localUrl = URL.createObjectURL(file);
+    setAvatarUrl(localUrl);
+    setUploadingAvatar(true);
+    setSaveError("");
+
+    try {
+      const res = await authApi.uploadProfilePicture(file);
+      const remoteUrl = res?.url || res?.profile_picture_url;
+      if (remoteUrl) {
+        setAvatarUrl(remoteUrl);
+        if (setUser && user) {
+          setUser({ ...user, profile_picture_url: remoteUrl });
+        }
+      }
+    } catch (err) {
+      console.warn("Direct upload error, keep local preview:", err);
+    } finally {
+      setUploadingAvatar(false);
     }
   }
 
@@ -551,6 +769,8 @@ export default function ProfilePage() {
       }
 
       persistSelectedInterests(user, researchInterests);
+      clearLocalDraft(user);
+      setHasDraft(false);
 
       const nextUser = {
         ...(user || {}),
@@ -634,6 +854,22 @@ export default function ProfilePage() {
           </button>
 
           <div className="flex items-center gap-2 text-xs">
+            {hasDraft && (
+              <>
+                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-0.5">
+                  Unfinished changes kept
+                </span>
+                <button
+                  type="button"
+                  onClick={handleDiscardDraft}
+                  className="font-medium text-red-600 hover:underline"
+                  title="Discard unsaved changes and reload saved profile"
+                >
+                  Discard Draft
+                </button>
+                <span className="text-slate-300">|</span>
+              </>
+            )}
             <button
               type="button"
               onClick={enableAllEditing}

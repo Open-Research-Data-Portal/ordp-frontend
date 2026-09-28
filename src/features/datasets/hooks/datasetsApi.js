@@ -20,6 +20,31 @@ export async function listCategories() {
   return data;
 }
 
+/**
+ * Submit a user-proposed category name to the admin for review.
+ * Tries /metadata/categories/proposals/ first, then /metadata/categories/propose/.
+ */
+export async function proposeCategoryRequest(name) {
+  const candidates = [
+    `${METADATA_BASE}/categories/proposals/`,
+    `${METADATA_BASE}/categories/propose/`,
+    `${METADATA_BASE}/categories/request/`,
+  ];
+  let lastErr = null;
+  for (const url of candidates) {
+    try {
+      const { data } = await client.post(url, { name });
+      return data;
+    } catch (err) {
+      lastErr = err;
+      const status = err?.response?.status;
+      if (status === 404 || status === 405) continue;
+      throw err;
+    }
+  }
+  throw lastErr;
+}
+
 export async function listSubjects() {
   const { data } = await client.get(`${METADATA_BASE}/subjects/`);
   return Array.isArray(data) ? data : (data?.results || data?.subjects || []);

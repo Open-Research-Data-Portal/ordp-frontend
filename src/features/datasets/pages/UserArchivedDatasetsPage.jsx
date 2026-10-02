@@ -170,7 +170,7 @@ export default function UserArchivedDatasetsPage() {
   }, [datasets, requestsMap]);
 
   return (
-    <DashboardShell title="Archived Datasets" subtitle="Browse datasets that have been archived.">
+    <DashboardShell title="Archived" subtitle="Browse datasets that have been archived.">
       <div className="p-8 lg:p-10 bg-white min-h-full rounded-2xl border border-[#E3E1DA]">
         <button
           type="button"
@@ -181,11 +181,19 @@ export default function UserArchivedDatasetsPage() {
         </button>
         <div className="flex items-start justify-between gap-4 mb-2">
           <div>
-            <h1 className="text-3xl font-serif font-bold text-navy">Archived Datasets</h1>
+            <h1 className="text-3xl font-serif font-bold text-navy">Archived</h1>
             <p className="text-sm text-gray-500 mt-1">
               Archived datasets are preserved for institutional research records and are withdrawn from active discovery.
             </p>
           </div>
+          <button
+            type="button"
+            onClick={() => navigate("/my-datasets")}
+            className="flex items-center gap-2 border border-slate-300 hover:border-navy text-slate-700 hover:text-navy bg-white rounded-full px-4 py-2 text-sm font-semibold shrink-0 transition-all shadow-2xs cursor-pointer"
+            title="Return to your active datasets"
+          >
+            My Datasets
+          </button>
         </div>
 
         {error && <p role="alert" className="text-danger mt-4">{error}</p>}
@@ -275,6 +283,7 @@ export default function UserArchivedDatasetsPage() {
                           </button>
                         );
                       })()}
+                    </div>
                   </div>
                 </div>
               );

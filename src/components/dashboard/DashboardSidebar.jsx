@@ -18,6 +18,7 @@ import {
   Archive,
   ChevronLeft,
   ChevronRight,
+  UserCheck,
   X,
 } from "lucide-react";
 import { useAuth } from "../../context/useAuth";
@@ -32,7 +33,7 @@ const ROLE_CONFIG = {
     nav: [
       { label: "Dashboard", icon: LayoutGrid, to: "/user-dashboard" },
       { label: "Other Datasets", icon: Database, to: "/datasets" },
-      { label: "Archived Datasets", icon: Archive, to: "/archived-datasets" },
+      { label: "Archived", icon: Archive, to: "/archived-datasets" },
       { label: "Bookmarks", icon: Bookmark, to: "/bookmarks" },
       { label: "Notifications", icon: Bell, to: "/notifications" },
       { label: "Settings", icon: Settings, to: "/profile" },
@@ -44,7 +45,7 @@ const ROLE_CONFIG = {
     nav: [
       { label: "Dashboard", icon: LayoutGrid, to: "/researcher-dashboard" },
       { label: "My Datasets", icon: FolderKanban, to: "/my-datasets" },
-      { label: "Archived Datasets", icon: Archive, to: "/archived-datasets" },
+      { label: "Archived", icon: Archive, to: "/archived-datasets" },
       { label: "Other Datasets", icon: Database, to: "/datasets" },
       { label: "Bookmarks", icon: Bookmark, to: "/bookmarks" },
       { label: "Notifications", icon: Bell, to: "/notifications" },
@@ -71,7 +72,7 @@ const ROLE_CONFIG = {
       { label: "Overview", icon: LayoutGrid, to: "/admin-dashboard" },
       { label: "Datasets", icon: Database, to: "/admin-dashboard?tab=datasets" },
       { label: "Audit Log", icon: ScrollText, to: "/admin/audit-log" },
-      { label: "Archived Datasets", icon: Archive, to: "/admin/archived-datasets" },
+      { label: "Archived", icon: Archive, to: "/admin/archived-datasets" },
       { label: "Users", icon: Users, to: "/admin-dashboard?tab=users" },
       { label: "Settings", icon: Settings, to: "/admin/settings" },
       { label: "Notifications", icon: Bell, to: "/notifications" },
@@ -207,15 +208,29 @@ export default function DashboardSidebar({
 
           {isReviewer(user) && roleKey !== "reviewer" && (
             <Link
-              to="/reviewer/review-queue"
-              title={collapsed ? "Review Queue" : undefined}
+              to="/reviewer-dashboard"
+              title={collapsed ? "Reviewer Console" : undefined}
               className={[
                 "flex items-center gap-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:bg-white/5 hover:text-white transition",
                 collapsed ? "justify-center px-0" : "px-3",
               ].join(" ")}
             >
-              <ClipboardCheck className="w-5 h-5 shrink-0" />
-              {!collapsed && <span className="truncate">Review Queue</span>}
+              <ClipboardCheck className="w-5 h-5 shrink-0 text-gold" />
+              {!collapsed && <span className="truncate">Reviewer Console</span>}
+            </Link>
+          )}
+
+          {roleKey === "reviewer" && (
+            <Link
+              to="/user-dashboard"
+              title={collapsed ? "User Dashboard" : undefined}
+              className={[
+                "flex items-center gap-3 py-2.5 rounded-lg text-sm font-medium text-slate-300 hover:bg-white/5 hover:text-white transition",
+                collapsed ? "justify-center px-0" : "px-3",
+              ].join(" ")}
+            >
+              <UserCheck className="w-5 h-5 shrink-0 text-gold" />
+              {!collapsed && <span className="truncate">User Dashboard</span>}
             </Link>
           )}
 

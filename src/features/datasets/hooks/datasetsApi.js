@@ -20,6 +20,80 @@ export async function listCategories() {
   return data;
 }
 
+export async function listInterestCategories() {
+  const { data } = await client.get(`${METADATA_BASE}/categories/interests/`);
+  return Array.isArray(data) ? data : data?.results || [];
+}
+
+export async function getPendingCategories() {
+  const { data } = await client.get("/admin-panel/categories/pending/");
+  return Array.isArray(data) ? data : data?.results || [];
+}
+
+export async function searchApprovedCategories(search = "") {
+  const { data } = await client.get("/admin-panel/categories/approved/", {
+    params: search ? { search } : {},
+  });
+  return Array.isArray(data) ? data : data?.results || [];
+}
+
+export async function decideCategorySuggestion(categoryId, payload) {
+  const { data } = await client.post(`/admin-panel/categories/${categoryId}/decide/`, payload);
+  return data;
+}
+
+/**
+ * Submit a user-proposed category name to the admin for review.
+ * Tries the working interest proposal endpoint (/accounts/profile/interests/other/),
+ * metadata category endpoints, and admin-panel endpoints.
+ */
+export async function proposeCategoryRequest(name, description = "") {
+  const candidates = [
+    { url: "/accounts/profile/interests/other/", body: { name } },
+    { url: `${METADATA_BASE}/categories/`, body: { name, description } },
+    { url: "/admin-panel/categories/pending/", body: { name, description } },
+    { url: "/admin-panel/categories/create/", body: { name, description } },
+    { url: `${METADATA_BASE}/categories/proposals/`, body: { name, description } },
+    { url: `${METADATA_BASE}/categories/propose/`, body: { name, description } },
+  ];
+  let lastErr = null;
+  for (const { url, body } of candidates) {
+    try {
+      const { data } = await client.post(url, body);
+      return data;
+    } catch (err) {
+      lastErr = err;
+      const status = err?.response?.status;
+      if (status === 404 || status === 405) continue;
+      // If 400 or other validation error, propagate it
+      if (status && status !== 500) throw err;
+      continue;
+    }
+  }
+  throw lastErr;
+}
+
+export async function createAdminCategory(payload) {
+  const candidates = [
+    { url: "/admin-panel/categories/create/", data: payload },
+    { url: "/admin-panel/categories/", data: payload },
+    { url: `${METADATA_BASE}/categories/`, data: { ...payload, status: "approved" } },
+  ];
+  let lastErr = null;
+  for (const { url, data: body } of candidates) {
+    try {
+      const { data } = await client.post(url, body);
+      return data;
+    } catch (err) {
+      lastErr = err;
+      const status = err?.response?.status;
+      if (status === 404 || status === 405) continue;
+      throw err;
+    }
+  }
+  throw lastErr;
+}
+
 export async function listSubjects() {
   const { data } = await client.get(`${METADATA_BASE}/subjects/`);
   return Array.isArray(data) ? data : (data?.results || data?.subjects || []);
@@ -380,6 +454,53 @@ export async function getAdminUsers() {
 export async function createAdminUser(payload) {
   const { data } = await client.post("/admin-panel/users/create/", payload);
   return data;
+}
+
+export async function updateAdminUserRole(userId, role) {
+  const roles = [role];
+  try {
+    const { data } = await client.patch(`/admin-panel/users/${userId}/`, { role, roles });
+    return data;
+  } catch {
+    try {
+      const { data } = await client.post(`/admin-panel/users/${userId}/roles/`, { role, roles });
+      return data;
+    } catch {
+      const { data } = await client.put(`/admin-panel/users/${userId}/`, { role, roles });
+      return data;
+    }
+  }
+}
+
+export async function grantAdminUserRole(userId, role) {
+  const { data } = await client.post(`/admin-panel/users/${userId}/grant-role/`, { role });
+  return data;
+}
+
+export async function revokeAdminUserRole(userId, role) {
+  const { data } = await client.post(`/admin-panel/users/${userId}/revoke-role/`, { role });
+  return data;
+}
+
+export async function setAdminUserPrimaryRole(userId, role) {
+  const { data } = await client.post(`/admin-panel/users/${userId}/set-primary-role/`, { role });
+  return data;
+}
+
+export async function toggleAdminUserActive(userId, isActive) {
+  try {
+    const { data } = await client.patch(`/admin-panel/users/${userId}/`, { is_active: isActive });
+    return data;
+  } catch {
+    try {
+      const endpoint = isActive ? "activate" : "deactivate";
+      const { data } = await client.post(`/admin-panel/users/${userId}/${endpoint}/`);
+      return data;
+    } catch {
+      const { data } = await client.put(`/admin-panel/users/${userId}/`, { is_active: isActive });
+      return data;
+    }
+  }
 }
 
 export async function deleteAdminUser(userId) {

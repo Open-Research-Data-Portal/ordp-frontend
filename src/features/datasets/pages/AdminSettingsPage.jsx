@@ -15,6 +15,12 @@ import {
   Settings2,
   Bell,
   Clock,
+  Search,
+  Edit2,
+  ArrowRight,
+  Plus,
+  RefreshCw,
+  X,
 } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import { EmptyState } from "../../../components/dashboard/dashboardUi";
@@ -28,42 +34,42 @@ const DEFAULT_WEIGHTS = [
     label: "Metadata Completeness",
     description: "Title, abstract, keywords, license, and subject all filled in correctly.",
     weight: 25,
-    color: "#6366f1",
+    color: "#0C1236", // Primary Navy (100% weight)
   },
   {
     id: "data_integrity",
     label: "Data Integrity & Quality",
     description: "Files are readable, uncorrupted, and match described format and size.",
     weight: 25,
-    color: "#0ea5e9",
+    color: "#1A2248", // Navy Muted (80% weight)
   },
   {
     id: "ethical_compliance",
     label: "Ethical Compliance",
     description: "Consent, privacy, and institutional ethics requirements are met.",
     weight: 20,
-    color: "#f59e0b",
+    color: "#8B6914", // Gold Dark
   },
   {
     id: "documentation",
     label: "Documentation & Reproducibility",
     description: "README, methodology, and variable descriptions are adequate.",
     weight: 15,
-    color: "#10b981",
+    color: "#A87E0E", // Primary Gold
   },
   {
     id: "access_licensing",
     label: "Access & Licensing",
     description: "License is appropriate and access level matches data sensitivity.",
     weight: 10,
-    color: "#ec4899",
+    color: "#4C7A3D", // System Forest
   },
   {
     id: "novelty_relevance",
     label: "Novelty & Relevance",
     description: "Dataset contributes new knowledge and fits ORDP research scope.",
     weight: 5,
-    color: "#8b5cf6",
+    color: "#2D3766", // Navy Slate (60% weight)
   },
 ];
 
@@ -71,44 +77,119 @@ const STORAGE_KEY = "ordp_review_weights";
 
 // ─── API helpers ──────────────────────────────────────────────────────────────
 async function fetchCategoryProposals() {
+  const endpoints = [
+    "/admin-panel/categories/pending/",
+    "/admin-panel/categories/pending",
+    "/metadata/categories/proposals/",
+    "/metadata/categories/?status=pending",
+    "/metadata/categories/pending/",
+  ];
+  let lastErr = null;
+  for (const ep of endpoints) {
+    try {
+      const { data } = await client.get(ep);
+      const list = Array.isArray(data)
+        ? data
+        : data?.results ||
+          data?.categories ||
+          data?.pending ||
+          data?.pending_categories ||
+          data?.proposals ||
+          data?.data ||
+          [];
+      if (Array.isArray(data) || data?.results || list.length > 0) {
+        return list;
+      }
+    } catch (err) {
+      lastErr = err;
+      if (err?.response?.status === 404 || err?.response?.status === 405) continue;
+      console.warn(`Category proposals endpoint ${ep} failed:`, err);
+    }
+  }
+  if (lastErr && lastErr?.response?.status !== 404) {
+    throw lastErr;
+  }
+  return [];
+}
+
+async function createAdminCategory(payload) {
+  const candidates = [
+    "/admin-panel/categories/create/",
+    "/admin-panel/categories/",
+    "/metadata/categories/",
+  ];
+  let lastErr = null;
+  for (const url of candidates) {
+    try {
+      const { data } = await client.post(url, { ...payload, status: "approved" });
+      return data;
+    } catch (err) {
+      lastErr = err;
+      if (err?.response?.status === 404 || err?.response?.status === 405) continue;
+      throw err;
+    }
+  }
+  throw lastErr;
+}
+
+async function decideCategoryProposal(id, payload) {
   try {
-    const { data } = await client.get("/metadata/categories/proposals/");
+    const { data } = await client.post(`/admin-panel/categories/${id}/decide/`, payload);
+    return data;
+  } catch (err) {
+    const decision = payload?.decision;
+    if (decision === "approve") {
+      try {
+        const { data } = await client.post(`/metadata/categories/${id}/approve/`, payload);
+        return data;
+      } catch {
+        const { data } = await client.patch(`/metadata/categories/${id}/`, {
+          status: "approved",
+          name: payload?.name,
+          description: payload?.description,
+        });
+        return data;
+      }
+    } else if (decision === "merge") {
+      const { data } = await client.post(`/metadata/categories/${id}/merge/`, {
+        merge_into: payload?.merge_into,
+      });
+      return data;
+    } else if (decision === "reject") {
+      try {
+        const { data } = await client.post(`/metadata/categories/${id}/reject/`, {
+          reason: payload?.reason,
+          replacement_category_id: payload?.replacement_category_id,
+        });
+        return data;
+      } catch {
+        const { data } = await client.patch(`/metadata/categories/${id}/`, {
+          status: "rejected",
+          rejection_reason: payload?.reason,
+        });
+        return data;
+      }
+    }
+    throw err;
+  }
+}
+
+async function searchApprovedCategories(search = "") {
+  try {
+    const { data } = await client.get("/admin-panel/categories/approved/", {
+      params: search ? { search } : {},
+    });
     return Array.isArray(data) ? data : data?.results || [];
   } catch {
     try {
-      const { data } = await client.get("/metadata/categories/?status=pending");
-      const all = Array.isArray(data) ? data : data?.results || [];
-      return all.filter((c) => c.status === "pending" || c.is_proposal);
+      const { data } = await client.get("/metadata/categories/");
+      const list = Array.isArray(data) ? data : data?.results || [];
+      if (!search) return list;
+      const q = search.toLowerCase();
+      return list.filter((c) => c.name?.toLowerCase().includes(q));
     } catch {
       return [];
     }
-  }
-}
-
-async function approveCategoryProposal(id, mergeIntoId = null) {
-  try {
-    if (mergeIntoId) {
-      const { data } = await client.post(`/metadata/categories/${id}/merge/`, { merge_into: mergeIntoId });
-      return data;
-    }
-    const { data } = await client.post(`/metadata/categories/${id}/approve/`);
-    return data;
-  } catch {
-    const { data } = await client.patch(`/metadata/categories/${id}/`, { status: "approved" });
-    return data;
-  }
-}
-
-async function rejectCategoryProposal(id, reason = "") {
-  try {
-    const { data } = await client.post(`/metadata/categories/${id}/reject/`, { reason });
-    return data;
-  } catch {
-    const { data } = await client.patch(`/metadata/categories/${id}/`, {
-      status: "rejected",
-      rejection_reason: reason,
-    });
-    return data;
   }
 }
 
@@ -166,7 +247,7 @@ function WeightSlider({ criterion, value, onChange, disabled }) {
             value={value}
             disabled={disabled}
             onChange={(e) => onChange(Number(e.target.value))}
-            className="w-16 text-center text-sm font-bold border border-slate-200 rounded-lg py-1 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-transparent disabled:opacity-60 bg-slate-50"
+            className="w-16 text-center text-sm font-bold border border-slate-200 rounded-lg py-1 focus:outline-none focus:ring-2 focus:ring-gold/30 focus:border-gold disabled:opacity-60 bg-slate-50"
             style={{ color: criterion.color }}
           />
           <span className="text-[10px] text-slate-400 mt-0.5">weight</span>
@@ -196,36 +277,88 @@ function WeightSlider({ criterion, value, onChange, disabled }) {
 function CategoryProposalCard({ proposal, allCategories, onApprove, onReject, onMerge, busy }) {
   const [showReject, setShowReject] = useState(false);
   const [showMerge, setShowMerge] = useState(false);
-  const [rejectReason, setRejectReason] = useState("");
-  const [mergeTarget, setMergeTarget] = useState("");
+  const [showEditApprove, setShowEditApprove] = useState(false);
 
-  const handleReject = () => {
-    onReject(proposal.id, rejectReason);
-    setShowReject(false);
-    setRejectReason("");
+  const proposalId = proposal.id || proposal.category_id || proposal.pk;
+  const proposalName = proposal.name || proposal.category_name || proposal.title || "Category Suggestion";
+  const proposalDesc = proposal.description || proposal.desc || "";
+
+  const [approvedName, setApprovedName] = useState(proposalName);
+  const [approvedDesc, setApprovedDesc] = useState(proposalDesc);
+
+  const [rejectReason, setRejectReason] = useState("");
+  const [replacementCategoryId, setReplacementCategoryId] = useState("");
+
+  const [mergeTarget, setMergeTarget] = useState("");
+  const [targetSearch, setTargetSearch] = useState("");
+
+  const datasetCount = Number(proposal.dataset_count ?? proposal.datasets_count ?? proposal.datasets ?? 0);
+  const interestCount = Number(proposal.interest_count ?? proposal.interests_count ?? proposal.profiles_count ?? proposal.profile_count ?? 0);
+  const similarExisting = Array.isArray(proposal.similar_existing)
+    ? proposal.similar_existing
+    : Array.isArray(proposal.similar_categories)
+    ? proposal.similar_categories
+    : Array.isArray(proposal.matches)
+    ? proposal.matches
+    : [];
+
+  const requiresReplacementOnReject = datasetCount > 0;
+
+  const filteredApproved = allCategories
+    .filter((c) => c.id !== proposalId && c.status !== "pending")
+    .filter((c) => (targetSearch.trim() ? c.name?.toLowerCase().includes(targetSearch.trim().toLowerCase()) : true));
+
+  const handleApproveClick = () => {
+    if (showEditApprove) {
+      const edits = {};
+      if (approvedName.trim() && approvedName.trim() !== proposalName) {
+        edits.name = approvedName.trim();
+      }
+      if (approvedDesc.trim() !== proposalDesc) {
+        edits.description = approvedDesc.trim();
+      }
+      onApprove(proposalId, edits);
+    } else {
+      onApprove(proposalId, {});
+    }
   };
 
-  const handleMerge = () => {
+  const handleRejectClick = () => {
+    if (requiresReplacementOnReject && !replacementCategoryId) {
+      return;
+    }
+    onReject(proposalId, {
+      replacementCategoryId: requiresReplacementOnReject ? replacementCategoryId : null,
+      reason: rejectReason.trim(),
+    });
+    setShowReject(false);
+  };
+
+  const handleMergeClick = () => {
     if (!mergeTarget) return;
-    onMerge(proposal.id, mergeTarget);
+    onMerge(proposalId, mergeTarget);
     setShowMerge(false);
-    setMergeTarget("");
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden hover:border-indigo-200 hover:shadow-sm transition-all duration-200">
+    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden hover:border-navy/30 hover:shadow-md transition-all duration-200">
       <div className="p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 bg-amber-50 rounded-xl flex items-center justify-center shrink-0">
-              <Tag className="w-4 h-4 text-amber-500" />
+            <div className="w-10 h-10 bg-gold-light/40 rounded-xl flex items-center justify-center shrink-0">
+              <Tag className="w-5 h-5 text-gold" />
             </div>
             <div className="min-w-0">
-              <p className="font-semibold text-slate-800 truncate">{proposal.name}</p>
+              <p className="font-semibold text-slate-800 text-base truncate">{proposalName}</p>
               <p className="text-xs text-slate-500 mt-0.5">
-                Proposed by{" "}
+                Suggested by{" "}
                 <span className="font-medium text-slate-700">
-                  {proposal.proposed_by_name || proposal.proposed_by || "Unknown"}
+                  {proposal.suggested_by?.full_name ||
+                    proposal.suggested_by?.email ||
+                    proposal.suggested_by ||
+                    proposal.proposed_by_name ||
+                    proposal.proposed_by ||
+                    "Researcher"}
                 </span>
                 {proposal.created_at && (
                   <> · {new Date(proposal.created_at).toLocaleDateString()}</>
@@ -234,68 +367,157 @@ function CategoryProposalCard({ proposal, allCategories, onApprove, onReject, on
             </div>
           </div>
           <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full">
-            Pending
+            Pending Review
           </span>
         </div>
-        {proposal.description && (
-          <p className="text-xs text-slate-500 mt-3 leading-relaxed bg-slate-50 rounded-lg px-3 py-2">
-            {proposal.description}
+
+        {proposalDesc && (
+          <p className="text-xs text-slate-600 mt-3 leading-relaxed bg-[#F8F7F4] rounded-lg px-3 py-2 border border-slate-200/60">
+            {proposalDesc}
           </p>
         )}
-        {proposal.dataset_count != null && (
-          <p className="text-xs text-slate-400 mt-2">
-            Used in <strong>{proposal.dataset_count}</strong> dataset(s)
-          </p>
+
+        {/* Impact badges */}
+        <div className="flex flex-wrap items-center gap-2 mt-3.5">
+          <span
+            className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg border ${
+              datasetCount > 0
+                ? "bg-amber-50 text-amber-900 border-amber-200"
+                : "bg-slate-50 text-slate-600 border-slate-200"
+            }`}
+          >
+            📦 <strong>{datasetCount}</strong> dataset{datasetCount !== 1 ? "s" : ""}
+          </span>
+          <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg border bg-slate-50 text-slate-600 border-slate-200">
+            👤 <strong>{interestCount}</strong> researcher profile{interestCount !== 1 ? "s" : ""}
+          </span>
+        </div>
+
+        {/* Similar approved categories matches */}
+        {similarExisting.length > 0 && (
+          <div className="mt-4 rounded-xl border border-indigo-100 bg-indigo-50/50 p-3">
+            <p className="text-[11px] font-bold text-indigo-900 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+              <span>Text-similarity Matches</span>
+              <span className="font-normal text-indigo-600 text-[10px] lowercase">(not automatic)</span>
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {similarExisting.map((sim) => {
+                const score = sim.similarity_score ?? sim.score;
+                const scorePct = typeof score === "number" ? `${Math.round(score * 100)}%` : null;
+                return (
+                  <button
+                    key={sim.id}
+                    type="button"
+                    onClick={() => {
+                      setMergeTarget(sim.id);
+                      setReplacementCategoryId(sim.id);
+                    }}
+                    className="inline-flex items-center gap-1.5 text-xs bg-white text-indigo-950 border border-indigo-200 hover:border-indigo-400 hover:bg-indigo-50 px-2.5 py-1 rounded-lg transition shadow-2xs cursor-pointer"
+                    title={`Click to select "${sim.name}" as target`}
+                  >
+                    <span className="font-medium">{sim.name}</span>
+                    {scorePct && <span className="text-[10px] text-indigo-600 font-bold">({scorePct})</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         )}
       </div>
 
-      <div className="px-5 pb-4 flex flex-wrap items-center gap-2">
+      {/* Action buttons */}
+      <div className="px-5 pb-4 pt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 bg-slate-50/50">
         <button
-          onClick={() => onApprove(proposal.id)}
+          type="button"
+          onClick={() => {
+            setShowEditApprove(false);
+            handleApproveClick();
+          }}
           disabled={busy}
-          className="flex items-center gap-1.5 text-xs font-semibold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 px-3 py-1.5 rounded-lg transition disabled:opacity-50"
+          className="flex items-center gap-1.5 text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 px-3.5 py-2 rounded-lg transition disabled:opacity-50 cursor-pointer shadow-sm"
         >
-          {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
-          Approve & Add
+          {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+          Approve
         </button>
+
         <button
-          onClick={() => { setShowMerge(!showMerge); setShowReject(false); }}
+          type="button"
+          onClick={() => {
+            setShowReject(!showReject);
+            setShowMerge(false);
+            setShowEditApprove(false);
+          }}
           disabled={busy}
-          className="flex items-center gap-1.5 text-xs font-semibold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 px-3 py-1.5 rounded-lg transition disabled:opacity-50"
+          className="flex items-center gap-1.5 text-xs font-semibold bg-red-600 text-white hover:bg-red-700 px-3.5 py-2 rounded-lg transition disabled:opacity-50 cursor-pointer shadow-sm"
         >
-          <Merge className="w-3 h-3" />
-          Merge Into…
-        </button>
-        <button
-          onClick={() => { setShowReject(!showReject); setShowMerge(false); }}
-          disabled={busy}
-          className="flex items-center gap-1.5 text-xs font-semibold bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 px-3 py-1.5 rounded-lg transition disabled:opacity-50"
-        >
-          <XCircle className="w-3 h-3" />
+          <XCircle className="w-3.5 h-3.5" />
           Reject
         </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setShowMerge(!showMerge);
+            setShowReject(false);
+            setShowEditApprove(false);
+          }}
+          disabled={busy}
+          className="flex items-center gap-1.5 text-xs font-semibold bg-navy text-white hover:bg-navy-dark px-3.5 py-2 rounded-lg transition disabled:opacity-50 cursor-pointer shadow-sm"
+        >
+          <Merge className="w-3.5 h-3.5 text-gold" />
+          Merge Into…
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setShowEditApprove(!showEditApprove);
+            setShowMerge(false);
+            setShowReject(false);
+          }}
+          disabled={busy}
+          className="flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-navy border border-slate-200 bg-white px-2.5 py-2 rounded-lg transition cursor-pointer"
+          title="Edit name or description before approving"
+        >
+          <Edit2 className="w-3 h-3" />
+          Edit & Approve
+        </button>
       </div>
 
-      {showReject && (
-        <div className="border-t border-slate-100 bg-red-50/50 px-5 py-4">
-          <p className="text-xs font-semibold text-slate-700 mb-2">Rejection reason (optional)</p>
-          <textarea
-            rows={2}
-            placeholder="Explain why this category is being rejected…"
-            value={rejectReason}
-            onChange={(e) => setRejectReason(e.target.value)}
-            className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-300 resize-none bg-white"
-          />
-          <div className="flex gap-2 mt-2">
+
+      {/* Edit & Approve panel */}
+      {showEditApprove && (
+        <div className="border-t border-slate-200 bg-emerald-50/40 px-5 py-4">
+          <p className="text-xs font-semibold text-emerald-900 mb-2">Edit Category Before Approving</p>
+          <div className="space-y-2">
+            <input
+              type="text"
+              value={approvedName}
+              onChange={(e) => setApprovedName(e.target.value)}
+              placeholder="Category name"
+              className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300"
+            />
+            <textarea
+              rows={2}
+              value={approvedDesc}
+              onChange={(e) => setApprovedDesc(e.target.value)}
+              placeholder="Category description (optional)"
+              className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300 resize-none"
+            />
+          </div>
+          <div className="flex gap-2 mt-3">
             <button
-              onClick={handleReject}
-              className="text-xs font-semibold bg-red-600 text-white hover:bg-red-700 px-3 py-1.5 rounded-lg transition"
+              type="button"
+              onClick={handleApproveClick}
+              disabled={busy || !approvedName.trim()}
+              className="text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 px-3 py-1.5 rounded-lg transition disabled:opacity-50 cursor-pointer"
             >
-              Confirm Rejection
+              Approve with Changes
             </button>
             <button
-              onClick={() => setShowReject(false)}
-              className="text-xs font-semibold text-slate-500 hover:text-slate-800 px-3 py-1.5 rounded-lg border border-slate-200 bg-white transition"
+              type="button"
+              onClick={() => setShowEditApprove(false)}
+              className="text-xs font-semibold text-slate-500 hover:text-slate-800 px-3 py-1.5 rounded-lg border border-slate-200 bg-white transition cursor-pointer"
             >
               Cancel
             </button>
@@ -303,34 +525,163 @@ function CategoryProposalCard({ proposal, allCategories, onApprove, onReject, on
         </div>
       )}
 
+      {/* Merge panel */}
       {showMerge && (
-        <div className="border-t border-slate-100 bg-indigo-50/50 px-5 py-4">
-          <p className="text-xs font-semibold text-slate-700 mb-2">Merge into existing category</p>
+        <div className="border-t border-slate-200 bg-[#F8F7F4] px-5 py-4">
+          <p className="text-xs font-semibold text-slate-800 mb-1">Merge into existing approved category</p>
+          <p className="text-[11px] text-slate-500 mb-2">
+            Moves this suggestion's dataset and profile uses to the selected approved category, then removes this suggestion.
+          </p>
+
+          {similarExisting.length > 0 && (
+            <div className="mb-2">
+              <span className="text-[11px] text-slate-500 block mb-1">Quick Select (Similar matches):</span>
+              <div className="flex flex-wrap gap-1">
+                {similarExisting.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setMergeTarget(s.id)}
+                    className={`text-xs px-2.5 py-1 rounded-md border font-medium transition cursor-pointer ${
+                      mergeTarget === s.id
+                        ? "bg-navy text-white border-navy"
+                        : "bg-white text-slate-700 border-slate-200 hover:border-navy"
+                    }`}
+                  >
+                    {s.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="relative mt-2 mb-2">
+            <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
+            <input
+              type="text"
+              value={targetSearch}
+              onChange={(e) => setTargetSearch(e.target.value)}
+              placeholder="Search approved categories…"
+              className="w-full text-xs pl-8 pr-3 py-1.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-gold/30"
+            />
+          </div>
+
           <select
             value={mergeTarget}
             onChange={(e) => setMergeTarget(e.target.value)}
-            className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-white"
+            className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gold/30 bg-white"
           >
-            <option value="">Select a category…</option>
-            {allCategories
-              .filter((c) => c.id !== proposal.id && c.status !== "pending")
-              .map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
+            <option value="">Select target category…</option>
+            {filteredApproved.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
           </select>
-          <div className="flex gap-2 mt-2">
+
+          <div className="flex gap-2 mt-3">
             <button
-              onClick={handleMerge}
-              disabled={!mergeTarget}
-              className="text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 px-3 py-1.5 rounded-lg transition disabled:opacity-40"
+              type="button"
+              onClick={handleMergeClick}
+              disabled={!mergeTarget || busy}
+              className="text-xs font-semibold bg-navy text-white hover:bg-navy-light px-3 py-1.5 rounded-lg transition disabled:opacity-40 cursor-pointer"
             >
               Confirm Merge
             </button>
             <button
+              type="button"
               onClick={() => setShowMerge(false)}
-              className="text-xs font-semibold text-slate-500 hover:text-slate-800 px-3 py-1.5 rounded-lg border border-slate-200 bg-white transition"
+              className="text-xs font-semibold text-slate-500 hover:text-slate-800 px-3 py-1.5 rounded-lg border border-slate-200 bg-white transition cursor-pointer"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Reject panel */}
+      {showReject && (
+        <div className="border-t border-slate-200 bg-red-50/50 px-5 py-4">
+          <p className="text-xs font-semibold text-slate-800 mb-1">Reject category suggestion</p>
+
+          {requiresReplacementOnReject ? (
+            <div className="rounded-lg bg-amber-50 border border-amber-200 p-2.5 mb-3 text-xs text-amber-900">
+              <span className="font-semibold block">⚠️ Replacement Required:</span>
+              This category is currently in use by <strong>{datasetCount}</strong> dataset(s). A valid approved replacement category must be selected to reassign affected datasets before rejection.
+            </div>
+          ) : (
+            <p className="text-[11px] text-slate-500 mb-2">
+              No datasets use this suggestion. Profile interest selections will be removed upon rejection.
+            </p>
+          )}
+
+          {requiresReplacementOnReject && (
+            <div className="mb-3">
+              <label className="text-[11px] font-semibold text-slate-700 block mb-1">
+                Replacement Category <span className="text-red-500">*</span>
+              </label>
+
+              {similarExisting.length > 0 && (
+                <div className="flex flex-wrap gap-1 mb-2">
+                  {similarExisting.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => setReplacementCategoryId(s.id)}
+                      className={`text-xs px-2.5 py-1 rounded-md border font-medium transition cursor-pointer ${
+                        replacementCategoryId === s.id
+                          ? "bg-navy text-white border-navy"
+                          : "bg-white text-slate-700 border-slate-200 hover:border-navy"
+                      }`}
+                    >
+                      {s.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <select
+                value={replacementCategoryId}
+                onChange={(e) => setReplacementCategoryId(e.target.value)}
+                className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-300 bg-white"
+                required
+              >
+                <option value="">Select replacement category…</option>
+                {allCategories
+                  .filter((c) => c.id !== proposal.id && c.status !== "pending")
+                  .map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+          )}
+
+          <label className="text-[11px] font-semibold text-slate-700 block mb-1">
+            Rejection explanation (optional):
+          </label>
+          <textarea
+            rows={2}
+            placeholder="Explain why this category suggestion was rejected…"
+            value={rejectReason}
+            onChange={(e) => setRejectReason(e.target.value)}
+            className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-300 resize-none bg-white"
+          />
+
+          <div className="flex gap-2 mt-3">
+            <button
+              type="button"
+              onClick={handleRejectClick}
+              disabled={busy || (requiresReplacementOnReject && !replacementCategoryId)}
+              className="text-xs font-semibold bg-red-600 text-white hover:bg-red-700 px-3 py-1.5 rounded-lg transition disabled:opacity-40 cursor-pointer"
+            >
+              Confirm Rejection
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowReject(false)}
+              className="text-xs font-semibold text-slate-500 hover:text-slate-800 px-3 py-1.5 rounded-lg border border-slate-200 bg-white transition cursor-pointer"
             >
               Cancel
             </button>
@@ -414,7 +765,12 @@ export default function AdminSettingsPage() {
   const [proposals, setProposals] = useState([]);
   const [allCategories, setAllCategories] = useState([]);
   const [proposalsLoading, setProposalsLoading] = useState(true);
+  const [proposalsError, setProposalsError] = useState(null);
   const [busyProposalId, setBusyProposalId] = useState(null);
+  const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
+  const [newCatName, setNewCatName] = useState("");
+  const [newCatDesc, setNewCatDesc] = useState("");
+  const [addingCategory, setAddingCategory] = useState(false);
 
   // System
   const [draftDays, setDraftDays] = useState(30);
@@ -434,10 +790,19 @@ export default function AdminSettingsPage() {
 
   const loadProposals = useCallback(async () => {
     setProposalsLoading(true);
+    setProposalsError(null);
     try {
       const [props, cats] = await Promise.all([fetchCategoryProposals(), fetchAllCategories()]);
-      setProposals(props);
-      setAllCategories(cats);
+      setProposals(Array.isArray(props) ? props : []);
+      setAllCategories(Array.isArray(cats) ? cats : []);
+    } catch (err) {
+      console.error("Failed to load category proposals:", err);
+      setProposalsError(
+        err?.response?.data?.detail ||
+          err?.response?.data?.message ||
+          err?.message ||
+          "Failed to load category requests."
+      );
     } finally {
       setProposalsLoading(false);
     }
@@ -446,6 +811,33 @@ export default function AdminSettingsPage() {
   useEffect(() => {
     loadProposals();
   }, [loadProposals]);
+
+  async function handleAddCategorySubmit(e) {
+    e.preventDefault();
+    if (!newCatName.trim()) return;
+    setAddingCategory(true);
+    try {
+      await createAdminCategory({
+        name: newCatName.trim(),
+        description: newCatDesc.trim(),
+      });
+      addToast(`Category "${newCatName.trim()}" created successfully.`, "success");
+      setNewCatName("");
+      setNewCatDesc("");
+      setShowAddCategoryModal(false);
+      await loadProposals();
+    } catch (err) {
+      addToast(
+        err?.response?.data?.detail ||
+          err?.response?.data?.message ||
+          err?.message ||
+          "Failed to create category.",
+        "error"
+      );
+    } finally {
+      setAddingCategory(false);
+    }
+  }
 
   const totalWeight = Object.values(weights).reduce((s, v) => s + (Number(v) || 0), 0);
 
@@ -472,27 +864,33 @@ export default function AdminSettingsPage() {
     }
   }
 
-  async function handleApprove(id) {
+  async function handleApprove(id, edits = {}) {
     setBusyProposalId(id);
     try {
-      await approveCategoryProposal(id);
-      addToast("Category approved and added to the system.", "success");
+      const payload = { decision: "approve", ...edits };
+      await decideCategoryProposal(id, payload);
+      addToast("Category approved and added to active categories.", "success");
       await loadProposals();
-    } catch {
-      addToast("Failed to approve category.", "error");
+    } catch (err) {
+      addToast(err?.response?.data?.detail || "Failed to approve category.", "error");
     } finally {
       setBusyProposalId(null);
     }
   }
 
-  async function handleReject(id, reason) {
+  async function handleReject(id, { replacementCategoryId = null, reason = "" } = {}) {
     setBusyProposalId(id);
     try {
-      await rejectCategoryProposal(id, reason);
+      const payload = {
+        decision: "reject",
+        ...(replacementCategoryId ? { replacement_category_id: replacementCategoryId } : {}),
+        ...(reason ? { reason } : {}),
+      };
+      await decideCategoryProposal(id, payload);
       addToast("Category proposal rejected.", "success");
       await loadProposals();
-    } catch {
-      addToast("Failed to reject category.", "error");
+    } catch (err) {
+      addToast(err?.response?.data?.detail || "Failed to reject category.", "error");
     } finally {
       setBusyProposalId(null);
     }
@@ -501,11 +899,12 @@ export default function AdminSettingsPage() {
   async function handleMerge(id, targetId) {
     setBusyProposalId(id);
     try {
-      await approveCategoryProposal(id, targetId);
-      addToast("Category merged and affected users notified.", "success");
+      const payload = { decision: "merge", merge_into: targetId };
+      await decideCategoryProposal(id, payload);
+      addToast("Category merged and affected uses migrated.", "success");
       await loadProposals();
-    } catch {
-      addToast("Failed to merge category.", "error");
+    } catch (err) {
+      addToast(err?.response?.data?.detail || "Failed to merge category.", "error");
     } finally {
       setBusyProposalId(null);
     }
@@ -533,11 +932,11 @@ export default function AdminSettingsPage() {
       {/* Page Header */}
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-1">
-          <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-md">
-            <Settings2 className="w-5 h-5 text-white" />
+          <div className="w-10 h-10 bg-navy rounded-xl flex items-center justify-center shadow-md">
+            <Settings2 className="w-5 h-5 text-gold" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Admin Settings</h1>
+            <h1 className="text-2xl font-bold text-navy">Admin Settings</h1>
             <p className="text-sm text-slate-500">
               Configure review criteria weights, category approvals, and system preferences.
             </p>
@@ -570,12 +969,12 @@ export default function AdminSettingsPage() {
                 type="button"
                 onClick={handleSaveWeights}
                 disabled={savingWeights || weightsLoading}
-                className="flex items-center gap-1.5 text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-1.5 rounded-lg shadow-sm transition disabled:opacity-50"
+                className="flex items-center gap-1.5 text-xs font-semibold bg-navy text-white hover:bg-navy-light px-4 py-1.5 rounded-lg shadow-sm transition disabled:opacity-50"
               >
                 {savingWeights ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 ) : (
-                  <Save className="w-3.5 h-3.5" />
+                  <Save className="w-3.5 h-3.5 text-gold" />
                 )}
                 Save Weights
               </button>
@@ -631,11 +1030,11 @@ export default function AdminSettingsPage() {
             </div>
           </div>
 
-          <div className="mt-4 flex items-start gap-3 bg-indigo-50 border border-indigo-100 rounded-xl p-4 text-xs text-indigo-700">
-            <Info className="w-4 h-4 shrink-0 mt-0.5 text-indigo-500" />
+          <div className="mt-4 flex items-start gap-3 bg-gold-light/40 border border-gold/30 rounded-xl p-4 text-xs text-navy">
+            <Info className="w-4 h-4 shrink-0 mt-0.5 text-gold-dark" />
             <p>
               The <strong>final review score</strong> is computed as a weighted sum:{" "}
-              <code className="bg-indigo-100 rounded px-1 py-0.5 font-mono">
+              <code className="bg-gold-light text-navy rounded px-1.5 py-0.5 font-mono font-bold">
                 Score = Σ (criteria_score × weight / 100)
               </code>
               . These weights are applied automatically when reviewers submit evaluations.
@@ -651,57 +1050,103 @@ export default function AdminSettingsPage() {
           badge={proposals.length > 0 ? proposals.length : null}
           defaultOpen
         >
-          <p className="text-xs text-slate-500 mb-4">
-            When researchers submit datasets with a new category suggestion, they appear here.
-            You can approve (adding the category to the system), merge it into an existing one,
-            or reject it with a reason. Affected users are notified of the decision.
-          </p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <p className="text-xs text-slate-500 max-w-xl">
+              When researchers submit datasets or profile interests with a new category suggestion, they appear here.
+              You can approve (publishing to the portal), merge into an existing category, or reject with reason.
+            </p>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={loadProposals}
+                disabled={proposalsLoading}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-navy bg-white border border-slate-200 hover:bg-slate-50 px-3 py-1.5 rounded-lg transition cursor-pointer"
+                title="Refresh category proposals"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${proposalsLoading ? "animate-spin text-gold" : ""}`} />
+                Refresh
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowAddCategoryModal(true)}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-navy hover:bg-navy-dark px-3 py-1.5 rounded-lg transition cursor-pointer shadow-sm"
+              >
+                <Plus className="w-3.5 h-3.5 text-gold" />
+                Add Category
+              </button>
+            </div>
+          </div>
+
+          {proposalsError && (
+            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3.5 flex items-center justify-between text-xs text-red-700">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
+                <span>{proposalsError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={loadProposals}
+                className="font-semibold underline ml-2 cursor-pointer hover:text-red-900"
+              >
+                Retry
+              </button>
+            </div>
+          )}
 
           {proposalsLoading ? (
             <div className="flex items-center justify-center py-10 text-slate-400">
-              <Loader2 className="w-5 h-5 animate-spin mr-2" />
-              <span className="text-sm">Loading proposals…</span>
+              <Loader2 className="w-5 h-5 animate-spin mr-2 text-gold" />
+              <span className="text-sm">Loading category requests…</span>
             </div>
           ) : proposals.length === 0 ? (
-            <div className="py-10 text-center">
-              <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center mx-auto mb-3">
-                <Tag className="w-6 h-6 text-slate-300" />
+            <div className="py-10 text-center bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+              <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center mx-auto mb-3 shadow-xs">
+                <Tag className="w-6 h-6 text-slate-400" />
               </div>
-              <p className="text-sm font-medium text-slate-600">No pending category proposals</p>
-              <p className="text-xs text-slate-400 mt-1">
-                When researchers suggest new categories, they will appear here for review.
+              <p className="text-sm font-semibold text-slate-700">No pending category proposals</p>
+              <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+                When researchers suggest new categories during dataset upload or profile setup, they will appear here for review. You can also add categories directly using the &quot;Add Category&quot; button above.
               </p>
             </div>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {proposals.map((p) => (
                 <CategoryProposalCard
-                  key={p.id}
+                  key={p.id || p.category_id}
                   proposal={p}
                   allCategories={allCategories}
                   onApprove={handleApprove}
                   onReject={handleReject}
                   onMerge={handleMerge}
-                  busy={busyProposalId === p.id}
+                  busy={busyProposalId === (p.id || p.category_id)}
                 />
               ))}
             </div>
           )}
 
-          <div className="mt-6">
-            <p className="text-xs font-semibold text-slate-600 mb-3 flex items-center gap-2">
-              Active Categories
-              <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full text-[11px]">
-                {allCategories.filter((c) => c.status !== "pending" && !c.is_proposal).length}
-              </span>
-            </p>
+          <div className="mt-6 pt-5 border-t border-slate-100">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-semibold text-slate-600 flex items-center gap-2">
+                Active Categories
+                <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full text-[11px]">
+                  {allCategories.filter((c) => c.status !== "pending" && !c.is_proposal).length}
+                </span>
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowAddCategoryModal(true)}
+                className="text-xs font-medium text-navy hover:underline cursor-pointer flex items-center gap-1"
+              >
+                <Plus className="w-3 h-3 text-gold" /> Add New
+              </button>
+            </div>
             <div className="flex flex-wrap gap-2">
               {allCategories
                 .filter((c) => c.status !== "pending" && !c.is_proposal)
                 .map((c) => (
                   <span
                     key={c.id}
-                    className="text-xs bg-slate-100 text-slate-700 border border-slate-200 px-3 py-1 rounded-full"
+                    className="text-xs bg-slate-100 text-slate-700 border border-slate-200 px-3 py-1 rounded-full font-medium"
                   >
                     {c.name}
                   </span>
@@ -761,8 +1206,8 @@ export default function AdminSettingsPage() {
                       role="switch"
                       aria-checked={value}
                       onClick={() => onChange(!value)}
-                      className={`relative inline-flex h-5 w-9 items-center rounded-full border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-300 ${
-                        value ? "bg-indigo-600 border-indigo-600" : "bg-slate-200 border-slate-200"
+                      className={`relative inline-flex h-5 w-9 items-center rounded-full border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-gold/30 ${
+                        value ? "bg-emerald-600 border-emerald-600" : "bg-slate-200 border-slate-200"
                       }`}
                     >
                       <span
@@ -782,14 +1227,94 @@ export default function AdminSettingsPage() {
               type="button"
               onClick={handleSaveSystem}
               disabled={systemSaving}
-              className="flex items-center gap-1.5 text-sm font-semibold bg-slate-800 text-white hover:bg-slate-700 px-5 py-2 rounded-lg shadow-sm transition disabled:opacity-50"
+              className="flex items-center gap-1.5 text-sm font-semibold bg-navy text-white hover:bg-navy-light px-5 py-2 rounded-xl shadow-xs transition disabled:opacity-50"
             >
-              {systemSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              {systemSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 text-gold" />}
               Save System Settings
             </button>
           </div>
         </CollapsibleSection>
       </div>
+
+      {/* Add Category Modal */}
+      {showAddCategoryModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          onClick={() => setShowAddCategoryModal(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl animate-[fadeSlideIn_0.2s_ease-out]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-navy/10 flex items-center justify-center text-navy">
+                  <Tag className="w-4 h-4 text-gold" />
+                </div>
+                <h3 className="text-base font-semibold text-navy">Create New Category</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddCategoryModal(false)}
+                className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddCategorySubmit} className="mt-4 space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-slate-700 block mb-1">
+                  Category Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Astrophysics, Bioengineering"
+                  value={newCatName}
+                  onChange={(e) => setNewCatName(e.target.value)}
+                  className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-navy/30"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-700 block mb-1">
+                  Description <span className="text-slate-400 font-normal">(optional)</span>
+                </label>
+                <textarea
+                  rows={3}
+                  placeholder="Brief description of the research domain..."
+                  value={newCatDesc}
+                  onChange={(e) => setNewCatDesc(e.target.value)}
+                  className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-navy/30 resize-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowAddCategoryModal(false)}
+                  className="text-xs font-semibold text-slate-600 hover:text-slate-800 px-3.5 py-2 rounded-lg border border-slate-200 bg-white cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={addingCategory || !newCatName.trim()}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold bg-navy text-white hover:bg-navy-dark px-4 py-2 rounded-lg transition disabled:opacity-50 cursor-pointer shadow-sm"
+                >
+                  {addingCategory ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Plus className="w-3.5 h-3.5 text-gold" />
+                  )}
+                  Create Category
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </DashboardShell>
   );
 }

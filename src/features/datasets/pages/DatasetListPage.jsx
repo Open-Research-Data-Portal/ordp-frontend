@@ -10,6 +10,7 @@ import {
   Trash2,
   Eye,
   Mail,
+  Copy,
   Users,
   Loader2,
   X,
@@ -81,6 +82,7 @@ export default function DatasetListPage({
   const [reviewerModal, setReviewerModal] = useState(null);
   const [reviewerLoadingId, setReviewerLoadingId] = useState("");
   const [reviewerError, setReviewerError] = useState("");
+  const [copiedReviewerId, setCopiedReviewerId] = useState("");
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -98,6 +100,7 @@ export default function DatasetListPage({
   async function openReviewerContacts(dataset) {
     setReviewerModal({ dataset, reviewers: [] });
     setReviewerError("");
+    setCopiedReviewerId("");
     setReviewerLoadingId(dataset.id);
     try {
       const data = await datasetsApi.getDatasetReviewers(dataset.id);
@@ -110,6 +113,15 @@ export default function DatasetListPage({
     } finally {
       setReviewerLoadingId("");
     }
+  }
+
+  async function copyReviewerEmail(reviewer) {
+    if (!reviewer.contact_email) return;
+    await navigator.clipboard?.writeText(reviewer.contact_email);
+    setCopiedReviewerId(reviewer.id);
+    window.setTimeout(() => {
+      setCopiedReviewerId((current) => (current === reviewer.id ? "" : current));
+    }, 1800);
   }
 
   const isArchivedPage = title.toLowerCase().includes("archived");
@@ -421,7 +433,7 @@ export default function DatasetListPage({
                                 ) : (
                                   <Users className="w-3.5 h-3.5" />
                                 )}
-                                Reviewer contacts
+                                Contacts
                               </button>
                             )}
                           </div>
@@ -486,14 +498,16 @@ export default function DatasetListPage({
           <div className="w-full max-w-lg rounded-xl border border-[#E3E1DA] bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between gap-4 border-b border-[#E3E1DA] px-5 py-4">
               <div>
-                <h2 className="text-base font-semibold text-navy">Reviewer contacts</h2>
-                <p className="mt-1 text-xs text-gray-500">{reviewerModal.dataset?.title}</p>
+                <h2 className="text-base font-semibold text-navy">Contacts</h2>
+                <p className="mt-1 text-xs text-gray-500">
+                  Copy an email below and use it to send your question directly.
+                </p>
               </div>
               <button
                 type="button"
                 onClick={() => setReviewerModal(null)}
                 className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-navy"
-                aria-label="Close reviewer contacts"
+                aria-label="Close contacts"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -503,7 +517,7 @@ export default function DatasetListPage({
               {reviewerLoadingId === reviewerModal.dataset?.id ? (
                 <div className="flex items-center gap-2 text-sm text-gray-500">
                   <Loader2 className="w-4 h-4 animate-spin text-gold" />
-                  Loading reviewer contacts...
+                  Loading contacts...
                 </div>
               ) : reviewerError ? (
                 <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{reviewerError}</p>
@@ -514,26 +528,37 @@ export default function DatasetListPage({
               ) : (
                 <div className="space-y-3">
                   {reviewerModal.reviewers.map((reviewer) => (
-                    <article key={reviewer.id} className="rounded-lg border border-[#E3E1DA] p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-navy">{reviewer.full_name || reviewer.username || reviewer.email}</p>
-                          <p className="mt-1 text-xs text-gray-500">
-                            {[reviewer.academic_title, reviewer.affiliation, reviewer.college].filter(Boolean).join(" - ") || "Reviewer"}
-                          </p>
-                        </div>
-                        {reviewer.contact_email && (
-                          <a
-                            href={reviewer.contact_url || `mailto:${reviewer.contact_email}`}
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-3 py-2 text-xs font-semibold text-white hover:bg-navy-dark"
-                          >
-                            <Mail className="w-3.5 h-3.5" />
-                            Email
-                          </a>
-                        )}
+                    <article key={reviewer.id} className="rounded-xl border border-slate-200 bg-white p-4">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-navy">{reviewer.full_name || reviewer.username || reviewer.email}</p>
+                        <p className="mt-1 text-xs text-gray-500">
+                          {[reviewer.academic_title, reviewer.affiliation, reviewer.college].filter(Boolean).join(" - ") || "Reviewer"}
+                        </p>
                       </div>
                       {reviewer.contact_email && (
-                        <p className="mt-3 break-all text-xs text-gray-500">{reviewer.contact_email}</p>
+                        <div className="mt-4 rounded-lg border border-[#E3E1DA] bg-[#FBFAF7] px-3 py-2.5">
+                          <div className="flex min-w-0 items-center gap-2 text-xs font-semibold text-navy">
+                            <Mail className="w-3.5 h-3.5 shrink-0 text-gold" />
+                            <span className="truncate">{reviewer.contact_email}</span>
+                          </div>
+                          <div className="mt-3 flex items-center justify-end gap-2">
+                            <a
+                              href={reviewer.contact_url || `mailto:${reviewer.contact_email}`}
+                              className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-navy px-3 py-1.5 text-xs font-semibold text-white hover:bg-navy-dark"
+                            >
+                              <Mail className="w-3.5 h-3.5" />
+                              Email
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => copyReviewerEmail(reviewer)}
+                              className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-[#E3E1DA] bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-navy"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                              {copiedReviewerId === reviewer.id ? "Copied" : "Copy"}
+                            </button>
+                          </div>
+                        </div>
                       )}
                     </article>
                   ))}

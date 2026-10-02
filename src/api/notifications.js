@@ -26,73 +26,171 @@ export function saveLocalNotifications(userId, list) {
 
 /**
  * Normalize a raw backend notification object into the shape the UI expects.
+ * Correctly identifies category decisions (approved, rejected, merged) and attaches action links.
  */
-function normalizeNotification(item) {
+export function normalizeNotification(item) {
+  if (!item || typeof item !== "object") return null;
+
+  const id = String(item.id ?? item.notification_id ?? item.pk ?? Math.random());
+  const is_read = Boolean(item.is_read ?? item.read ?? item.seen ?? false);
+  const created_at = item.created_at || item.timestamp || item.date || new Date().toISOString();
+
+  let rawType = String(item.type || item.notification_type || item.category || "info").toLowerCase();
+  const textBlob = `${item.title || ""} ${item.subject || ""} ${item.message || ""} ${item.body || ""} ${item.description || ""}`.toLowerCase();
+
+  // Refine category decision types
+  let type = rawType;
+  if (textBlob.includes("category") || rawType.includes("category")) {
+    if (textBlob.includes("approv") || rawType.includes("approv")) {
+      type = "category_approved";
+    } else if (textBlob.includes("reject") || rawType.includes("reject")) {
+      type = "category_rejected";
+    } else if (textBlob.includes("merge") || rawType.includes("merge")) {
+      type = "category_merged";
+    } else {
+      type = "category_decision";
+    }
+  }
+
+  // Determine user-friendly title if empty
+  let title = item.title || item.subject;
+  if (!title) {
+    if (type === "category_approved") title = "Category Suggestion Approved";
+    else if (type === "category_rejected") title = "Category Suggestion Rejected";
+    else if (type === "category_merged") title = "Category Merged";
+    else if (type === "category_decision") title = "Category Decision";
+    else title = "Notification";
+  }
+
+  const message = item.message || item.body || item.description || "";
+
+  // Resolve link_path for navigation
+  let link_path = item.link_path || item.action_url || item.action_link || item.url || null;
+  if (!link_path && type.startsWith("category_")) {
+    link_path = "/profile";
+  }
+
   return {
     ...item,
-    id: String(item.id || item._id || item.notification_id || Math.random()),
-    is_read: Boolean(item.is_read || item.read || item.seen),
-    created_at: item.created_at || item.timestamp || item.date || new Date().toISOString(),
-    title: item.title || item.subject || item.notification_type || "Notification",
-    message: item.message || item.body || item.description || "",
-    type: item.type || item.notification_type || item.category || "info",
-    // Map backend link_path / action_url / action_link to a single link_path
-    link_path: item.link_path || item.action_url || item.action_link || item.url || null,
+    id,
+    title,
+    message,
+    type,
+    is_read,
+    created_at,
+    link_path,
+    category_id: item.category_id || item.category?.id || null,
+    decision: item.decision || (type.includes("approv") ? "approve" : type.includes("reject") ? "reject" : null),
   };
 }
 
 /**
- * Fetch all notifications for the current user.
- * Tries backend endpoints in priority order, merges with local store,
- * and seeds a default welcome notification only on first visit.
+ * GET /api/notifications/bell/
+ * Returns bell notifications and unread count, including category decisions.
+ */
+export async function fetchBellNotifications(user) {
+  const userId = user?.id || user?.user_id || "user";
+  try {
+    const res = await client.get("/notifications/bell/");
+    const data = res.data;
+
+    let rawList = [];
+    let unreadCount = 0;
+
+    if (Array.isArray(data)) {
+      rawList = data;
+      unreadCount = rawList.filter((n) => !n.is_read && !n.read).length;
+    } else if (data && typeof data === "object") {
+      rawList = Array.isArray(data.notifications)
+        ? data.notifications
+        : Array.isArray(data.results)
+        ? data.results
+        : Array.isArray(data.items)
+        ? data.items
+        : [];
+
+      if (typeof data.unread_count === "number") {
+        unreadCount = data.unread_count;
+      } else if (typeof data.unread === "number") {
+        unreadCount = data.unread;
+      } else {
+        unreadCount = rawList.filter((n) => !n.is_read && !n.read).length;
+      }
+    }
+
+    const notifications = rawList.map(normalizeNotification).filter(Boolean);
+    notifications.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+    return {
+      notifications,
+      unreadCount: typeof unreadCount === "number" ? unreadCount : notifications.filter((n) => !n.is_read).length,
+    };
+  } catch (err) {
+    console.warn("GET /api/notifications/bell/ failed, falling back to local store:", err);
+    const local = getLocalNotifications(userId) || [];
+    return {
+      notifications: local,
+      unreadCount: local.filter((n) => !n.is_read).length,
+    };
+  }
+}
+
+/**
+ * GET /api/notifications/history/
+ * Returns full notification history.
+ */
+export async function fetchNotificationHistory(user) {
+  const userId = user?.id || user?.user_id || "user";
+
+  try {
+    const res = await client.get("/notifications/history/");
+    const data = res.data;
+    const rawList = Array.isArray(data)
+      ? data
+      : Array.isArray(data?.results)
+      ? data.results
+      : Array.isArray(data?.notifications)
+      ? data.notifications
+      : Array.isArray(data?.items)
+      ? data.items
+      : [];
+
+    const backendList = rawList.map(normalizeNotification).filter(Boolean);
+
+    // Merge with any offline local notifications
+    const localList = getModelNotificationsWithSentinel(userId, backendList.length > 0);
+    const combined = [...backendList, ...(localList || [])];
+
+    const seen = new Set();
+    const deduped = [];
+    for (const item of combined) {
+      if (!seen.has(item.id)) {
+        seen.add(item.id);
+        deduped.push(item);
+      }
+    }
+
+    deduped.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    saveLocalNotifications(userId, deduped);
+    return deduped;
+  } catch (err) {
+    console.warn("GET /api/notifications/history/ failed, trying /notifications/bell/ or local:", err);
+    // Fallback: try bell notifications
+    try {
+      const { notifications } = await fetchBellNotifications(user);
+      if (notifications.length > 0) return notifications;
+    } catch {}
+
+    const local = getLocalNotifications(userId) || [];
+    return local;
+  }
+}
+
+/**
+ * Primary notifications fetcher: defaults to notification history.
  */
 export async function fetchNotifications(user) {
-  const userId = user?.id || user?.user_id || "user";
-  let backendList = [];
-
-  // Priority order: history → bell → generic list
-  const endpointCandidates = [
-    "/notifications/history/",
-    "/notifications/bell/",
-    "/notifications/",
-  ];
-
-  for (const endpoint of endpointCandidates) {
-    try {
-      const res = await client.get(endpoint);
-      const raw = Array.isArray(res.data)
-        ? res.data
-        : res.data?.results || res.data?.notifications || res.data?.items || [];
-      if (raw.length > 0 || endpoint === endpointCandidates[endpointCandidates.length - 1]) {
-        backendList = raw.map(normalizeNotification);
-        break;
-      }
-    } catch {
-      // try next endpoint
-    }
-  }
-
-  // Merge with local notifications (locally-seeded or offline fallback)
-  let localList = getModelNotificationsWithSentinel(userId, backendList.length > 0);
-
-  const combined = [...backendList, ...(localList || [])];
-  // Deduplicate by ID — backend is authoritative so it comes first
-  const seen = new Set();
-  const deduped = [];
-  for (const item of combined) {
-    const id = String(item.id || item._id);
-    if (!seen.has(id)) {
-      seen.add(id);
-      deduped.push(normalizeNotification(item));
-    }
-  }
-
-  deduped.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-
-  // Persist the full merged list locally so offline views stay current
-  saveLocalNotifications(userId, deduped);
-
-  return deduped;
+  return await fetchNotificationHistory(user);
 }
 
 function getModelNotificationsWithSentinel(userId, hasBackend) {
@@ -121,70 +219,91 @@ function getModelNotificationsWithSentinel(userId, hasBackend) {
   return localList || [];
 }
 
+/**
+ * POST /api/notifications/{notification_id}/read/
+ * Mark a notification as read.
+ */
 export async function markNotificationAsRead(user, notificationId) {
   const userId = user?.id || user?.user_id || "user";
 
-  // Try backend mark-read endpoints
-  const candidates = [
-    () => client.post(`/notifications/${notificationId}/read/`),
-    () => client.patch(`/notifications/${notificationId}/`, { is_read: true }),
-    () => client.post(`/notifications/${notificationId}/mark-read/`),
-  ];
-  for (const attempt of candidates) {
+  try {
+    await client.post(`/notifications/${notificationId}/read/`);
+  } catch (err) {
+    // Fallback to alternative verbs/endpoints
     try {
-      await attempt();
-      break;
+      await client.patch(`/notifications/${notificationId}/`, { is_read: true });
     } catch {
-      // try next
+      try {
+        await client.post(`/notifications/${notificationId}/mark-read/`);
+      } catch {}
     }
   }
 
-  // Always update local state
+  // Update local storage
   const current = getLocalNotifications(userId) || [];
   const updated = current.map((n) =>
     String(n.id) === String(notificationId) ? { ...n, is_read: true } : n
   );
   saveLocalNotifications(userId, updated);
-  return await fetchNotifications(user);
+
+  // Dispatch global event for header bells to update immediately
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("ordp:notifications-updated"));
+  }
+
+  return updated;
 }
 
+/**
+ * Mark all notifications as read.
+ */
 export async function markAllNotificationsAsRead(user) {
   const userId = user?.id || user?.user_id || "user";
 
-  // Try backend bulk mark-all-read
   const candidates = [
     () => client.post("/notifications/mark-all-read/"),
     () => client.post("/notifications/read-all/"),
     () => client.patch("/notifications/", { is_read: true }),
   ];
+
   for (const attempt of candidates) {
     try {
       await attempt();
       break;
-    } catch {
-      // try next
-    }
+    } catch {}
   }
 
-  // Always update local state
   const current = getLocalNotifications(userId) || [];
   const updated = current.map((n) => ({ ...n, is_read: true }));
   saveLocalNotifications(userId, updated);
-  return await fetchNotifications(user);
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("ordp:notifications-updated"));
+  }
+
+  return updated;
 }
 
+/**
+ * DELETE /api/notifications/{notification_id}/
+ * Delete a notification.
+ */
 export async function deleteNotificationItem(user, notificationId) {
   const userId = user?.id || user?.user_id || "user";
 
-  // Try backend delete
   try {
     await client.delete(`/notifications/${notificationId}/`);
-  } catch {
-    // Not all backends support delete — keep local fallback
+  } catch (err) {
+    console.warn("DELETE /api/notifications/${notificationId}/ failed:", err);
   }
 
   const current = getLocalNotifications(userId) || [];
   const updated = current.filter((n) => String(n.id) !== String(notificationId));
   saveLocalNotifications(userId, updated);
-  return await fetchNotifications(user);
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("ordp:notifications-updated"));
+  }
+
+  return updated;
 }

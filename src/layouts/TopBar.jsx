@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Search, SlidersHorizontal, Bell } from "lucide-react";
 import { useAuth } from "../context/useAuth";
 import { getDisplayName, getDashboardPath } from "../utils/userRoles";
-import { fetchNotifications } from "../api/notifications";
+import { fetchBellNotifications } from "../api/notifications";
 import logo from "../assets/aastulogo.png";
 
 export default function TopBar() {
@@ -14,17 +14,28 @@ export default function TopBar() {
 
   useEffect(() => {
     let active = true;
-    if (isAuthenticated && user) {
-      fetchNotifications(user)
-        .then((list) => {
-          if (!active) return;
-          const unread = list.filter((n) => !n.is_read).length;
-          setUnreadCount(unread);
-        })
-        .catch(() => {});
+
+    async function loadBell() {
+      if (isAuthenticated && user) {
+        try {
+          const res = await fetchBellNotifications(user);
+          if (active) {
+            setUnreadCount(res?.unreadCount || 0);
+          }
+        } catch {
+          // ignore
+        }
+      }
     }
+
+    loadBell();
+    window.addEventListener("ordp:notifications-updated", loadBell);
+    const interval = setInterval(loadBell, 30000);
+
     return () => {
       active = false;
+      window.removeEventListener("ordp:notifications-updated", loadBell);
+      clearInterval(interval);
     };
   }, [isAuthenticated, user]);
 

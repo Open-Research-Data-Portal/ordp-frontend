@@ -18,6 +18,9 @@ import {
   Search,
   Edit2,
   ArrowRight,
+  Plus,
+  RefreshCw,
+  X,
 } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import { EmptyState } from "../../../components/dashboard/dashboardUi";
@@ -74,23 +77,59 @@ const STORAGE_KEY = "ordp_review_weights";
 
 // ─── API helpers ──────────────────────────────────────────────────────────────
 async function fetchCategoryProposals() {
-  try {
-    const { data } = await client.get("/admin-panel/categories/pending/");
-    return Array.isArray(data) ? data : data?.results || [];
-  } catch {
+  const endpoints = [
+    "/admin-panel/categories/pending/",
+    "/admin-panel/categories/pending",
+    "/metadata/categories/proposals/",
+    "/metadata/categories/?status=pending",
+    "/metadata/categories/pending/",
+  ];
+  let lastErr = null;
+  for (const ep of endpoints) {
     try {
-      const { data } = await client.get("/metadata/categories/proposals/");
-      return Array.isArray(data) ? data : data?.results || [];
-    } catch {
-      try {
-        const { data } = await client.get("/metadata/categories/?status=pending");
-        const all = Array.isArray(data) ? data : data?.results || [];
-        return all.filter((c) => c.status === "pending" || c.is_proposal);
-      } catch {
-        return [];
+      const { data } = await client.get(ep);
+      const list = Array.isArray(data)
+        ? data
+        : data?.results ||
+          data?.categories ||
+          data?.pending ||
+          data?.pending_categories ||
+          data?.proposals ||
+          data?.data ||
+          [];
+      if (Array.isArray(data) || data?.results || list.length > 0) {
+        return list;
       }
+    } catch (err) {
+      lastErr = err;
+      if (err?.response?.status === 404 || err?.response?.status === 405) continue;
+      console.warn(`Category proposals endpoint ${ep} failed:`, err);
     }
   }
+  if (lastErr && lastErr?.response?.status !== 404) {
+    throw lastErr;
+  }
+  return [];
+}
+
+async function createAdminCategory(payload) {
+  const candidates = [
+    "/admin-panel/categories/create/",
+    "/admin-panel/categories/",
+    "/metadata/categories/",
+  ];
+  let lastErr = null;
+  for (const url of candidates) {
+    try {
+      const { data } = await client.post(url, { ...payload, status: "approved" });
+      return data;
+    } catch (err) {
+      lastErr = err;
+      if (err?.response?.status === 404 || err?.response?.status === 405) continue;
+      throw err;
+    }
+  }
+  throw lastErr;
 }
 
 async function decideCategoryProposal(id, payload) {
@@ -240,8 +279,12 @@ function CategoryProposalCard({ proposal, allCategories, onApprove, onReject, on
   const [showMerge, setShowMerge] = useState(false);
   const [showEditApprove, setShowEditApprove] = useState(false);
 
-  const [approvedName, setApprovedName] = useState(proposal.name || "");
-  const [approvedDesc, setApprovedDesc] = useState(proposal.description || "");
+  const proposalId = proposal.id || proposal.category_id || proposal.pk;
+  const proposalName = proposal.name || proposal.category_name || proposal.title || "Category Suggestion";
+  const proposalDesc = proposal.description || proposal.desc || "";
+
+  const [approvedName, setApprovedName] = useState(proposalName);
+  const [approvedDesc, setApprovedDesc] = useState(proposalDesc);
 
   const [rejectReason, setRejectReason] = useState("");
   const [replacementCategoryId, setReplacementCategoryId] = useState("");
@@ -249,28 +292,34 @@ function CategoryProposalCard({ proposal, allCategories, onApprove, onReject, on
   const [mergeTarget, setMergeTarget] = useState("");
   const [targetSearch, setTargetSearch] = useState("");
 
-  const datasetCount = Number(proposal.dataset_count || 0);
-  const interestCount = Number(proposal.interest_count || 0);
-  const similarExisting = Array.isArray(proposal.similar_existing) ? proposal.similar_existing : [];
+  const datasetCount = Number(proposal.dataset_count ?? proposal.datasets_count ?? proposal.datasets ?? 0);
+  const interestCount = Number(proposal.interest_count ?? proposal.interests_count ?? proposal.profiles_count ?? proposal.profile_count ?? 0);
+  const similarExisting = Array.isArray(proposal.similar_existing)
+    ? proposal.similar_existing
+    : Array.isArray(proposal.similar_categories)
+    ? proposal.similar_categories
+    : Array.isArray(proposal.matches)
+    ? proposal.matches
+    : [];
 
   const requiresReplacementOnReject = datasetCount > 0;
 
   const filteredApproved = allCategories
-    .filter((c) => c.id !== proposal.id && c.status !== "pending")
+    .filter((c) => c.id !== proposalId && c.status !== "pending")
     .filter((c) => (targetSearch.trim() ? c.name?.toLowerCase().includes(targetSearch.trim().toLowerCase()) : true));
 
   const handleApproveClick = () => {
     if (showEditApprove) {
       const edits = {};
-      if (approvedName.trim() && approvedName.trim() !== proposal.name) {
+      if (approvedName.trim() && approvedName.trim() !== proposalName) {
         edits.name = approvedName.trim();
       }
-      if (approvedDesc.trim() !== (proposal.description || "")) {
+      if (approvedDesc.trim() !== proposalDesc) {
         edits.description = approvedDesc.trim();
       }
-      onApprove(proposal.id, edits);
+      onApprove(proposalId, edits);
     } else {
-      onApprove(proposal.id, {});
+      onApprove(proposalId, {});
     }
   };
 
@@ -278,7 +327,7 @@ function CategoryProposalCard({ proposal, allCategories, onApprove, onReject, on
     if (requiresReplacementOnReject && !replacementCategoryId) {
       return;
     }
-    onReject(proposal.id, {
+    onReject(proposalId, {
       replacementCategoryId: requiresReplacementOnReject ? replacementCategoryId : null,
       reason: rejectReason.trim(),
     });
@@ -287,12 +336,12 @@ function CategoryProposalCard({ proposal, allCategories, onApprove, onReject, on
 
   const handleMergeClick = () => {
     if (!mergeTarget) return;
-    onMerge(proposal.id, mergeTarget);
+    onMerge(proposalId, mergeTarget);
     setShowMerge(false);
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden hover:border-navy/30 hover:shadow-sm transition-all duration-200">
+    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden hover:border-navy/30 hover:shadow-md transition-all duration-200">
       <div className="p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
@@ -300,12 +349,13 @@ function CategoryProposalCard({ proposal, allCategories, onApprove, onReject, on
               <Tag className="w-5 h-5 text-gold" />
             </div>
             <div className="min-w-0">
-              <p className="font-semibold text-slate-800 text-base truncate">{proposal.name}</p>
+              <p className="font-semibold text-slate-800 text-base truncate">{proposalName}</p>
               <p className="text-xs text-slate-500 mt-0.5">
                 Suggested by{" "}
                 <span className="font-medium text-slate-700">
                   {proposal.suggested_by?.full_name ||
                     proposal.suggested_by?.email ||
+                    proposal.suggested_by ||
                     proposal.proposed_by_name ||
                     proposal.proposed_by ||
                     "Researcher"}
@@ -321,9 +371,9 @@ function CategoryProposalCard({ proposal, allCategories, onApprove, onReject, on
           </span>
         </div>
 
-        {proposal.description && (
+        {proposalDesc && (
           <p className="text-xs text-slate-600 mt-3 leading-relaxed bg-[#F8F7F4] rounded-lg px-3 py-2 border border-slate-200/60">
-            {proposal.description}
+            {proposalDesc}
           </p>
         )}
 
@@ -376,7 +426,7 @@ function CategoryProposalCard({ proposal, allCategories, onApprove, onReject, on
       </div>
 
       {/* Action buttons */}
-      <div className="px-5 pb-4 flex flex-wrap items-center gap-2">
+      <div className="px-5 pb-4 pt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 bg-slate-50/50">
         <button
           type="button"
           onClick={() => {
@@ -384,39 +434,10 @@ function CategoryProposalCard({ proposal, allCategories, onApprove, onReject, on
             handleApproveClick();
           }}
           disabled={busy}
-          className="flex items-center gap-1.5 text-xs font-semibold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 px-3 py-1.5 rounded-lg transition disabled:opacity-50 cursor-pointer shadow-2xs"
+          className="flex items-center gap-1.5 text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 px-3.5 py-2 rounded-lg transition disabled:opacity-50 cursor-pointer shadow-sm"
         >
-          {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+          {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
           Approve
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            setShowEditApprove(!showEditApprove);
-            setShowMerge(false);
-            setShowReject(false);
-          }}
-          disabled={busy}
-          className="flex items-center gap-1 text-xs font-semibold text-slate-600 hover:text-navy border border-slate-200 px-2.5 py-1.5 rounded-lg transition cursor-pointer"
-          title="Edit name or description before approving"
-        >
-          <Edit2 className="w-3 h-3" />
-          Edit & Approve
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            setShowMerge(!showMerge);
-            setShowReject(false);
-            setShowEditApprove(false);
-          }}
-          disabled={busy}
-          className="flex items-center gap-1.5 text-xs font-semibold bg-navy/5 text-navy hover:bg-navy/10 border border-navy/20 px-3 py-1.5 rounded-lg transition disabled:opacity-50 cursor-pointer"
-        >
-          <Merge className="w-3 h-3 text-gold" />
-          Merge Into…
         </button>
 
         <button
@@ -427,12 +448,42 @@ function CategoryProposalCard({ proposal, allCategories, onApprove, onReject, on
             setShowEditApprove(false);
           }}
           disabled={busy}
-          className="flex items-center gap-1.5 text-xs font-semibold bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 px-3 py-1.5 rounded-lg transition disabled:opacity-50 cursor-pointer"
+          className="flex items-center gap-1.5 text-xs font-semibold bg-red-600 text-white hover:bg-red-700 px-3.5 py-2 rounded-lg transition disabled:opacity-50 cursor-pointer shadow-sm"
         >
           <XCircle className="w-3.5 h-3.5" />
           Reject
         </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setShowMerge(!showMerge);
+            setShowReject(false);
+            setShowEditApprove(false);
+          }}
+          disabled={busy}
+          className="flex items-center gap-1.5 text-xs font-semibold bg-navy text-white hover:bg-navy-dark px-3.5 py-2 rounded-lg transition disabled:opacity-50 cursor-pointer shadow-sm"
+        >
+          <Merge className="w-3.5 h-3.5 text-gold" />
+          Merge Into…
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setShowEditApprove(!showEditApprove);
+            setShowMerge(false);
+            setShowReject(false);
+          }}
+          disabled={busy}
+          className="flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-navy border border-slate-200 bg-white px-2.5 py-2 rounded-lg transition cursor-pointer"
+          title="Edit name or description before approving"
+        >
+          <Edit2 className="w-3 h-3" />
+          Edit & Approve
+        </button>
       </div>
+
 
       {/* Edit & Approve panel */}
       {showEditApprove && (
@@ -714,7 +765,12 @@ export default function AdminSettingsPage() {
   const [proposals, setProposals] = useState([]);
   const [allCategories, setAllCategories] = useState([]);
   const [proposalsLoading, setProposalsLoading] = useState(true);
+  const [proposalsError, setProposalsError] = useState(null);
   const [busyProposalId, setBusyProposalId] = useState(null);
+  const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
+  const [newCatName, setNewCatName] = useState("");
+  const [newCatDesc, setNewCatDesc] = useState("");
+  const [addingCategory, setAddingCategory] = useState(false);
 
   // System
   const [draftDays, setDraftDays] = useState(30);
@@ -734,10 +790,19 @@ export default function AdminSettingsPage() {
 
   const loadProposals = useCallback(async () => {
     setProposalsLoading(true);
+    setProposalsError(null);
     try {
       const [props, cats] = await Promise.all([fetchCategoryProposals(), fetchAllCategories()]);
-      setProposals(props);
-      setAllCategories(cats);
+      setProposals(Array.isArray(props) ? props : []);
+      setAllCategories(Array.isArray(cats) ? cats : []);
+    } catch (err) {
+      console.error("Failed to load category proposals:", err);
+      setProposalsError(
+        err?.response?.data?.detail ||
+          err?.response?.data?.message ||
+          err?.message ||
+          "Failed to load category requests."
+      );
     } finally {
       setProposalsLoading(false);
     }
@@ -746,6 +811,33 @@ export default function AdminSettingsPage() {
   useEffect(() => {
     loadProposals();
   }, [loadProposals]);
+
+  async function handleAddCategorySubmit(e) {
+    e.preventDefault();
+    if (!newCatName.trim()) return;
+    setAddingCategory(true);
+    try {
+      await createAdminCategory({
+        name: newCatName.trim(),
+        description: newCatDesc.trim(),
+      });
+      addToast(`Category "${newCatName.trim()}" created successfully.`, "success");
+      setNewCatName("");
+      setNewCatDesc("");
+      setShowAddCategoryModal(false);
+      await loadProposals();
+    } catch (err) {
+      addToast(
+        err?.response?.data?.detail ||
+          err?.response?.data?.message ||
+          err?.message ||
+          "Failed to create category.",
+        "error"
+      );
+    } finally {
+      setAddingCategory(false);
+    }
+  }
 
   const totalWeight = Object.values(weights).reduce((s, v) => s + (Number(v) || 0), 0);
 
@@ -958,57 +1050,103 @@ export default function AdminSettingsPage() {
           badge={proposals.length > 0 ? proposals.length : null}
           defaultOpen
         >
-          <p className="text-xs text-slate-500 mb-4">
-            When researchers submit datasets with a new category suggestion, they appear here.
-            You can approve (adding the category to the system), merge it into an existing one,
-            or reject it with a reason. Affected users are notified of the decision.
-          </p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <p className="text-xs text-slate-500 max-w-xl">
+              When researchers submit datasets or profile interests with a new category suggestion, they appear here.
+              You can approve (publishing to the portal), merge into an existing category, or reject with reason.
+            </p>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={loadProposals}
+                disabled={proposalsLoading}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-navy bg-white border border-slate-200 hover:bg-slate-50 px-3 py-1.5 rounded-lg transition cursor-pointer"
+                title="Refresh category proposals"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${proposalsLoading ? "animate-spin text-gold" : ""}`} />
+                Refresh
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowAddCategoryModal(true)}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-navy hover:bg-navy-dark px-3 py-1.5 rounded-lg transition cursor-pointer shadow-sm"
+              >
+                <Plus className="w-3.5 h-3.5 text-gold" />
+                Add Category
+              </button>
+            </div>
+          </div>
+
+          {proposalsError && (
+            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3.5 flex items-center justify-between text-xs text-red-700">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
+                <span>{proposalsError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={loadProposals}
+                className="font-semibold underline ml-2 cursor-pointer hover:text-red-900"
+              >
+                Retry
+              </button>
+            </div>
+          )}
 
           {proposalsLoading ? (
             <div className="flex items-center justify-center py-10 text-slate-400">
-              <Loader2 className="w-5 h-5 animate-spin mr-2" />
-              <span className="text-sm">Loading proposals…</span>
+              <Loader2 className="w-5 h-5 animate-spin mr-2 text-gold" />
+              <span className="text-sm">Loading category requests…</span>
             </div>
           ) : proposals.length === 0 ? (
-            <div className="py-10 text-center">
-              <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center mx-auto mb-3">
-                <Tag className="w-6 h-6 text-slate-300" />
+            <div className="py-10 text-center bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+              <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center mx-auto mb-3 shadow-xs">
+                <Tag className="w-6 h-6 text-slate-400" />
               </div>
-              <p className="text-sm font-medium text-slate-600">No pending category proposals</p>
-              <p className="text-xs text-slate-400 mt-1">
-                When researchers suggest new categories, they will appear here for review.
+              <p className="text-sm font-semibold text-slate-700">No pending category proposals</p>
+              <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+                When researchers suggest new categories during dataset upload or profile setup, they will appear here for review. You can also add categories directly using the &quot;Add Category&quot; button above.
               </p>
             </div>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {proposals.map((p) => (
                 <CategoryProposalCard
-                  key={p.id}
+                  key={p.id || p.category_id}
                   proposal={p}
                   allCategories={allCategories}
                   onApprove={handleApprove}
                   onReject={handleReject}
                   onMerge={handleMerge}
-                  busy={busyProposalId === p.id}
+                  busy={busyProposalId === (p.id || p.category_id)}
                 />
               ))}
             </div>
           )}
 
-          <div className="mt-6">
-            <p className="text-xs font-semibold text-slate-600 mb-3 flex items-center gap-2">
-              Active Categories
-              <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full text-[11px]">
-                {allCategories.filter((c) => c.status !== "pending" && !c.is_proposal).length}
-              </span>
-            </p>
+          <div className="mt-6 pt-5 border-t border-slate-100">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-semibold text-slate-600 flex items-center gap-2">
+                Active Categories
+                <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full text-[11px]">
+                  {allCategories.filter((c) => c.status !== "pending" && !c.is_proposal).length}
+                </span>
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowAddCategoryModal(true)}
+                className="text-xs font-medium text-navy hover:underline cursor-pointer flex items-center gap-1"
+              >
+                <Plus className="w-3 h-3 text-gold" /> Add New
+              </button>
+            </div>
             <div className="flex flex-wrap gap-2">
               {allCategories
                 .filter((c) => c.status !== "pending" && !c.is_proposal)
                 .map((c) => (
                   <span
                     key={c.id}
-                    className="text-xs bg-slate-100 text-slate-700 border border-slate-200 px-3 py-1 rounded-full"
+                    className="text-xs bg-slate-100 text-slate-700 border border-slate-200 px-3 py-1 rounded-full font-medium"
                   >
                     {c.name}
                   </span>
@@ -1097,6 +1235,86 @@ export default function AdminSettingsPage() {
           </div>
         </CollapsibleSection>
       </div>
+
+      {/* Add Category Modal */}
+      {showAddCategoryModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          onClick={() => setShowAddCategoryModal(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl animate-[fadeSlideIn_0.2s_ease-out]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-navy/10 flex items-center justify-center text-navy">
+                  <Tag className="w-4 h-4 text-gold" />
+                </div>
+                <h3 className="text-base font-semibold text-navy">Create New Category</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddCategoryModal(false)}
+                className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddCategorySubmit} className="mt-4 space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-slate-700 block mb-1">
+                  Category Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Astrophysics, Bioengineering"
+                  value={newCatName}
+                  onChange={(e) => setNewCatName(e.target.value)}
+                  className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-navy/30"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-700 block mb-1">
+                  Description <span className="text-slate-400 font-normal">(optional)</span>
+                </label>
+                <textarea
+                  rows={3}
+                  placeholder="Brief description of the research domain..."
+                  value={newCatDesc}
+                  onChange={(e) => setNewCatDesc(e.target.value)}
+                  className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-navy/30 resize-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowAddCategoryModal(false)}
+                  className="text-xs font-semibold text-slate-600 hover:text-slate-800 px-3.5 py-2 rounded-lg border border-slate-200 bg-white cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={addingCategory || !newCatName.trim()}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold bg-navy text-white hover:bg-navy-dark px-4 py-2 rounded-lg transition disabled:opacity-50 cursor-pointer shadow-sm"
+                >
+                  {addingCategory ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Plus className="w-3.5 h-3.5 text-gold" />
+                  )}
+                  Create Category
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </DashboardShell>
   );
 }

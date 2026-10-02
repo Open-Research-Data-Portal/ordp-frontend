@@ -44,18 +44,45 @@ export async function decideCategorySuggestion(categoryId, payload) {
 
 /**
  * Submit a user-proposed category name to the admin for review.
- * Tries /metadata/categories/proposals/ first, then /metadata/categories/propose/.
+ * Tries the working interest proposal endpoint (/accounts/profile/interests/other/),
+ * metadata category endpoints, and admin-panel endpoints.
  */
-export async function proposeCategoryRequest(name) {
+export async function proposeCategoryRequest(name, description = "") {
   const candidates = [
-    `${METADATA_BASE}/categories/proposals/`,
-    `${METADATA_BASE}/categories/propose/`,
-    `${METADATA_BASE}/categories/request/`,
+    { url: "/accounts/profile/interests/other/", body: { name } },
+    { url: `${METADATA_BASE}/categories/`, body: { name, description } },
+    { url: "/admin-panel/categories/pending/", body: { name, description } },
+    { url: "/admin-panel/categories/create/", body: { name, description } },
+    { url: `${METADATA_BASE}/categories/proposals/`, body: { name, description } },
+    { url: `${METADATA_BASE}/categories/propose/`, body: { name, description } },
   ];
   let lastErr = null;
-  for (const url of candidates) {
+  for (const { url, body } of candidates) {
     try {
-      const { data } = await client.post(url, { name });
+      const { data } = await client.post(url, body);
+      return data;
+    } catch (err) {
+      lastErr = err;
+      const status = err?.response?.status;
+      if (status === 404 || status === 405) continue;
+      // If 400 or other validation error, propagate it
+      if (status && status !== 500) throw err;
+      continue;
+    }
+  }
+  throw lastErr;
+}
+
+export async function createAdminCategory(payload) {
+  const candidates = [
+    { url: "/admin-panel/categories/create/", data: payload },
+    { url: "/admin-panel/categories/", data: payload },
+    { url: `${METADATA_BASE}/categories/`, data: { ...payload, status: "approved" } },
+  ];
+  let lastErr = null;
+  for (const { url, data: body } of candidates) {
+    try {
+      const { data } = await client.post(url, body);
       return data;
     } catch (err) {
       lastErr = err;

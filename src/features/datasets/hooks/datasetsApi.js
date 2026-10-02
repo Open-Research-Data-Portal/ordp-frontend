@@ -20,6 +20,28 @@ export async function listCategories() {
   return data;
 }
 
+export async function listInterestCategories() {
+  const { data } = await client.get(`${METADATA_BASE}/categories/interests/`);
+  return Array.isArray(data) ? data : data?.results || [];
+}
+
+export async function getPendingCategories() {
+  const { data } = await client.get("/admin-panel/categories/pending/");
+  return Array.isArray(data) ? data : data?.results || [];
+}
+
+export async function searchApprovedCategories(search = "") {
+  const { data } = await client.get("/admin-panel/categories/approved/", {
+    params: search ? { search } : {},
+  });
+  return Array.isArray(data) ? data : data?.results || [];
+}
+
+export async function decideCategorySuggestion(categoryId, payload) {
+  const { data } = await client.post(`/admin-panel/categories/${categoryId}/decide/`, payload);
+  return data;
+}
+
 /**
  * Submit a user-proposed category name to the admin for review.
  * Tries /metadata/categories/proposals/ first, then /metadata/categories/propose/.
@@ -421,6 +443,21 @@ export async function updateAdminUserRole(userId, role) {
       return data;
     }
   }
+}
+
+export async function grantAdminUserRole(userId, role) {
+  const { data } = await client.post(`/admin-panel/users/${userId}/grant-role/`, { role });
+  return data;
+}
+
+export async function revokeAdminUserRole(userId, role) {
+  const { data } = await client.post(`/admin-panel/users/${userId}/revoke-role/`, { role });
+  return data;
+}
+
+export async function setAdminUserPrimaryRole(userId, role) {
+  const { data } = await client.post(`/admin-panel/users/${userId}/set-primary-role/`, { role });
+  return data;
 }
 
 export async function toggleAdminUserActive(userId, isActive) {

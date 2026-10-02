@@ -111,7 +111,7 @@ export default function DatasetListPage({
         reviewers: Array.isArray(data?.reviewers) ? data.reviewers : [],
       });
     } catch (err) {
-      setReviewerError(err.response?.data?.detail || "Unable to load reviewer contacts.");
+      setReviewerError(err.response?.data?.detail || "Unable to load contacts.");
     } finally {
       setReviewerLoadingId("");
     }

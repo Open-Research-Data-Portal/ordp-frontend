@@ -13,6 +13,10 @@ import {
   FileText,
   Info,
   AlertCircle,
+  Download,
+  Archive,
+  FolderKanban,
+  Edit3,
 } from "lucide-react";
 import DashboardShell from "../components/dashboard/DashboardShell";
 import { useAuth } from "../context/useAuth";
@@ -25,19 +29,23 @@ import {
 } from "../api/notifications";
 
 function getIconForType(type) {
-  switch (String(type).toLowerCase()) {
-    case "review":
-    case "dataset_assigned_for_review":
+  const t = String(type || "").toLowerCase();
+  switch (true) {
+    case t.includes("download"):
+      return <Download className="w-5 h-5 text-sky-600" />;
+    case t.includes("archive"):
+      return <Archive className="w-5 h-5 text-amber-600" />;
+    case t.includes("modif") || t.includes("revision") || t.includes("edit"):
+      return <Edit3 className="w-5 h-5 text-indigo-600" />;
+    case t.includes("category"):
+      return <FolderKanban className="w-5 h-5 text-teal-600" />;
+    case t.includes("review") || t.includes("assign"):
       return <ShieldCheck className="w-5 h-5 text-violet-600" />;
-    case "dataset_approved":
-    case "approved":
+    case t.includes("approved") || t === "success":
       return <CheckCircle2 className="w-5 h-5 text-emerald-600" />;
-    case "rejected":
-    case "dataset_rejected":
-    case "revision_rejected":
+    case t.includes("reject") || t.includes("danger") || t.includes("error"):
       return <AlertCircle className="w-5 h-5 text-red-600" />;
-    case "dataset":
-    case "upload":
+    case t.includes("dataset") || t.includes("upload"):
       return <FileText className="w-5 h-5 text-blue-600" />;
     default:
       return <Info className="w-5 h-5 text-gold-dark" />;

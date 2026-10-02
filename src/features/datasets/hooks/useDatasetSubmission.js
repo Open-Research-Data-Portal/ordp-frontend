@@ -385,6 +385,8 @@ export default function useDatasetSubmission(draftId = null) {
         const metadataPayload = {
           category_id: metadataData.category_id || undefined,
           other_category: metadataData.other_category || undefined,
+          category_name: metadataData.other_category || metadataData.categoryName || undefined,
+          category: metadataData.other_category || metadataData.category_id || undefined,
           subject_id: metadataData.subject_id || undefined,
           description: details.description || "",
           keywords: Array.isArray(metadataData.keywords) ? metadataData.keywords : [],

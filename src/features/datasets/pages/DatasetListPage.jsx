@@ -10,10 +10,12 @@ import {
   Trash2,
   Eye,
   Mail,
-  Copy,
   Users,
   Loader2,
   X,
+  Archive,
+  Copy,
+  Check,
 } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import { useAuth } from "../../../context/useAuth";
@@ -82,7 +84,7 @@ export default function DatasetListPage({
   const [reviewerModal, setReviewerModal] = useState(null);
   const [reviewerLoadingId, setReviewerLoadingId] = useState("");
   const [reviewerError, setReviewerError] = useState("");
-  const [copiedReviewerId, setCopiedReviewerId] = useState("");
+  const [copiedEmail, setCopiedEmail] = useState("");
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -100,7 +102,7 @@ export default function DatasetListPage({
   async function openReviewerContacts(dataset) {
     setReviewerModal({ dataset, reviewers: [] });
     setReviewerError("");
-    setCopiedReviewerId("");
+    setCopiedEmail("");
     setReviewerLoadingId(dataset.id);
     try {
       const data = await datasetsApi.getDatasetReviewers(dataset.id);
@@ -113,15 +115,6 @@ export default function DatasetListPage({
     } finally {
       setReviewerLoadingId("");
     }
-  }
-
-  async function copyReviewerEmail(reviewer) {
-    if (!reviewer.contact_email) return;
-    await navigator.clipboard?.writeText(reviewer.contact_email);
-    setCopiedReviewerId(reviewer.id);
-    window.setTimeout(() => {
-      setCopiedReviewerId((current) => (current === reviewer.id ? "" : current));
-    }, 1800);
   }
 
   const isArchivedPage = title.toLowerCase().includes("archived");
@@ -252,14 +245,25 @@ export default function DatasetListPage({
             <p className="text-sm text-gray-500 mt-1">{subtitle}</p>
           </div>
           {!isArchivedPage && (
-            <button
-              type="button"
-              onClick={() => navigate("/datasets/contribute?new=1")}
-              className="flex items-center gap-2 bg-navy hover:bg-navy-dark text-white rounded-full px-5 py-2.5 text-sm font-semibold shrink-0 transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              New Dataset
-            </button>
+            <div className="flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => navigate("/my-archive")}
+                className="flex items-center gap-2 border border-slate-300 hover:border-navy text-slate-700 hover:text-navy bg-white rounded-full px-4 py-2.5 text-sm font-semibold shrink-0 transition-all shadow-2xs cursor-pointer"
+                title="View your archived datasets"
+              >
+                <Archive className="w-4 h-4 text-slate-500" />
+                My Archive
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate("/datasets/contribute?new=1")}
+                className="flex items-center gap-2 bg-navy hover:bg-navy-dark text-white rounded-full px-5 py-2.5 text-sm font-semibold shrink-0 transition-colors cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                New Dataset
+              </button>
+            </div>
           )}
         </div>
 
@@ -499,9 +503,7 @@ export default function DatasetListPage({
             <div className="flex items-start justify-between gap-4 border-b border-[#E3E1DA] px-5 py-4">
               <div>
                 <h2 className="text-base font-semibold text-navy">Contacts</h2>
-                <p className="mt-1 text-xs text-gray-500">
-                  Copy an email below and use it to send your question directly.
-                </p>
+                <p className="mt-1 text-xs text-slate-400">Copy a reviewer&rsquo;s email below and use it to send your question directly.</p>
               </div>
               <button
                 type="button"
@@ -527,41 +529,65 @@ export default function DatasetListPage({
                 </p>
               ) : (
                 <div className="space-y-3">
-                  {reviewerModal.reviewers.map((reviewer) => (
-                    <article key={reviewer.id} className="rounded-xl border border-slate-200 bg-white p-4">
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-navy">{reviewer.full_name || reviewer.username || reviewer.email}</p>
-                        <p className="mt-1 text-xs text-gray-500">
-                          {[reviewer.academic_title, reviewer.affiliation, reviewer.college].filter(Boolean).join(" - ") || "Reviewer"}
-                        </p>
-                      </div>
-                      {reviewer.contact_email && (
-                        <div className="mt-4 rounded-lg border border-[#E3E1DA] bg-[#FBFAF7] px-3 py-2.5">
-                          <div className="flex min-w-0 items-center gap-2 text-xs font-semibold text-navy">
-                            <Mail className="w-3.5 h-3.5 shrink-0 text-gold" />
-                            <span className="truncate">{reviewer.contact_email}</span>
+                  {reviewerModal.reviewers.map((reviewer) => {
+                    const email = reviewer.contact_email || reviewer.email || reviewer.user_email || reviewer.reviewer_email || "";
+                    const datasetTitle = reviewerModal.dataset?.title || "Dataset Review";
+                    const datasetId = reviewerModal.dataset?.id || "";
+                    const mailSubject = encodeURIComponent(`Inquiry regarding dataset: ${datasetTitle}`);
+                    const mailBody = encodeURIComponent(`Dear ${reviewer.full_name || reviewer.username || "Reviewer"},\n\nI am contacting you regarding my submitted dataset "${datasetTitle}" (ID: ${datasetId}).\n\nKind regards,\n`);
+                    const mailtoHref = email ? `mailto:${email}?subject=${mailSubject}&body=${mailBody}` : "";
+
+                    return (
+                      <article key={reviewer.id} className="rounded-xl border border-[#E3E1DA] bg-white p-4 shadow-2xs hover:border-navy/30 transition">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-navy">{reviewer.full_name || reviewer.username || reviewer.email || "Reviewer"}</p>
+                            <p className="mt-0.5 text-xs text-gray-500">
+                              {[reviewer.academic_title, reviewer.affiliation, reviewer.college].filter(Boolean).join(" · ") || "Assigned Reviewer"}
+                            </p>
                           </div>
-                          <div className="mt-3 flex items-center justify-end gap-2">
+
+                        </div>
+
+                        {email ? (
+                          <div className="mt-3 flex items-center justify-between gap-2 rounded-lg border border-[#E3E1DA] bg-[#F7F6F2] px-3 py-2">
                             <a
-                              href={reviewer.contact_url || `mailto:${reviewer.contact_email}`}
-                              className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-navy px-3 py-1.5 text-xs font-semibold text-white hover:bg-navy-dark"
+                              href={mailtoHref}
+                              className="inline-flex items-center gap-2 min-w-0 text-xs font-medium text-navy hover:text-navy-dark hover:underline"
+                              title="Click to open your email client"
                             >
-                              <Mail className="w-3.5 h-3.5" />
-                              Email
+                              <Mail className="w-3.5 h-3.5 text-gold shrink-0" />
+                              <span className="truncate">{email}</span>
                             </a>
                             <button
                               type="button"
-                              onClick={() => copyReviewerEmail(reviewer)}
-                              className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-[#E3E1DA] bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-navy"
+                              onClick={() => {
+                                navigator.clipboard?.writeText(email);
+                                setCopiedEmail(email);
+                                setTimeout(() => setCopiedEmail(""), 2000);
+                              }}
+                              className="inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-white hover:text-navy transition shrink-0"
+                              title="Copy email to clipboard"
                             >
-                              <Copy className="w-3.5 h-3.5" />
-                              {copiedReviewerId === reviewer.id ? "Copied" : "Copy"}
+                              {copiedEmail === email ? (
+                                <>
+                                  <Check className="w-3 h-3 text-emerald-600" />
+                                  <span className="text-emerald-700 font-medium">Copied</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3 h-3 text-slate-400" />
+                                  <span>Copy</span>
+                                </>
+                              )}
                             </button>
                           </div>
-                        </div>
-                      )}
-                    </article>
-                  ))}
+                        ) : (
+                          <p className="mt-2 text-xs italic text-gray-400">No email address on record.</p>
+                        )}
+                      </article>
+                    );
+                  })}
                 </div>
               )}
             </div>

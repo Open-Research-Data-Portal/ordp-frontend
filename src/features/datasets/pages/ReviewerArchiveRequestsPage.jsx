@@ -94,7 +94,7 @@ export default function ReviewerArchiveRequestsPage() {
   }
 
   return (
-    <DashboardShell title="Archived Datasets" subtitle="Review incoming archive requests">
+    <DashboardShell title="Archived" subtitle="Review incoming archive requests">
       <section className="bg-white rounded-xl border border-border shadow-sm overflow-hidden animate-fade-in-up">
         <div className="flex items-center justify-between px-5 pt-5 pb-1">
           <SectionHeader

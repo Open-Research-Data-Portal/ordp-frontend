@@ -98,6 +98,24 @@ export async function updateProfile(patch) {
   }
 }
 
+/**
+ * Upload a profile picture (multipart/form-data, field name "profile_picture").
+ * Endpoint: POST /api/accounts/profile/picture/
+ * Returns: { status: "updated", url: "<presigned url>" }
+ */
+export async function uploadProfilePicture(file) {
+  try {
+    const formData = new FormData();
+    formData.append("profile_picture", file);
+    const { data } = await client.post(`${BASE}/profile/picture/`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return data;
+  } catch (err) {
+    throw normalizeError(err);
+  }
+}
+
 export async function getProfileCompletion() {
   try {
     const { data } = await client.get(`${BASE}/profile/complete/`);

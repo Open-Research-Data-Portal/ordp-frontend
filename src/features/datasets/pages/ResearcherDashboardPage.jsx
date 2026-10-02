@@ -267,66 +267,6 @@ export default function ResearcherDashboardPage() {
       )}
 
       <section className="mb-8 animate-fade-in-up" style={{ animationDelay: "225ms" }}>
-        <div className="bg-white rounded-xl border border-border shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-border">
-            <h2 className="text-lg font-serif font-bold text-navy">Recent Activity</h2>
-            <p className="text-sm text-gray-500 mt-0.5">Live activity from datasets you own or co-own.</p>
-          </div>
-
-          {loadingActivity ? (
-            <p className="px-5 py-6 text-sm text-gray-500">Loading recent activity...</p>
-          ) : activityError ? (
-            <p className="px-5 py-6 text-sm text-red-600">{activityError}</p>
-          ) : recentActivity.length === 0 ? (
-            <p className="px-5 py-6 text-sm text-gray-500">No recent activity yet.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-                  <tr>
-                    <th className="px-5 py-3 font-semibold">Action</th>
-                    <th className="px-5 py-3 font-semibold">Dataset</th>
-                    <th className="px-5 py-3 font-semibold">User</th>
-                    <th className="px-5 py-3 font-semibold">Timestamp</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentActivity.slice(0, 8).map((item, index) => {
-                    const datasetId = item.dataset_id || item.dataset;
-                    const title = item.dataset_title || item.title || "Untitled dataset";
-                    return (
-                      <tr key={`${item.action}-${datasetId || title}-${item.timestamp || index}`} className="border-t border-border">
-                        <td className="px-5 py-3">
-                          <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${activityBadgeClass(item.action)}`}>
-                            {formatAction(item.action)}
-                          </span>
-                        </td>
-                        <td className="px-5 py-3">
-                          {datasetId ? (
-                            <button
-                              type="button"
-                              onClick={() => navigate(`/my-datasets/${datasetId}`)}
-                              className="font-semibold text-navy hover:text-gold text-left"
-                            >
-                              {title}
-                            </button>
-                          ) : (
-                            <span className="font-semibold text-navy">{title}</span>
-                          )}
-                        </td>
-                        <td className="px-5 py-3 text-gray-600">{item.user || "Unknown"}</td>
-                        <td className="px-5 py-3 text-gray-500">{formatRelativeTime(item.timestamp)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </section>
-
-      <section className="mb-8 animate-fade-in-up" style={{ animationDelay: "250ms" }}>
         <div className="flex items-end justify-between mb-4">
           <div>
             <h2 className="text-lg font-serif font-bold text-navy">Recommendations</h2>
@@ -434,7 +374,7 @@ export default function ResearcherDashboardPage() {
         )}
       </section>
 
-      <section className="mb-8 animate-fade-in-up" style={{ animationDelay: "300ms" }}>
+      <section className="mb-8 animate-fade-in-up" style={{ animationDelay: "275ms" }}>
         <h2 className="text-lg font-serif font-bold text-navy mb-4">My Bookmarks</h2>
 
         {loadingBookmarks ? (
@@ -470,6 +410,67 @@ export default function ResearcherDashboardPage() {
             ))}
           </div>
         )}
+      </section>
+
+      {/* Activity Log — placed last so content sections get priority */}
+      <section className="mb-8 animate-fade-in-up" style={{ animationDelay: "300ms" }}>
+        <div className="bg-white rounded-xl border border-border shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-border">
+            <h2 className="text-lg font-serif font-bold text-navy">Recent Activity</h2>
+            <p className="text-sm text-gray-500 mt-0.5">Live activity from datasets you own or co-own.</p>
+          </div>
+
+          {loadingActivity ? (
+            <p className="px-5 py-6 text-sm text-gray-500">Loading recent activity...</p>
+          ) : activityError ? (
+            <p className="px-5 py-6 text-sm text-red-600">{activityError}</p>
+          ) : recentActivity.length === 0 ? (
+            <p className="px-5 py-6 text-sm text-gray-500">No recent activity yet.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+                  <tr>
+                    <th className="px-5 py-3 font-semibold">Action</th>
+                    <th className="px-5 py-3 font-semibold">Dataset</th>
+                    <th className="px-5 py-3 font-semibold">User</th>
+                    <th className="px-5 py-3 font-semibold">Timestamp</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentActivity.slice(0, 8).map((item, index) => {
+                    const datasetId = item.dataset_id || item.dataset;
+                    const title = item.dataset_title || item.title || "Untitled dataset";
+                    return (
+                      <tr key={`${item.action}-${datasetId || title}-${item.timestamp || index}`} className="border-t border-border">
+                        <td className="px-5 py-3">
+                          <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${activityBadgeClass(item.action)}`}>
+                            {formatAction(item.action)}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3">
+                          {datasetId ? (
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/my-datasets/${datasetId}`)}
+                              className="font-semibold text-navy hover:text-gold text-left"
+                            >
+                              {title}
+                            </button>
+                          ) : (
+                            <span className="font-semibold text-navy">{title}</span>
+                          )}
+                        </td>
+                        <td className="px-5 py-3 text-gray-600">{item.user || "Unknown"}</td>
+                        <td className="px-5 py-3 text-gray-500">{formatRelativeTime(item.timestamp)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </section>
     </DashboardShell>
   );

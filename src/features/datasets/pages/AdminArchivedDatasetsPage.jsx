@@ -231,7 +231,7 @@ export default function AdminArchivedDatasetsPage() {
 
   return (
     <DashboardShell
-      title="ORDP Admin Console"
+      title="Archived"
       subtitle="Comprehensive Archive & Restore Management"
     >
       {/* Top summary metric cards */}
@@ -246,7 +246,7 @@ export default function AdminArchivedDatasetsPage() {
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold uppercase tracking-wider opacity-80">
-              Archived Datasets
+              Archived
             </span>
             <Archive
               className={`w-5 h-5 ${activeTab === "archived" ? "text-gold" : "text-gray-400"}`}
@@ -296,7 +296,7 @@ export default function AdminArchivedDatasetsPage() {
                     : "text-gray-600 hover:bg-gray-100"
                 }`}
               >
-                All Archived Datasets ({archivedDatasets.length})
+                All Archived ({archivedDatasets.length})
               </button>
               <button
                 type="button"
@@ -421,7 +421,7 @@ export default function AdminArchivedDatasetsPage() {
                   <th className="px-5 py-3 text-left font-semibold">Reason / Comment</th>
                   <th className="px-5 py-3 text-left font-semibold">Date</th>
                   <th className="px-5 py-3 text-left font-semibold">Status</th>
-                  <th className="px-5 py-3 text-right font-semibold">Review Actions</th>
+                  <th className="px-5 py-3 text-right font-semibold">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -554,7 +554,7 @@ export default function AdminArchivedDatasetsPage() {
                   <th className="px-5 py-3 text-left font-semibold">Dataset</th>
                   <th className="px-5 py-3 text-left font-semibold">Requester</th>
                   <th className="px-5 py-3 text-left font-semibold">Date</th>
-                  <th className="px-5 py-3 text-right font-semibold">Admin Decision</th>
+                  <th className="px-5 py-3 text-right font-semibold">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">

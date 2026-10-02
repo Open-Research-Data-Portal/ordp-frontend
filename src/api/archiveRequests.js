@@ -23,13 +23,31 @@ export const ARCHIVE_REASONS = [
   { value: "other", label: "Other" },
 ];
 
+// Mirrors apps/admin_panel/models.py -> DatasetUnarchiveRequest.IntendedUse.
+export const UNARCHIVE_INTENDED_USES = [
+  { value: "research", label: "Research" },
+  { value: "teaching", label: "Teaching" },
+  { value: "reproducing_results", label: "Reproducing Results" },
+  { value: "personal_reference", label: "Personal Reference" },
+  { value: "other", label: "Other" },
+];
+
+// Number of reviewer "approve" votes needed before an archive request is
+// automatically moved to the archived dataset list.
+export const ARCHIVE_VOTE_THRESHOLD = 3;
+
 export function reasonLabel(value) {
   return ARCHIVE_REASONS.find((r) => r.value === value)?.label || value || "—";
+}
+
+export function intendedUseLabel(value) {
+  return UNARCHIVE_INTENDED_USES.find((r) => r.value === value)?.label || value || "—";
 }
 
 const MOCK_ARCHIVE_REQUESTS = [
   {
     id: "arch-req-1001",
+    type: "archive",
     dataset_id: "mock-ds-71a1",
     dataset_title: "Ethiopian Nutrition Survey microdata 2023",
     owner_name: "Selamawit Bekele",
@@ -38,10 +56,12 @@ const MOCK_ARCHIVE_REQUESTS = [
     comment: "This dataset was accessioned twice during the last batch upload; the newer copy is identical.",
     requested_at: "2026-09-05T08:14:00Z",
     status: "pending",
+    votes: [],
     source: "mock",
   },
   {
     id: "arch-req-1002",
+    type: "archive",
     dataset_id: "mock-ds-88c3",
     dataset_title: "Cement compressive strength experiments (2019-2021)",
     owner_name: "Dawit Lemma",
@@ -50,10 +70,12 @@ const MOCK_ARCHIVE_REQUESTS = [
     comment: "Superseded by the 2024 re-run of the same testing protocol with corrected equipment calibration.",
     requested_at: "2026-09-05T14:02:00Z",
     status: "pending",
+    votes: [],
     source: "mock",
   },
   {
     id: "arch-req-1003",
+    type: "archive",
     dataset_id: "mock-ds-45f9",
     dataset_title: "Survey of household energy use — draft v1",
     owner_name: "Hanna Tesfaye",
@@ -62,10 +84,16 @@ const MOCK_ARCHIVE_REQUESTS = [
     comment: "The authors requested removal of the draft release before public indexing picked it up.",
     requested_at: "2026-09-06T10:45:00Z",
     status: "approved",
+    votes: [
+      { reviewer: "reviewer-1", vote: "approve" },
+      { reviewer: "reviewer-2", vote: "approve" },
+      { reviewer: "reviewer-3", vote: "approve" },
+    ],
     source: "mock",
   },
   {
     id: "arch-req-1004",
+    type: "archive",
     dataset_id: "mock-ds-12b7",
     dataset_title: "Clinical records anonymization benchmark",
     owner_name: "Yonatan Girma",
@@ -74,6 +102,38 @@ const MOCK_ARCHIVE_REQUESTS = [
     comment: "Contains a known column-mapping error in the de-identified patient table (confirmed by the submitter).",
     requested_at: "2026-09-06T16:30:00Z",
     status: "rejected",
+    votes: [],
+    source: "mock",
+  },
+  // Pre-seeded archived dataset (approved by 3 reviewers) so the "Archived
+  // Datasets" list and the Admin restore flow have data to demo with.
+  {
+    id: "arch-ds-2001",
+    type: "archived",
+    dataset_id: "mock-ds-2001",
+    dataset_title: "Flood susceptibility mapping model for Awash Basin",
+    owner_name: "Mekdes Alemu",
+    owner_email: "mekdes.alemu@aastu.edu.et",
+    reason: "no_longer_relevant",
+    comment: "Superseded by the updated high-resolution flood model released in 2026.",
+    archived_at: "2026-09-01T11:20:00Z",
+    requested_at: "2026-09-01T11:20:00Z",
+    status: "approved",
+    votes: [],
+    source: "mock",
+  },
+  // Pending unarchive (restore) request that goes to the admin only.
+  {
+    id: "unarch-req-3001",
+    type: "unarchive",
+    dataset_id: "mock-ds-45f9",
+    dataset_title: "Survey of household energy use — draft v1",
+    owner_name: "Hanna Tesfaye",
+    owner_email: "hanna.t@aastu.edu.et",
+    intended_use: "research",
+    reason: "The survey was withdrawn by mistake — the cleaned final dataset is now ready for re-publication.",
+    requested_at: "2026-09-08T09:00:00Z",
+    status: "pending",
     source: "mock",
   },
 ];
@@ -124,6 +184,7 @@ export function getArchiveRequestsForDataset(datasetId) {
 export function submitArchiveRequest({ dataset_id, dataset_title, owner_name, owner_email, reason, comment }) {
   const entry = {
     id: `arch-req-${Date.now()}`,
+    type: "archive",
     dataset_id: String(dataset_id),
     dataset_title: dataset_title || "Untitled dataset",
     owner_name: owner_name || owner_email || "You",
@@ -132,6 +193,7 @@ export function submitArchiveRequest({ dataset_id, dataset_title, owner_name, ow
     comment: (comment || "").trim(),
     requested_at: new Date().toISOString(),
     status: "pending",
+    votes: [],
     source: "user",
   };
   const list = readLocal();
@@ -182,6 +244,132 @@ export function hasPendingArchiveRequest(datasetId) {
 }
 
 /**
+ * Cast a reviewer's vote on an archive request (local demo fallback when the
+ * backend is unreachable). Idempotent per reviewer — one vote each. Once 3
+ * "approve" votes are collected the request is automatically marked approved
+ * (archived), and with 3 "reject" votes it is rejected.
+ *
+ * @returns {{status: string, approveCount: number, rejectCount: number}}
+ */
+export function voteArchiveRequest(requestId, reviewer, vote) {
+  const voteValue = vote === "approve" ? "approve" : "reject";
+  const mockIndex = mockState.findIndex((r) => r.id === requestId);
+  if (mockIndex >= 0) {
+    const current = { ...mockState[mockIndex], votes: [...(mockState[mockIndex].votes || [])] };
+    const without = current.votes.filter((v) => String(v.reviewer) !== String(reviewer));
+    current.votes = [...without, { reviewer, vote: voteValue }];
+    const approveCount = current.votes.filter((v) => v.vote === "approve").length;
+    const rejectCount = current.votes.filter((v) => v.vote === "reject").length;
+    if (approveCount >= ARCHIVE_VOTE_THRESHOLD) current.status = "approved";
+    else if (rejectCount >= ARCHIVE_VOTE_THRESHOLD) current.status = "rejected";
+    else current.status = "pending";
+    mockState[mockIndex] = current;
+    return {
+      status: current.status,
+      approveCount,
+      rejectCount,
+      requestId: current.dataset_id,
+      request: current,
+    };
+  }
+
+  const list = readLocal().map((r) => {
+    if (r.id !== requestId) return r;
+    const votes = [...(r.votes || [])].filter((v) => String(v.reviewer) !== String(reviewer));
+    votes.push({ reviewer, vote: voteValue });
+    const approveCount = votes.filter((v) => v.vote === "approve").length;
+    const rejectCount = votes.filter((v) => v.vote === "reject").length;
+    const status =
+      approveCount >= ARCHIVE_VOTE_THRESHOLD
+        ? "approved"
+        : rejectCount >= ARCHIVE_VOTE_THRESHOLD
+          ? "rejected"
+          : "pending";
+    return { ...r, votes, status };
+  });
+  writeLocal(list);
+  const updated = list.find((r) => r.id === requestId) || {};
+  return {
+    status: updated.status,
+    approveCount: (updated.votes || []).filter((v) => v.vote === "approve").length,
+    rejectCount: (updated.votes || []).filter((v) => v.vote === "reject").length,
+    requestId: updated.dataset_id,
+    request: updated,
+  };
+}
+
+/**
+ * Archived datasets for browsing (model seed + approved local requests).
+ * Used by the user/researcher "Archived Datasets" page and by the admin.
+ */
+export function getArchivedDatasetsLocal() {
+  return [...mockState, ...readLocal()]
+    .filter((r) => r.type === "archived" || (r.type !== "unarchive" && r.status === "approved"))
+    .map((r) => ({
+      id: r.dataset_id || r.id,
+      dataset_id: r.dataset_id || r.id,
+      title: r.dataset_title,
+      owner: r.owner_name,
+      requested_by: r.owner_name,
+      reason: r.comment || r.reason,
+      requested_at: r.archived_at || r.requested_at,
+      status: "archived",
+    }));
+}
+
+/** Convenience text showing current vote progress for a request. */
+export function votesTextFor(request) {
+  const votes = Array.isArray(request?.votes) ? request.votes : [];
+  const approveCount = votes.filter((v) => v.vote === "approve").length;
+  return `Approved by ${approveCount}/${ARCHIVE_VOTE_THRESHOLD} reviewers`;
+}
+
+/**
+ * Persist a new unarchive (restoration) request. These are routed to admins
+ * only — reviewers never see them.
+ */
+export function submitUnarchiveRequest({ dataset_id, dataset_title, owner_name, owner_email, intended_use, reason }) {
+  const entry = {
+    id: `unarch-req-${Date.now()}`,
+    type: "unarchive",
+    dataset_id: String(dataset_id),
+    dataset_title: dataset_title || "Untitled dataset",
+    owner_name: owner_name || owner_email || "You",
+    owner_email: owner_email || "",
+    intended_use: intended_use || "other",
+    reason: (reason || "").trim(),
+    requested_at: new Date().toISOString(),
+    status: "pending",
+    source: "user",
+  };
+  const list = readLocal();
+  list.push(entry);
+  writeLocal(list);
+  return entry;
+}
+
+/** Pending unarchive (restore) requests — visible to admins only. */
+export function getUnarchiveRequests() {
+  return [...mockState, ...readLocal()].filter(
+    (r) => r.type === "unarchive" && r.status === "pending"
+  );
+}
+
+/**
+ * Admin resolves an unarchive request: "restore" (approved) or "reject".
+ * User-submitted requests are persisted; mock ones update in-memory state.
+ */
+export function resolveUnarchiveRequest(requestId, status) {
+  const mockIndex = mockState.findIndex((r) => r.id === requestId);
+  if (mockIndex >= 0) {
+    mockState[mockIndex] = { ...mockState[mockIndex], status };
+    return;
+  }
+  const list = readLocal().map((r) => (r.id === requestId ? { ...r, status } : r));
+  writeLocal(list);
+}
+
+/**
  * Normalize a backend archive-request row
  * (GET /admin-panel/archive-requests/queue/) into the internal shape used by
  * the reviewer/admin tables. The queue endpoint returns reason text directly,
@@ -211,6 +399,7 @@ export function normalizeBackendRequest(r) {
 
   return {
     id: r.id,
+    type: r.type || "archive",
     dataset_id: r.dataset_id,
     dataset_title: r.dataset_title || r.dataset?.title || "Untitled dataset",
     owner_name: r.requested_by || r.owner_name || r.owner?.email || "—",
@@ -222,6 +411,7 @@ export function normalizeBackendRequest(r) {
     comment: reasonText || rawReason,
     requested_at: r.created_at || r.requested_at || new Date().toISOString(),
     status: r.status || "pending",
+    votes: Array.isArray(r.votes) ? r.votes : [],
     source: r.source || "api",
   };
 }

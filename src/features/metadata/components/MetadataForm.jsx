@@ -42,6 +42,8 @@ export default function MetadataForm({ initialValues = {}, onNext, onBack, isSub
   const [categories, setCategories] = useState([]);
   const [categoryId, setCategoryId] = useState(initialValues.category_id || "");
   const [otherCategory, setOtherCategory] = useState(initialValues.other_category || "");
+  const [categoryRequestStatus, setCategoryRequestStatus] = useState(null); // null | "sending" | "sent" | "error"
+  const [categoryRequestMsg, setCategoryRequestMsg] = useState("");
   const [keywords, setKeywords] = useState(initialValues.keywords || []);
   const [dataFormats, setDataFormats] = useState(initialValues.dataFormats || []);
   const [characteristics, setCharacteristics] = useState(initialValues.characteristics || []);
@@ -81,13 +83,46 @@ export default function MetadataForm({ initialValues = {}, onNext, onBack, isSub
     setList(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
   };
 
+  const [createdCategoryId, setCreatedCategoryId] = useState("");
   const selectedCategory = categories.find((c) => c.id === categoryId);
+
+  async function handleSendCategoryRequest() {
+    const name = otherCategory.trim();
+    if (!name) return;
+    setCategoryRequestStatus("sending");
+    setCategoryRequestMsg("");
+    try {
+      const res = await datasetsApi.proposeCategoryRequest(name);
+      const catId = res?.category_id || res?.id || res?.category?.id;
+      if (catId) {
+        setCreatedCategoryId(catId);
+      }
+      setCategoryRequestStatus("sent");
+      setCategoryRequestMsg(`"${name}" has been submitted for admin review. You can continue filling out your dataset below.`);
+    } catch (err) {
+      setCategoryRequestStatus("error");
+      setCategoryRequestMsg(err?.response?.data?.detail || err?.response?.data?.message || err?.message || "Failed to send category request. Please try again.");
+    }
+  }
 
   const handleContinue = async (e) => {
     e.preventDefault();
     const useOtherCategory = categoryId === "__other__";
-    const resolvedCategoryId = useOtherCategory ? "" : categoryId;
     const resolvedOtherCategory = useOtherCategory ? otherCategory.trim() : "";
+    let resolvedCategoryId = useOtherCategory ? (createdCategoryId || "") : categoryId;
+
+    if (useOtherCategory && resolvedOtherCategory && !resolvedCategoryId) {
+      try {
+        const res = await datasetsApi.proposeCategoryRequest(resolvedOtherCategory);
+        const catId = res?.category_id || res?.id || res?.category?.id;
+        if (catId) {
+          resolvedCategoryId = catId;
+          setCreatedCategoryId(catId);
+        }
+      } catch (err) {
+        console.warn("Category proposal on continue deferred to metadata attachment:", err);
+      }
+    }
 
     if (!resolvedCategoryId && !resolvedOtherCategory) {
       setLocalError("Please select a category or describe a new one.");
@@ -137,7 +172,7 @@ export default function MetadataForm({ initialValues = {}, onNext, onBack, isSub
         <h2 className={sectionTitleClass}>Core Metadata</h2>
         <div className="grid grid-cols-2 gap-6">
           <FormField label="Category" required>
-            <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className={inputClass}>
+            <select value={categoryId} onChange={(e) => { setCategoryId(e.target.value); setCategoryRequestStatus(null); setCategoryRequestMsg(""); }} className={inputClass}>
               <option value="">Select category</option>
               {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               <option value="__other__">Other (suggest a new category)</option>
@@ -146,16 +181,46 @@ export default function MetadataForm({ initialValues = {}, onNext, onBack, isSub
         </div>
 
         {categoryId === "__other__" && (
-          <FormField label="New Category Name" required>
-            <input
-              type="text"
-              value={otherCategory}
-              onChange={(e) => setOtherCategory(e.target.value)}
-              placeholder="e.g., Computational Linguistics"
-              className={inputClass}
-            />
-          </FormField>
+          <div className="mt-4 space-y-3">
+            <FormField label="New Category Name" required>
+              <input
+                type="text"
+                value={otherCategory}
+                onChange={(e) => { setOtherCategory(e.target.value); setCategoryRequestStatus(null); setCategoryRequestMsg(""); }}
+                placeholder="e.g., Computational Linguistics"
+                className={inputClass}
+              />
+            </FormField>
+
+            {/* Send Request section */}
+            <div className="flex items-start gap-3 bg-[#FBF8F0] border border-gold/30 rounded-xl px-4 py-4">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-navy mb-0.5">Suggest to Admin</p>
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  Send this new category name to the admin for approval. Once approved it will appear in the list for everyone.
+                </p>
+                {categoryRequestMsg && (
+                  <p className={`text-xs mt-2 font-medium leading-relaxed ${categoryRequestStatus === "sent" ? "text-emerald-700" : "text-red-600"}`}>
+                    {categoryRequestMsg}
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                disabled={!otherCategory.trim() || categoryRequestStatus === "sending" || categoryRequestStatus === "sent"}
+                onClick={handleSendCategoryRequest}
+                className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-navy hover:bg-navy-dark disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2.5 rounded-lg transition-colors"
+              >
+                {categoryRequestStatus === "sending"
+                  ? "Sending…"
+                  : categoryRequestStatus === "sent"
+                  ? "✓ Request Sent"
+                  : "Send Request to Admin"}
+              </button>
+            </div>
+          </div>
         )}
+
 
         <TagInput label="Keywords / Tags" required tags={keywords} onChange={setKeywords} placeholder="+ Add keyword" />
         <p className="-mt-4 mb-6 text-sm text-gray-500">At least 3 keywords recommended. Press Enter to add a tag.</p>

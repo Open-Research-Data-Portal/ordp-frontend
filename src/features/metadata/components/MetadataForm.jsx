@@ -83,6 +83,7 @@ export default function MetadataForm({ initialValues = {}, onNext, onBack, isSub
     setList(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
   };
 
+  const [createdCategoryId, setCreatedCategoryId] = useState("");
   const selectedCategory = categories.find((c) => c.id === categoryId);
 
   async function handleSendCategoryRequest() {
@@ -91,27 +92,37 @@ export default function MetadataForm({ initialValues = {}, onNext, onBack, isSub
     setCategoryRequestStatus("sending");
     setCategoryRequestMsg("");
     try {
-      // Try backend proposals endpoint; fall back to the metadata categories list endpoint
-      try {
-        await datasetsApi.proposeCategoryRequest(name);
-      } catch {
-        await datasetsApi.listCategories(); // no-op fallback – backend may already log via listCategories
-        // If the dedicated endpoint isn't available, still show success to user; admin sees it through
-        // the "other_category" field attached to the dataset metadata on submission.
+      const res = await datasetsApi.proposeCategoryRequest(name);
+      const catId = res?.category_id || res?.id || res?.category?.id;
+      if (catId) {
+        setCreatedCategoryId(catId);
       }
       setCategoryRequestStatus("sent");
       setCategoryRequestMsg(`"${name}" has been submitted for admin review. You can continue filling out your dataset below.`);
     } catch (err) {
       setCategoryRequestStatus("error");
-      setCategoryRequestMsg(err?.response?.data?.detail || err?.message || "Failed to send category request. Please try again.");
+      setCategoryRequestMsg(err?.response?.data?.detail || err?.response?.data?.message || err?.message || "Failed to send category request. Please try again.");
     }
   }
 
   const handleContinue = async (e) => {
     e.preventDefault();
     const useOtherCategory = categoryId === "__other__";
-    const resolvedCategoryId = useOtherCategory ? "" : categoryId;
     const resolvedOtherCategory = useOtherCategory ? otherCategory.trim() : "";
+    let resolvedCategoryId = useOtherCategory ? (createdCategoryId || "") : categoryId;
+
+    if (useOtherCategory && resolvedOtherCategory && !resolvedCategoryId) {
+      try {
+        const res = await datasetsApi.proposeCategoryRequest(resolvedOtherCategory);
+        const catId = res?.category_id || res?.id || res?.category?.id;
+        if (catId) {
+          resolvedCategoryId = catId;
+          setCreatedCategoryId(catId);
+        }
+      } catch (err) {
+        console.warn("Category proposal on continue deferred to metadata attachment:", err);
+      }
+    }
 
     if (!resolvedCategoryId && !resolvedOtherCategory) {
       setLocalError("Please select a category or describe a new one.");

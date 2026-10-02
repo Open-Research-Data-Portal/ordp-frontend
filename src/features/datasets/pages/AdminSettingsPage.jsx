@@ -15,6 +15,9 @@ import {
   Settings2,
   Bell,
   Clock,
+  Search,
+  Edit2,
+  ArrowRight,
 } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import { EmptyState } from "../../../components/dashboard/dashboardUi";
@@ -72,43 +75,82 @@ const STORAGE_KEY = "ordp_review_weights";
 // ─── API helpers ──────────────────────────────────────────────────────────────
 async function fetchCategoryProposals() {
   try {
-    const { data } = await client.get("/metadata/categories/proposals/");
+    const { data } = await client.get("/admin-panel/categories/pending/");
     return Array.isArray(data) ? data : data?.results || [];
   } catch {
     try {
-      const { data } = await client.get("/metadata/categories/?status=pending");
-      const all = Array.isArray(data) ? data : data?.results || [];
-      return all.filter((c) => c.status === "pending" || c.is_proposal);
+      const { data } = await client.get("/metadata/categories/proposals/");
+      return Array.isArray(data) ? data : data?.results || [];
+    } catch {
+      try {
+        const { data } = await client.get("/metadata/categories/?status=pending");
+        const all = Array.isArray(data) ? data : data?.results || [];
+        return all.filter((c) => c.status === "pending" || c.is_proposal);
+      } catch {
+        return [];
+      }
+    }
+  }
+}
+
+async function decideCategoryProposal(id, payload) {
+  try {
+    const { data } = await client.post(`/admin-panel/categories/${id}/decide/`, payload);
+    return data;
+  } catch (err) {
+    const decision = payload?.decision;
+    if (decision === "approve") {
+      try {
+        const { data } = await client.post(`/metadata/categories/${id}/approve/`, payload);
+        return data;
+      } catch {
+        const { data } = await client.patch(`/metadata/categories/${id}/`, {
+          status: "approved",
+          name: payload?.name,
+          description: payload?.description,
+        });
+        return data;
+      }
+    } else if (decision === "merge") {
+      const { data } = await client.post(`/metadata/categories/${id}/merge/`, {
+        merge_into: payload?.merge_into,
+      });
+      return data;
+    } else if (decision === "reject") {
+      try {
+        const { data } = await client.post(`/metadata/categories/${id}/reject/`, {
+          reason: payload?.reason,
+          replacement_category_id: payload?.replacement_category_id,
+        });
+        return data;
+      } catch {
+        const { data } = await client.patch(`/metadata/categories/${id}/`, {
+          status: "rejected",
+          rejection_reason: payload?.reason,
+        });
+        return data;
+      }
+    }
+    throw err;
+  }
+}
+
+async function searchApprovedCategories(search = "") {
+  try {
+    const { data } = await client.get("/admin-panel/categories/approved/", {
+      params: search ? { search } : {},
+    });
+    return Array.isArray(data) ? data : data?.results || [];
+  } catch {
+    try {
+      const { data } = await client.get("/metadata/categories/");
+      const list = Array.isArray(data) ? data : data?.results || [];
+      if (!search) return list;
+      const q = search.toLowerCase();
+      return list.filter((c) => c.name?.toLowerCase().includes(q));
     } catch {
       return [];
     }
-  }
-}
-
-async function approveCategoryProposal(id, mergeIntoId = null) {
-  try {
-    if (mergeIntoId) {
-      const { data } = await client.post(`/metadata/categories/${id}/merge/`, { merge_into: mergeIntoId });
-      return data;
-    }
-    const { data } = await client.post(`/metadata/categories/${id}/approve/`);
-    return data;
-  } catch {
-    const { data } = await client.patch(`/metadata/categories/${id}/`, { status: "approved" });
-    return data;
-  }
-}
-
-async function rejectCategoryProposal(id, reason = "") {
-  try {
-    const { data } = await client.post(`/metadata/categories/${id}/reject/`, { reason });
-    return data;
-  } catch {
-    const { data } = await client.patch(`/metadata/categories/${id}/`, {
-      status: "rejected",
-      rejection_reason: reason,
-    });
-    return data;
   }
 }
 
@@ -196,20 +238,57 @@ function WeightSlider({ criterion, value, onChange, disabled }) {
 function CategoryProposalCard({ proposal, allCategories, onApprove, onReject, onMerge, busy }) {
   const [showReject, setShowReject] = useState(false);
   const [showMerge, setShowMerge] = useState(false);
-  const [rejectReason, setRejectReason] = useState("");
-  const [mergeTarget, setMergeTarget] = useState("");
+  const [showEditApprove, setShowEditApprove] = useState(false);
 
-  const handleReject = () => {
-    onReject(proposal.id, rejectReason);
-    setShowReject(false);
-    setRejectReason("");
+  const [approvedName, setApprovedName] = useState(proposal.name || "");
+  const [approvedDesc, setApprovedDesc] = useState(proposal.description || "");
+
+  const [rejectReason, setRejectReason] = useState("");
+  const [replacementCategoryId, setReplacementCategoryId] = useState("");
+
+  const [mergeTarget, setMergeTarget] = useState("");
+  const [targetSearch, setTargetSearch] = useState("");
+
+  const datasetCount = Number(proposal.dataset_count || 0);
+  const interestCount = Number(proposal.interest_count || 0);
+  const similarExisting = Array.isArray(proposal.similar_existing) ? proposal.similar_existing : [];
+
+  const requiresReplacementOnReject = datasetCount > 0;
+
+  const filteredApproved = allCategories
+    .filter((c) => c.id !== proposal.id && c.status !== "pending")
+    .filter((c) => (targetSearch.trim() ? c.name?.toLowerCase().includes(targetSearch.trim().toLowerCase()) : true));
+
+  const handleApproveClick = () => {
+    if (showEditApprove) {
+      const edits = {};
+      if (approvedName.trim() && approvedName.trim() !== proposal.name) {
+        edits.name = approvedName.trim();
+      }
+      if (approvedDesc.trim() !== (proposal.description || "")) {
+        edits.description = approvedDesc.trim();
+      }
+      onApprove(proposal.id, edits);
+    } else {
+      onApprove(proposal.id, {});
+    }
   };
 
-  const handleMerge = () => {
+  const handleRejectClick = () => {
+    if (requiresReplacementOnReject && !replacementCategoryId) {
+      return;
+    }
+    onReject(proposal.id, {
+      replacementCategoryId: requiresReplacementOnReject ? replacementCategoryId : null,
+      reason: rejectReason.trim(),
+    });
+    setShowReject(false);
+  };
+
+  const handleMergeClick = () => {
     if (!mergeTarget) return;
     onMerge(proposal.id, mergeTarget);
     setShowMerge(false);
-    setMergeTarget("");
   };
 
   return (
@@ -217,15 +296,19 @@ function CategoryProposalCard({ proposal, allCategories, onApprove, onReject, on
       <div className="p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 bg-gold-light/40 rounded-xl flex items-center justify-center shrink-0">
-              <Tag className="w-4 h-4 text-gold" />
+            <div className="w-10 h-10 bg-gold-light/40 rounded-xl flex items-center justify-center shrink-0">
+              <Tag className="w-5 h-5 text-gold" />
             </div>
             <div className="min-w-0">
-              <p className="font-semibold text-slate-800 truncate">{proposal.name}</p>
+              <p className="font-semibold text-slate-800 text-base truncate">{proposal.name}</p>
               <p className="text-xs text-slate-500 mt-0.5">
-                Proposed by{" "}
+                Suggested by{" "}
                 <span className="font-medium text-slate-700">
-                  {proposal.proposed_by_name || proposal.proposed_by || "Unknown"}
+                  {proposal.suggested_by?.full_name ||
+                    proposal.suggested_by?.email ||
+                    proposal.proposed_by_name ||
+                    proposal.proposed_by ||
+                    "Researcher"}
                 </span>
                 {proposal.created_at && (
                   <> · {new Date(proposal.created_at).toLocaleDateString()}</>
@@ -234,68 +317,156 @@ function CategoryProposalCard({ proposal, allCategories, onApprove, onReject, on
             </div>
           </div>
           <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full">
-            Pending
+            Pending Review
           </span>
         </div>
+
         {proposal.description && (
-          <p className="text-xs text-slate-500 mt-3 leading-relaxed bg-slate-50 rounded-lg px-3 py-2">
+          <p className="text-xs text-slate-600 mt-3 leading-relaxed bg-[#F8F7F4] rounded-lg px-3 py-2 border border-slate-200/60">
             {proposal.description}
           </p>
         )}
-        {proposal.dataset_count != null && (
-          <p className="text-xs text-slate-400 mt-2">
-            Used in <strong>{proposal.dataset_count}</strong> dataset(s)
-          </p>
+
+        {/* Impact badges */}
+        <div className="flex flex-wrap items-center gap-2 mt-3.5">
+          <span
+            className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg border ${
+              datasetCount > 0
+                ? "bg-amber-50 text-amber-900 border-amber-200"
+                : "bg-slate-50 text-slate-600 border-slate-200"
+            }`}
+          >
+            📦 <strong>{datasetCount}</strong> dataset{datasetCount !== 1 ? "s" : ""}
+          </span>
+          <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg border bg-slate-50 text-slate-600 border-slate-200">
+            👤 <strong>{interestCount}</strong> researcher profile{interestCount !== 1 ? "s" : ""}
+          </span>
+        </div>
+
+        {/* Similar approved categories matches */}
+        {similarExisting.length > 0 && (
+          <div className="mt-4 rounded-xl border border-indigo-100 bg-indigo-50/50 p-3">
+            <p className="text-[11px] font-bold text-indigo-900 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+              <span>Text-similarity Matches</span>
+              <span className="font-normal text-indigo-600 text-[10px] lowercase">(not automatic)</span>
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {similarExisting.map((sim) => {
+                const score = sim.similarity_score ?? sim.score;
+                const scorePct = typeof score === "number" ? `${Math.round(score * 100)}%` : null;
+                return (
+                  <button
+                    key={sim.id}
+                    type="button"
+                    onClick={() => {
+                      setMergeTarget(sim.id);
+                      setReplacementCategoryId(sim.id);
+                    }}
+                    className="inline-flex items-center gap-1.5 text-xs bg-white text-indigo-950 border border-indigo-200 hover:border-indigo-400 hover:bg-indigo-50 px-2.5 py-1 rounded-lg transition shadow-2xs cursor-pointer"
+                    title={`Click to select "${sim.name}" as target`}
+                  >
+                    <span className="font-medium">{sim.name}</span>
+                    {scorePct && <span className="text-[10px] text-indigo-600 font-bold">({scorePct})</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         )}
       </div>
 
+      {/* Action buttons */}
       <div className="px-5 pb-4 flex flex-wrap items-center gap-2">
         <button
-          onClick={() => onApprove(proposal.id)}
+          type="button"
+          onClick={() => {
+            setShowEditApprove(false);
+            handleApproveClick();
+          }}
           disabled={busy}
-          className="flex items-center gap-1.5 text-xs font-semibold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 px-3 py-1.5 rounded-lg transition disabled:opacity-50"
+          className="flex items-center gap-1.5 text-xs font-semibold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 px-3 py-1.5 rounded-lg transition disabled:opacity-50 cursor-pointer shadow-2xs"
         >
-          {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3 h-3" />}
-          Approve & Add
+          {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+          Approve
         </button>
+
         <button
-          onClick={() => { setShowMerge(!showMerge); setShowReject(false); }}
+          type="button"
+          onClick={() => {
+            setShowEditApprove(!showEditApprove);
+            setShowMerge(false);
+            setShowReject(false);
+          }}
           disabled={busy}
-          className="flex items-center gap-1.5 text-xs font-semibold bg-navy/5 text-navy hover:bg-navy/10 border border-navy/20 px-3 py-1.5 rounded-lg transition disabled:opacity-50"
+          className="flex items-center gap-1 text-xs font-semibold text-slate-600 hover:text-navy border border-slate-200 px-2.5 py-1.5 rounded-lg transition cursor-pointer"
+          title="Edit name or description before approving"
+        >
+          <Edit2 className="w-3 h-3" />
+          Edit & Approve
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setShowMerge(!showMerge);
+            setShowReject(false);
+            setShowEditApprove(false);
+          }}
+          disabled={busy}
+          className="flex items-center gap-1.5 text-xs font-semibold bg-navy/5 text-navy hover:bg-navy/10 border border-navy/20 px-3 py-1.5 rounded-lg transition disabled:opacity-50 cursor-pointer"
         >
           <Merge className="w-3 h-3 text-gold" />
           Merge Into…
         </button>
+
         <button
-          onClick={() => { setShowReject(!showReject); setShowMerge(false); }}
+          type="button"
+          onClick={() => {
+            setShowReject(!showReject);
+            setShowMerge(false);
+            setShowEditApprove(false);
+          }}
           disabled={busy}
-          className="flex items-center gap-1.5 text-xs font-semibold bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 px-3 py-1.5 rounded-lg transition disabled:opacity-50"
+          className="flex items-center gap-1.5 text-xs font-semibold bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 px-3 py-1.5 rounded-lg transition disabled:opacity-50 cursor-pointer"
         >
-          <XCircle className="w-3 h-3" />
+          <XCircle className="w-3.5 h-3.5" />
           Reject
         </button>
       </div>
 
-      {showReject && (
-        <div className="border-t border-slate-100 bg-red-50/50 px-5 py-4">
-          <p className="text-xs font-semibold text-slate-700 mb-2">Rejection reason (optional)</p>
-          <textarea
-            rows={2}
-            placeholder="Explain why this category is being rejected…"
-            value={rejectReason}
-            onChange={(e) => setRejectReason(e.target.value)}
-            className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-300 resize-none bg-white"
-          />
-          <div className="flex gap-2 mt-2">
+      {/* Edit & Approve panel */}
+      {showEditApprove && (
+        <div className="border-t border-slate-200 bg-emerald-50/40 px-5 py-4">
+          <p className="text-xs font-semibold text-emerald-900 mb-2">Edit Category Before Approving</p>
+          <div className="space-y-2">
+            <input
+              type="text"
+              value={approvedName}
+              onChange={(e) => setApprovedName(e.target.value)}
+              placeholder="Category name"
+              className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300"
+            />
+            <textarea
+              rows={2}
+              value={approvedDesc}
+              onChange={(e) => setApprovedDesc(e.target.value)}
+              placeholder="Category description (optional)"
+              className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300 resize-none"
+            />
+          </div>
+          <div className="flex gap-2 mt-3">
             <button
-              onClick={handleReject}
-              className="text-xs font-semibold bg-red-600 text-white hover:bg-red-700 px-3 py-1.5 rounded-lg transition"
+              type="button"
+              onClick={handleApproveClick}
+              disabled={busy || !approvedName.trim()}
+              className="text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 px-3 py-1.5 rounded-lg transition disabled:opacity-50 cursor-pointer"
             >
-              Confirm Rejection
+              Approve with Changes
             </button>
             <button
-              onClick={() => setShowReject(false)}
-              className="text-xs font-semibold text-slate-500 hover:text-slate-800 px-3 py-1.5 rounded-lg border border-slate-200 bg-white transition"
+              type="button"
+              onClick={() => setShowEditApprove(false)}
+              className="text-xs font-semibold text-slate-500 hover:text-slate-800 px-3 py-1.5 rounded-lg border border-slate-200 bg-white transition cursor-pointer"
             >
               Cancel
             </button>
@@ -303,34 +474,163 @@ function CategoryProposalCard({ proposal, allCategories, onApprove, onReject, on
         </div>
       )}
 
+      {/* Merge panel */}
       {showMerge && (
-        <div className="border-t border-slate-100 bg-[#F8F7F4] px-5 py-4">
-          <p className="text-xs font-semibold text-slate-700 mb-2">Merge into existing category</p>
+        <div className="border-t border-slate-200 bg-[#F8F7F4] px-5 py-4">
+          <p className="text-xs font-semibold text-slate-800 mb-1">Merge into existing approved category</p>
+          <p className="text-[11px] text-slate-500 mb-2">
+            Moves this suggestion's dataset and profile uses to the selected approved category, then removes this suggestion.
+          </p>
+
+          {similarExisting.length > 0 && (
+            <div className="mb-2">
+              <span className="text-[11px] text-slate-500 block mb-1">Quick Select (Similar matches):</span>
+              <div className="flex flex-wrap gap-1">
+                {similarExisting.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setMergeTarget(s.id)}
+                    className={`text-xs px-2.5 py-1 rounded-md border font-medium transition cursor-pointer ${
+                      mergeTarget === s.id
+                        ? "bg-navy text-white border-navy"
+                        : "bg-white text-slate-700 border-slate-200 hover:border-navy"
+                    }`}
+                  >
+                    {s.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="relative mt-2 mb-2">
+            <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
+            <input
+              type="text"
+              value={targetSearch}
+              onChange={(e) => setTargetSearch(e.target.value)}
+              placeholder="Search approved categories…"
+              className="w-full text-xs pl-8 pr-3 py-1.5 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-gold/30"
+            />
+          </div>
+
           <select
             value={mergeTarget}
             onChange={(e) => setMergeTarget(e.target.value)}
             className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gold/30 bg-white"
           >
-            <option value="">Select a category…</option>
-            {allCategories
-              .filter((c) => c.id !== proposal.id && c.status !== "pending")
-              .map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
+            <option value="">Select target category…</option>
+            {filteredApproved.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
           </select>
-          <div className="flex gap-2 mt-2">
+
+          <div className="flex gap-2 mt-3">
             <button
-              onClick={handleMerge}
-              disabled={!mergeTarget}
-              className="text-xs font-semibold bg-navy text-white hover:bg-navy-light px-3 py-1.5 rounded-lg transition disabled:opacity-40"
+              type="button"
+              onClick={handleMergeClick}
+              disabled={!mergeTarget || busy}
+              className="text-xs font-semibold bg-navy text-white hover:bg-navy-light px-3 py-1.5 rounded-lg transition disabled:opacity-40 cursor-pointer"
             >
               Confirm Merge
             </button>
             <button
+              type="button"
               onClick={() => setShowMerge(false)}
-              className="text-xs font-semibold text-slate-500 hover:text-slate-800 px-3 py-1.5 rounded-lg border border-slate-200 bg-white transition"
+              className="text-xs font-semibold text-slate-500 hover:text-slate-800 px-3 py-1.5 rounded-lg border border-slate-200 bg-white transition cursor-pointer"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Reject panel */}
+      {showReject && (
+        <div className="border-t border-slate-200 bg-red-50/50 px-5 py-4">
+          <p className="text-xs font-semibold text-slate-800 mb-1">Reject category suggestion</p>
+
+          {requiresReplacementOnReject ? (
+            <div className="rounded-lg bg-amber-50 border border-amber-200 p-2.5 mb-3 text-xs text-amber-900">
+              <span className="font-semibold block">⚠️ Replacement Required:</span>
+              This category is currently in use by <strong>{datasetCount}</strong> dataset(s). A valid approved replacement category must be selected to reassign affected datasets before rejection.
+            </div>
+          ) : (
+            <p className="text-[11px] text-slate-500 mb-2">
+              No datasets use this suggestion. Profile interest selections will be removed upon rejection.
+            </p>
+          )}
+
+          {requiresReplacementOnReject && (
+            <div className="mb-3">
+              <label className="text-[11px] font-semibold text-slate-700 block mb-1">
+                Replacement Category <span className="text-red-500">*</span>
+              </label>
+
+              {similarExisting.length > 0 && (
+                <div className="flex flex-wrap gap-1 mb-2">
+                  {similarExisting.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => setReplacementCategoryId(s.id)}
+                      className={`text-xs px-2.5 py-1 rounded-md border font-medium transition cursor-pointer ${
+                        replacementCategoryId === s.id
+                          ? "bg-navy text-white border-navy"
+                          : "bg-white text-slate-700 border-slate-200 hover:border-navy"
+                      }`}
+                    >
+                      {s.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <select
+                value={replacementCategoryId}
+                onChange={(e) => setReplacementCategoryId(e.target.value)}
+                className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-300 bg-white"
+                required
+              >
+                <option value="">Select replacement category…</option>
+                {allCategories
+                  .filter((c) => c.id !== proposal.id && c.status !== "pending")
+                  .map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+          )}
+
+          <label className="text-[11px] font-semibold text-slate-700 block mb-1">
+            Rejection explanation (optional):
+          </label>
+          <textarea
+            rows={2}
+            placeholder="Explain why this category suggestion was rejected…"
+            value={rejectReason}
+            onChange={(e) => setRejectReason(e.target.value)}
+            className="w-full text-xs border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-300 resize-none bg-white"
+          />
+
+          <div className="flex gap-2 mt-3">
+            <button
+              type="button"
+              onClick={handleRejectClick}
+              disabled={busy || (requiresReplacementOnReject && !replacementCategoryId)}
+              className="text-xs font-semibold bg-red-600 text-white hover:bg-red-700 px-3 py-1.5 rounded-lg transition disabled:opacity-40 cursor-pointer"
+            >
+              Confirm Rejection
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowReject(false)}
+              className="text-xs font-semibold text-slate-500 hover:text-slate-800 px-3 py-1.5 rounded-lg border border-slate-200 bg-white transition cursor-pointer"
             >
               Cancel
             </button>
@@ -472,27 +772,33 @@ export default function AdminSettingsPage() {
     }
   }
 
-  async function handleApprove(id) {
+  async function handleApprove(id, edits = {}) {
     setBusyProposalId(id);
     try {
-      await approveCategoryProposal(id);
-      addToast("Category approved and added to the system.", "success");
+      const payload = { decision: "approve", ...edits };
+      await decideCategoryProposal(id, payload);
+      addToast("Category approved and added to active categories.", "success");
       await loadProposals();
-    } catch {
-      addToast("Failed to approve category.", "error");
+    } catch (err) {
+      addToast(err?.response?.data?.detail || "Failed to approve category.", "error");
     } finally {
       setBusyProposalId(null);
     }
   }
 
-  async function handleReject(id, reason) {
+  async function handleReject(id, { replacementCategoryId = null, reason = "" } = {}) {
     setBusyProposalId(id);
     try {
-      await rejectCategoryProposal(id, reason);
+      const payload = {
+        decision: "reject",
+        ...(replacementCategoryId ? { replacement_category_id: replacementCategoryId } : {}),
+        ...(reason ? { reason } : {}),
+      };
+      await decideCategoryProposal(id, payload);
       addToast("Category proposal rejected.", "success");
       await loadProposals();
-    } catch {
-      addToast("Failed to reject category.", "error");
+    } catch (err) {
+      addToast(err?.response?.data?.detail || "Failed to reject category.", "error");
     } finally {
       setBusyProposalId(null);
     }
@@ -501,11 +807,12 @@ export default function AdminSettingsPage() {
   async function handleMerge(id, targetId) {
     setBusyProposalId(id);
     try {
-      await approveCategoryProposal(id, targetId);
-      addToast("Category merged and affected users notified.", "success");
+      const payload = { decision: "merge", merge_into: targetId };
+      await decideCategoryProposal(id, payload);
+      addToast("Category merged and affected uses migrated.", "success");
       await loadProposals();
-    } catch {
-      addToast("Failed to merge category.", "error");
+    } catch (err) {
+      addToast(err?.response?.data?.detail || "Failed to merge category.", "error");
     } finally {
       setBusyProposalId(null);
     }

@@ -502,7 +502,6 @@ export default function DatasetListPage({
             <div className="flex items-start justify-between gap-4 border-b border-[#E3E1DA] px-5 py-4">
               <div>
                 <h2 className="text-base font-semibold text-navy">Reviewer contacts</h2>
-                <p className="mt-1 text-xs text-gray-500">{reviewerModal.dataset?.title}</p>
                 <p className="mt-1 text-xs text-slate-400">Copy a reviewer&rsquo;s email below and use it to send your question directly.</p>
               </div>
               <button

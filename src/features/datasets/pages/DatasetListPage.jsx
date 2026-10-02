@@ -16,7 +16,6 @@ import {
   Archive,
   Copy,
   Check,
-  ExternalLink,
 } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import { useAuth } from "../../../context/useAuth";
@@ -504,6 +503,7 @@ export default function DatasetListPage({
               <div>
                 <h2 className="text-base font-semibold text-navy">Reviewer contacts</h2>
                 <p className="mt-1 text-xs text-gray-500">{reviewerModal.dataset?.title}</p>
+                <p className="mt-1 text-xs text-slate-400">Copy a reviewer&rsquo;s email below and use it to send your question directly.</p>
               </div>
               <button
                 type="button"
@@ -546,30 +546,7 @@ export default function DatasetListPage({
                               {[reviewer.academic_title, reviewer.affiliation, reviewer.college].filter(Boolean).join(" · ") || "Assigned Reviewer"}
                             </p>
                           </div>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            {reviewer.contact_url && (
-                              <a
-                                href={reviewer.contact_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 rounded-lg border border-[#E3E1DA] bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:text-navy hover:bg-slate-50 transition"
-                                title="Open reviewer web profile"
-                              >
-                                <ExternalLink className="w-3 h-3" />
-                                Profile
-                              </a>
-                            )}
-                            {email && (
-                              <a
-                                href={mailtoHref}
-                                className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-3 py-1.5 text-xs font-semibold text-white hover:bg-navy-dark transition shadow-2xs"
-                                title={`Open email client to send email to ${email}`}
-                              >
-                                <Mail className="w-3.5 h-3.5" />
-                                Email
-                              </a>
-                            )}
-                          </div>
+
                         </div>
 
                         {email ? (

@@ -14,6 +14,9 @@ import {
   Loader2,
   UserCheck,
   X,
+  Star,
+  Shield,
+  UserPlus,
 } from "lucide-react";
 import { Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis } from "recharts";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
@@ -22,6 +25,7 @@ import { SectionHeader, StatusBadge, ProfileSavedNotice, EmptyState } from "../.
 import * as datasetsApi from "../hooks/datasetsApi";
 import { fetchAllDatasets } from "../../../api/datasetsHub";
 import { useToast } from "../../../context/ToastContext.jsx";
+import { useAuth } from "../../../context/useAuth";
 import { getEffectiveRoles } from "../../../utils/userRoles";
 
 function normalizeList(data) {
@@ -29,10 +33,47 @@ function normalizeList(data) {
   return data?.results || [];
 }
 
+const ALL_SYSTEM_ROLES = ["public", "reviewer", "admin"];
+
 const ROLE_OPTIONS = [
-  { value: "public", label: "User" },
+  { value: "public", label: "User (Public / Researcher)" },
   { value: "reviewer", label: "Reviewer (Checker)" },
+  { value: "admin", label: "Administrator" },
 ];
+
+function formatRoleLabel(role) {
+  const r = String(role || "").toLowerCase();
+  if (r === "admin" || r === "administrator") return "Admin";
+  if (r === "reviewer" || r === "checker") return "Reviewer";
+  if (r === "researcher") return "Researcher";
+  return "User";
+}
+
+function getUserRoles(user) {
+  if (!user) return ["public"];
+  let roles = [];
+  if (Array.isArray(user.roles) && user.roles.length > 0) {
+    roles = user.roles.map((r) => String(r).toLowerCase());
+  } else if (user.role) {
+    roles = [String(user.role).toLowerCase()];
+  } else {
+    roles = ["public"];
+  }
+  if (!roles.includes("public")) {
+    roles.push("public");
+  }
+  return Array.from(new Set(roles));
+}
+
+function getUserPrimaryRole(user) {
+  if (!user) return "public";
+  if (user.primary_role) return String(user.primary_role).toLowerCase();
+  if (user.role) return String(user.role).toLowerCase();
+  const roles = getUserRoles(user);
+  if (roles.includes("admin")) return "admin";
+  if (roles.includes("reviewer")) return "reviewer";
+  return roles[0] || "public";
+}
 
 function displayRoleOf(user) {
   if (!user) return "user";
@@ -101,6 +142,11 @@ export default function AdminDashboardPage() {
   const [deactivateWarningModal, setDeactivateWarningModal] = useState(null);
   const [togglingActiveId, setTogglingActiveId] = useState(null);
   const [roleUpdatingId, setRoleUpdatingId] = useState(null);
+  const [roleActionBusyId, setRoleActionBusyId] = useState(null);
+
+  const { user: authUser } = useAuth();
+  const currentAdminId = authUser?.id || authUser?.user_id;
+  const currentAdminEmail = authUser?.email?.toLowerCase();
 
   useEffect(() => {
     let active = true;
@@ -184,26 +230,59 @@ export default function AdminDashboardPage() {
     setCreateError("");
     setCreatingUser(true);
     try {
-      const created = await datasetsApi.createAdminUser({
-        email: newUserEmail.trim(),
-        full_name: newUserFullName.trim(),
+      const email = newUserEmail.trim();
+      const fullName = newUserFullName.trim();
+      const res = await datasetsApi.createAdminUser({
+        email,
+        full_name: fullName,
         role: newUserRole,
       });
-      const name = newUserFullName.trim() || newUserEmail.trim();
-      setUsers((s) => [
-        {
-          id: created.id || created.user_id || `new-${Date.now()}`,
-          email: newUserEmail.trim(),
-          full_name: newUserFullName.trim(),
+
+      if (res?.status === "role_granted") {
+        // Backend added role to existing account
+        setUsers((prev) => {
+          const exists = prev.some((u) => u.email?.toLowerCase() === email.toLowerCase());
+          if (exists) {
+            return prev.map((u) => {
+              if (u.email?.toLowerCase() === email.toLowerCase()) {
+                const currentList = getUserRoles(u);
+                const updatedRoles = res.roles || Array.from(new Set([...currentList, newUserRole]));
+                return {
+                  ...u,
+                  roles: updatedRoles,
+                  primary_role: res.primary_role || u.primary_role || newUserRole,
+                  role: res.primary_role || u.role || newUserRole,
+                };
+              }
+              return u;
+            });
+          }
+          datasetsApi.getAdminUsers?.().then((fresh) => setUsers(normalizeList(fresh)));
+          return prev;
+        });
+
+        const detailMsg = res.detail || `Account for "${email}" already exists; granted "${formatRoleLabel(newUserRole)}" role to it.`;
+        addToast(detailMsg, "info");
+        setSuccessNotice(detailMsg);
+      } else {
+        // Newly created account
+        const name = fullName || email;
+        const newObj = {
+          id: res?.id || res?.user_id || `new-${Date.now()}`,
+          email,
+          full_name: fullName,
           role: newUserRole,
+          roles: res?.roles || [newUserRole, "public"],
+          primary_role: res?.primary_role || newUserRole,
           status: "Active",
           initials: name.slice(0, 2).toUpperCase(),
-          ...created,
-        },
-        ...s,
-      ]);
-      addToast(`User "${name}" created successfully. Activation email sent.`, "success");
-      setSuccessNotice(`User "${name}" (${newUserEmail.trim()}) was created successfully. An activation email has been dispatched.`);
+          ...res,
+        };
+        setUsers((s) => [newObj, ...s]);
+        addToast(`User "${name}" created successfully. Activation email sent.`, "success");
+        setSuccessNotice(`User "${name}" (${email}) was created successfully. An activation email has been dispatched.`);
+      }
+
       setNewUserEmail("");
       setNewUserFullName("");
       setNewUserRole("public");
@@ -215,7 +294,7 @@ export default function AdminDashboardPage() {
         err?.response?.data?.full_name?.[0] ||
         err?.response?.data?.role?.[0] ||
         err?.message ||
-        "Failed to create user.";
+        "Failed to create user or assign role.";
       setCreateError(detail);
     } finally {
       setCreatingUser(false);
@@ -240,6 +319,123 @@ export default function AdminDashboardPage() {
     });
   }
 
+  async function handleGrantUserRole(targetUser, roleToGrant) {
+    const id = targetUser.id || targetUser.user_id;
+    if (!id || roleActionBusyId) return;
+    setRoleActionBusyId(`${id}-${roleToGrant}`);
+    try {
+      const res = await datasetsApi.grantAdminUserRole(id, roleToGrant);
+      const updatedRoles = res?.roles || Array.from(new Set([...getUserRoles(targetUser), roleToGrant]));
+      const updatedPrimary = res?.primary_role || targetUser.primary_role || getUserPrimaryRole(targetUser);
+
+      setUsers((prev) =>
+        prev.map((u) => {
+          if ((u.id || u.user_id) === id) {
+            return {
+              ...u,
+              ...res,
+              roles: updatedRoles,
+              primary_role: updatedPrimary,
+              role: updatedPrimary,
+            };
+          }
+          return u;
+        })
+      );
+      addToast(
+        `Granted "${formatRoleLabel(roleToGrant)}" role to ${targetUser.full_name || targetUser.email}.`,
+        "success"
+      );
+    } catch (err) {
+      addToast(err?.response?.data?.detail || `Failed to grant role "${formatRoleLabel(roleToGrant)}".`, "error");
+    } finally {
+      setRoleActionBusyId(null);
+    }
+  }
+
+  async function handleRevokeUserRole(targetUser, roleToRevoke) {
+    const id = targetUser.id || targetUser.user_id;
+    if (!id || roleActionBusyId) return;
+
+    if (roleToRevoke === "public") {
+      addToast("The 'public' role cannot be revoked.", "warning");
+      return;
+    }
+
+    const isSelf = String(id) === String(currentAdminId) || targetUser.email?.toLowerCase() === currentAdminEmail;
+    if (roleToRevoke === "admin" && isSelf) {
+      addToast("You cannot revoke your own administrator role.", "warning");
+      return;
+    }
+
+    if (!window.confirm(`Revoke the "${formatRoleLabel(roleToRevoke)}" role from ${targetUser.full_name || targetUser.email}?`)) {
+      return;
+    }
+
+    setRoleActionBusyId(`${id}-${roleToRevoke}`);
+    try {
+      const res = await datasetsApi.revokeAdminUserRole(id, roleToRevoke);
+      const updatedRoles = res?.roles || getUserRoles(targetUser).filter((r) => r !== roleToRevoke);
+      const updatedPrimary = res?.primary_role || updatedRoles[0] || "public";
+
+      setUsers((prev) =>
+        prev.map((u) => {
+          if ((u.id || u.user_id) === id) {
+            return {
+              ...u,
+              ...res,
+              roles: updatedRoles,
+              primary_role: updatedPrimary,
+              role: updatedPrimary,
+            };
+          }
+          return u;
+        })
+      );
+
+      const released = res?.released_datasets;
+      if (Array.isArray(released) && released.length > 0) {
+        addToast(
+          `Revoked Reviewer role. Released assignment on ${released.length} pending dataset(s).`,
+          "info"
+        );
+      } else {
+        addToast(`Revoked "${formatRoleLabel(roleToRevoke)}" role from ${targetUser.full_name || targetUser.email}.`, "success");
+      }
+    } catch (err) {
+      addToast(err?.response?.data?.detail || `Failed to revoke role "${formatRoleLabel(roleToRevoke)}".`, "error");
+    } finally {
+      setRoleActionBusyId(null);
+    }
+  }
+
+  async function handleSetPrimaryRole(targetUser, primaryRole) {
+    const id = targetUser.id || targetUser.user_id;
+    if (!id || roleActionBusyId) return;
+    setRoleActionBusyId(`${id}-primary`);
+    try {
+      const res = await datasetsApi.setAdminUserPrimaryRole(id, primaryRole);
+      setUsers((prev) =>
+        prev.map((u) => {
+          if ((u.id || u.user_id) === id) {
+            return {
+              ...u,
+              ...res,
+              primary_role: primaryRole,
+              role: primaryRole,
+            };
+          }
+          return u;
+        })
+      );
+      addToast(`Set primary role for ${targetUser.full_name || targetUser.email} to "${formatRoleLabel(primaryRole)}".`, "success");
+    } catch (err) {
+      addToast(err?.response?.data?.detail || "Failed to set primary role.", "error");
+    } finally {
+      setRoleActionBusyId(null);
+    }
+  }
+
   async function handleUpdateUserRole(targetUser, newRole) {
     const id = targetUser.id || targetUser.user_id;
     if (!id || roleUpdatingId) return;
@@ -249,13 +445,13 @@ export default function AdminDashboardPage() {
       setUsers((prev) =>
         prev.map((u) => {
           if ((u.id || u.user_id) === id) {
-            return { ...u, role: newRole, roles: [newRole] };
+            return { ...u, role: newRole, roles: [newRole], primary_role: newRole };
           }
           return u;
         })
       );
       addToast(
-        `Updated role for ${targetUser.full_name || targetUser.email} to ${newRole === "reviewer" ? "Reviewer" : newRole}.`,
+        `Updated role for ${targetUser.full_name || targetUser.email} to ${formatRoleLabel(newRole)}.`,
         "success"
       );
     } catch (err) {
@@ -496,6 +692,9 @@ export default function AdminDashboardPage() {
                   </select>
                 </div>
               </div>
+              <p className="mt-2 text-xs text-slate-500">
+                Tip: If this email already has an account, the selected role will be added to it. If it is a new email, an account will be created and an activation link sent.
+              </p>
               <div className="mt-3 flex items-center justify-end gap-2">
                 <button
                   type="button"
@@ -509,7 +708,7 @@ export default function AdminDashboardPage() {
                   disabled={creatingUser}
                   className="bg-navy hover:bg-navy-light text-white text-sm font-semibold rounded-lg px-4 py-2 disabled:opacity-50 transition-colors"
                 >
-                  {creatingUser ? "Creating…" : "Create User"}
+                  {creatingUser ? "Processing…" : "Assign / Create User"}
                 </button>
               </div>
             </form>
@@ -623,11 +822,12 @@ export default function AdminDashboardPage() {
                 ) : (
                   filteredUsers.map((u) => {
                     const uid = u.id || u.user_id;
-                    const isUpdatingRole = roleUpdatingId === uid;
                     const isTogglingActive = togglingActiveId === uid;
-                    const currentRole = displayRoleOf(u);
                     const userStatus = getUserStatus(u);
                     const isActive = userStatus === "active";
+                    const userRoles = getUserRoles(u);
+                    const primaryRole = getUserPrimaryRole(u);
+                    const availableToGrant = ALL_SYSTEM_ROLES.filter((r) => !userRoles.includes(r));
 
                     return (
                       <tr key={uid} className="border-t border-gray-100 hover:bg-bg/50">
@@ -643,43 +843,112 @@ export default function AdminDashboardPage() {
                           </div>
                         </td>
                         <td className="px-5 py-4">
-                          <div className="flex items-center gap-2">
-                            <span
-                              className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border capitalize tracking-wide ${
-                                roleBadge[currentRole] || "bg-gray-100 text-gray-700 border-gray-200"
-                              }`}
-                            >
-                              {currentRole === "reviewer"
-                                ? "Reviewer"
-                                : currentRole === "admin"
-                                ? "Admin"
-                                : currentRole === "researcher"
-                                ? "Researcher"
-                                : "User"}
-                            </span>
+                          <div className="flex flex-col gap-2">
+                            {/* Assigned roles badges */}
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {userRoles.map((r) => {
+                                const isPrimary = r === primaryRole;
+                                const isSelfAdmin =
+                                  r === "admin" &&
+                                  (String(uid) === String(currentAdminId) ||
+                                    u.email?.toLowerCase() === currentAdminEmail);
+                                const canRevoke = r !== "public" && !isSelfAdmin;
+                                const isRevoking = roleActionBusyId === `${uid}-${r}`;
 
-                            {currentRole !== "reviewer" && currentRole !== "admin" && (
-                              <button
-                                type="button"
-                                onClick={() => handleUpdateUserRole(u, "reviewer")}
-                                disabled={isUpdatingRole}
-                                className="text-[11px] font-semibold text-violet-700 hover:text-white bg-violet-50 hover:bg-violet-600 border border-violet-200 px-2.5 py-1 rounded-lg transition shadow-2xs whitespace-nowrap cursor-pointer disabled:opacity-50"
-                                title="Promote user to Reviewer"
-                              >
-                                {isUpdatingRole ? "Updating…" : "+ Reviewer"}
-                              </button>
-                            )}
+                                return (
+                                  <span
+                                    key={r}
+                                    className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full border transition-all ${
+                                      r === "admin"
+                                        ? "bg-amber-50 text-amber-900 border-amber-300"
+                                        : r === "reviewer"
+                                        ? "bg-indigo-50 text-indigo-900 border-indigo-300"
+                                        : "bg-slate-100 text-slate-800 border-slate-300"
+                                    }`}
+                                  >
+                                    {isPrimary && (
+                                      <Star className="w-3 h-3 fill-amber-500 text-amber-500 shrink-0" />
+                                    )}
+                                    <span>{formatRoleLabel(r)}</span>
+                                    {isPrimary && (
+                                      <span className="text-[9px] uppercase tracking-wider font-bold bg-amber-200/60 text-amber-800 px-1 py-0.2 rounded ml-0.5">
+                                        Primary
+                                      </span>
+                                    )}
 
-                            {currentRole === "reviewer" && (
-                              <button
-                                type="button"
-                                onClick={() => handleUpdateUserRole(u, "public")}
-                                disabled={isUpdatingRole}
-                                className="text-[11px] font-semibold text-slate-700 hover:text-white bg-slate-100 hover:bg-slate-700 border border-slate-300 px-2.5 py-1 rounded-lg transition shadow-2xs whitespace-nowrap cursor-pointer disabled:opacity-50"
-                                title="Revert role to User"
-                              >
-                                {isUpdatingRole ? "Updating…" : "+ User"}
-                              </button>
+                                    {/* Set as Primary button if multiple roles exist and this isn't primary */}
+                                    {!isPrimary && userRoles.length > 1 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleSetPrimaryRole(u, r)}
+                                        disabled={Boolean(roleActionBusyId)}
+                                        className="text-[10px] text-slate-400 hover:text-amber-700 font-normal hover:underline ml-1 cursor-pointer disabled:opacity-40"
+                                        title={`Make "${formatRoleLabel(r)}" the primary role`}
+                                      >
+                                        {roleActionBusyId === `${uid}-primary` ? "Setting…" : "Set primary"}
+                                      </button>
+                                    )}
+
+                                    {/* Revoke button */}
+                                    {canRevoke ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRevokeUserRole(u, r)}
+                                        disabled={Boolean(roleActionBusyId)}
+                                        className="text-slate-400 hover:text-red-600 hover:bg-red-100 rounded-full p-0.5 transition ml-1 cursor-pointer disabled:opacity-40"
+                                        title={`Revoke "${formatRoleLabel(r)}" role`}
+                                        aria-label={`Revoke ${formatRoleLabel(r)} role`}
+                                      >
+                                        {isRevoking ? (
+                                          <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                                        ) : (
+                                          <X className="w-2.5 h-2.5" />
+                                        )}
+                                      </button>
+                                    ) : isSelfAdmin ? (
+                                      <span
+                                        className="text-[10px] text-amber-600/70 ml-1"
+                                        title="Cannot revoke your own administrator role"
+                                      >
+                                        🔒
+                                      </span>
+                                    ) : null}
+                                  </span>
+                                );
+                              })}
+                            </div>
+
+                            {/* Quick Grant for available roles */}
+                            {availableToGrant.length > 0 && (
+                              <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                                <span className="text-[10px] text-gray-400 font-medium">Grant:</span>
+                                {availableToGrant.map((missingRole) => {
+                                  const isGranting = roleActionBusyId === `${uid}-${missingRole}`;
+                                  return (
+                                    <button
+                                      key={missingRole}
+                                      type="button"
+                                      onClick={() => handleGrantUserRole(u, missingRole)}
+                                      disabled={Boolean(roleActionBusyId)}
+                                      className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md border transition cursor-pointer disabled:opacity-40 ${
+                                        missingRole === "admin"
+                                          ? "text-amber-800 bg-amber-50 hover:bg-amber-100 border-amber-300"
+                                          : missingRole === "reviewer"
+                                          ? "text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border-indigo-300"
+                                          : "text-slate-700 bg-slate-50 hover:bg-slate-100 border-slate-300"
+                                      }`}
+                                      title={`Grant ${formatRoleLabel(missingRole)} role`}
+                                    >
+                                      {isGranting ? (
+                                        <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                                      ) : (
+                                        "+"
+                                      )}
+                                      {formatRoleLabel(missingRole)}
+                                    </button>
+                                  );
+                                })}
+                              </div>
                             )}
                           </div>
                         </td>

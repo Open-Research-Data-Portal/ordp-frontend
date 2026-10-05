@@ -102,7 +102,6 @@ export default function DatasetListPage({
   async function openReviewerContacts(dataset) {
     setReviewerModal({ dataset, reviewers: [] });
     setReviewerError("");
-    setCopiedEmail("");
     setReviewerLoadingId(dataset.id);
     try {
       const data = await datasetsApi.getDatasetReviewers(dataset.id);
@@ -111,7 +110,7 @@ export default function DatasetListPage({
         reviewers: Array.isArray(data?.reviewers) ? data.reviewers : [],
       });
     } catch (err) {
-      setReviewerError(err.response?.data?.detail || "Unable to load contacts.");
+      setReviewerError(err.response?.data?.detail || "Unable to load reviewer contacts.");
     } finally {
       setReviewerLoadingId("");
     }
@@ -437,7 +436,7 @@ export default function DatasetListPage({
                                 ) : (
                                   <Users className="w-3.5 h-3.5" />
                                 )}
-                                Contacts
+                                Reviewer contacts
                               </button>
                             )}
                           </div>
@@ -502,14 +501,14 @@ export default function DatasetListPage({
           <div className="w-full max-w-lg rounded-xl border border-[#E3E1DA] bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between gap-4 border-b border-[#E3E1DA] px-5 py-4">
               <div>
-                <h2 className="text-base font-semibold text-navy">Contacts</h2>
+                <h2 className="text-base font-semibold text-navy">Reviewer contacts</h2>
                 <p className="mt-1 text-xs text-slate-400">Copy a reviewer&rsquo;s email below and use it to send your question directly.</p>
               </div>
               <button
                 type="button"
                 onClick={() => setReviewerModal(null)}
                 className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-navy"
-                aria-label="Close contacts"
+                aria-label="Close reviewer contacts"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -519,7 +518,7 @@ export default function DatasetListPage({
               {reviewerLoadingId === reviewerModal.dataset?.id ? (
                 <div className="flex items-center gap-2 text-sm text-gray-500">
                   <Loader2 className="w-4 h-4 animate-spin text-gold" />
-                  Loading contacts...
+                  Loading reviewer contacts...
                 </div>
               ) : reviewerError ? (
                 <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{reviewerError}</p>

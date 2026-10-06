@@ -14,9 +14,25 @@ import {
   ExternalLink,
   CheckCheck,
   Loader2,
+  Check,
+  Sparkles,
+  ShieldCheck,
+  ClipboardCheck,
+  LayoutGrid,
+  Shield,
+  Settings,
+  LogOut,
 } from "lucide-react";
 import { useAuth } from "../../context/useAuth";
-import { getDisplayName, getMediaUrl } from "../../utils/userRoles";
+import {
+  getDisplayName,
+  getMediaUrl,
+  getProfilePicture,
+  getAvailableRoles,
+  getActiveRole,
+  setActiveRole,
+  isAdmin,
+} from "../../utils/userRoles";
 import {
   fetchBellNotifications,
   markNotificationAsRead,
@@ -61,10 +77,23 @@ export default function DashboardHeader({
   const [bellNotifications, setBellNotifications] = useState([]);
   const [bellOpen, setBellOpen] = useState(false);
   const [bellLoading, setBellLoading] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [, setRoleTick] = useState(0);
 
   const bellRef = useRef(null);
+  const profileRef = useRef(null);
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+
+  useEffect(() => {
+    const handleSync = () => setRoleTick((t) => t + 1);
+    window.addEventListener("ordp:active-role-changed", handleSync);
+    window.addEventListener("ordp:profile-updated", handleSync);
+    return () => {
+      window.removeEventListener("ordp:active-role-changed", handleSync);
+      window.removeEventListener("ordp:profile-updated", handleSync);
+    };
+  }, []);
 
   const loadBell = async () => {
     if (!user) return;
@@ -89,20 +118,23 @@ export default function DashboardHeader({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  // Close dropdown on outside click
+  // Close popovers on outside click
   useEffect(() => {
     function handleClickOutside(event) {
       if (bellRef.current && !bellRef.current.contains(event.target)) {
         setBellOpen(false);
       }
+      if (profileRef.current && !profileRef.current.contains(event.target)) {
+        setProfileOpen(false);
+      }
     }
-    if (bellOpen) {
+    if (bellOpen || profileOpen) {
       document.addEventListener("mousedown", handleClickOutside);
     }
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [bellOpen]);
+  }, [bellOpen, profileOpen]);
 
   function handleSearch(e) {
     e.preventDefault();
@@ -138,6 +170,23 @@ export default function DashboardHeader({
     }
   };
 
+  const activeRole = getActiveRole(user);
+  const availableRoles = getAvailableRoles(user);
+  const avatarUrl = getProfilePicture(user);
+  const displayName = getDisplayName(user);
+
+  const handleSwitchRole = (role, path) => {
+    setActiveRole(role);
+    setProfileOpen(false);
+    navigate(path);
+  };
+
+  const handleLogout = async () => {
+    setProfileOpen(false);
+    await logout();
+    navigate("/login", { replace: true });
+  };
+
   return (
     <header className="sticky top-0 z-20 bg-white border-b border-border px-4 sm:px-6 h-[4.25rem] flex items-center gap-3 lg:gap-6">
       {/* Mobile Menu Toggle Button */}
@@ -147,19 +196,6 @@ export default function DashboardHeader({
           onClick={onToggleMobileMenu}
           className="lg:hidden p-2 rounded-lg text-navy hover:bg-gray-100 transition shrink-0 cursor-pointer"
           aria-label="Toggle Navigation Menu"
-        >
-          <Menu className="w-5 h-5" />
-        </button>
-      )}
-
-      {/* Desktop Sidebar Collapse Button */}
-      {onToggleCollapse && (
-        <button
-          type="button"
-          onClick={onToggleCollapse}
-          className="hidden lg:flex p-2 rounded-lg text-gray-500 hover:text-navy hover:bg-gray-100 transition shrink-0 cursor-pointer"
-          title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
           <Menu className="w-5 h-5" />
         </button>
@@ -309,27 +345,190 @@ export default function DashboardHeader({
           <HelpCircle className="w-5 h-5" />
         </button>
 
-        <button
-          type="button"
-          onClick={() => navigate("/profile")}
-          className="flex items-center gap-2 pl-2 pr-1 py-1 rounded-lg hover:bg-gray-50 transition cursor-pointer"
-        >
-          <div className="w-8 h-8 rounded-full bg-gold-light overflow-hidden flex items-center justify-center text-xs font-bold text-navy">
-            {user?.profile_picture || user?.profile?.profile_picture ? (
-              <img
-                src={getMediaUrl(user?.profile_picture || user?.profile?.profile_picture)}
-                alt="Profile"
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              getDisplayName(user).charAt(0).toUpperCase()
-            )}
-          </div>
-          <span className="hidden sm:block text-sm font-medium text-navy max-w-[120px] truncate">
-            {getDisplayName(user)}
-          </span>
-          <ChevronDown className="w-4 h-4 text-gray-400 hidden sm:block" />
-        </button>
+        {/* Profile Dropdown */}
+        <div className="relative" ref={profileRef}>
+          <button
+            type="button"
+            onClick={() => setProfileOpen((prev) => !prev)}
+            className={`flex items-center gap-2 pl-2 pr-1.5 py-1 rounded-xl transition cursor-pointer border ${
+              profileOpen
+                ? "bg-slate-100 border-gold/40 shadow-xs"
+                : "border-transparent hover:bg-gray-50"
+            }`}
+            aria-label="Profile and role switcher"
+          >
+            <div className="w-8 h-8 rounded-full bg-gold-light ring-2 ring-gold/30 overflow-hidden flex items-center justify-center text-xs font-bold text-navy shrink-0 shadow-xs">
+              {avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt={displayName}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                displayName.charAt(0).toUpperCase()
+              )}
+            </div>
+            <span className="hidden sm:block text-sm font-semibold text-navy max-w-[120px] truncate">
+              {displayName}
+            </span>
+            <ChevronDown
+              className={`w-3.5 h-3.5 text-gray-400 hidden sm:block transition-transform duration-200 ${
+                profileOpen ? "rotate-180 text-navy" : ""
+              }`}
+            />
+          </button>
+
+          {profileOpen && (
+            <div className="absolute right-0 mt-2 w-72 sm:w-80 rounded-2xl bg-white border border-slate-200 shadow-2xl overflow-hidden z-50 animate-[fadeSlideIn_0.18s_ease-out]">
+              {/* Header Profile Summary */}
+              <div className="p-4 bg-gradient-to-r from-navy via-navy-light to-navy text-white relative">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-full ring-2 ring-gold/40 bg-gold-light overflow-hidden flex items-center justify-center text-sm font-bold text-navy shrink-0 shadow-inner">
+                    {avatarUrl ? (
+                      <img
+                        src={avatarUrl}
+                        alt={displayName}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      displayName.charAt(0).toUpperCase()
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold text-white truncate">{displayName}</p>
+                    <p className="text-xs text-slate-300 truncate">{user?.email || ""}</p>
+                    <span className="inline-block mt-1 text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-gold/20 text-gold border border-gold/30">
+                      {activeRole === "admin"
+                        ? "Administrator"
+                        : activeRole === "reviewer"
+                        ? "Reviewer"
+                        : "Researcher"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Role Switcher Section (if user has multiple roles) */}
+              {availableRoles.length > 1 && (
+                <div className="p-3 border-b border-slate-100 bg-[#FBF8F0]/80">
+                  <p className="text-[11px] font-bold text-navy/70 uppercase tracking-wider px-2 mb-2 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-gold-dark" />
+                    Switch Role
+                  </p>
+                  <div className="space-y-1">
+                    {availableRoles.map((role) => {
+                      const isActive = activeRole === role;
+                      const roleMeta = {
+                        admin: {
+                          label: "Administrator",
+                          desc: "Console, user management, audit",
+                          icon: ShieldCheck,
+                          path: "/admin-dashboard",
+                        },
+                        reviewer: {
+                          label: "Reviewer",
+                          desc: "Peer reviews & moderation queue",
+                          icon: ClipboardCheck,
+                          path: "/reviewer-dashboard",
+                        },
+                        user: {
+                          label: "Researcher",
+                          desc: "My datasets, upload, exploration",
+                          icon: LayoutGrid,
+                          path: "/researcher-dashboard",
+                        },
+                      }[role] || {
+                        label: role,
+                        desc: "Personal dashboard",
+                        icon: LayoutGrid,
+                        path: "/researcher-dashboard",
+                      };
+                      const Icon = roleMeta.icon;
+
+                      return (
+                        <button
+                          key={role}
+                          type="button"
+                          onClick={() => handleSwitchRole(role, roleMeta.path)}
+                          className={`w-full flex items-center justify-between p-2.5 rounded-xl text-left transition cursor-pointer ${
+                            isActive
+                              ? "bg-white text-navy font-semibold shadow-xs border border-gold/50"
+                              : "text-slate-600 hover:bg-white/80 hover:text-navy"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div
+                              className={`p-1.5 rounded-lg shrink-0 ${
+                                isActive
+                                  ? "bg-gold/20 text-gold-dark"
+                                  : "bg-slate-100 text-slate-500"
+                              }`}
+                            >
+                              <Icon className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold leading-tight truncate">
+                                {roleMeta.label}
+                              </p>
+                              <p className="text-[10px] text-slate-400 truncate">
+                                {roleMeta.desc}
+                              </p>
+                            </div>
+                          </div>
+                          {isActive && (
+                            <Check className="w-4 h-4 text-emerald-600 shrink-0 ml-2" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Navigation links */}
+              <div className="p-2 space-y-1">
+                <Link
+                  to="/profile"
+                  onClick={() => setProfileOpen(false)}
+                  className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-navy transition"
+                >
+                  <Settings className="w-4 h-4 text-slate-400" />
+                  Profile Settings
+                </Link>
+                {isAdmin(user) && (
+                  <Link
+                    to="/admin/settings"
+                    onClick={() => setProfileOpen(false)}
+                    className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-navy transition"
+                  >
+                    <Shield className="w-4 h-4 text-slate-400" />
+                    Admin Settings
+                  </Link>
+                )}
+                <Link
+                  to="/support"
+                  onClick={() => setProfileOpen(false)}
+                  className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-navy transition"
+                >
+                  <HelpCircle className="w-4 h-4 text-slate-400" />
+                  Help &amp; Support
+                </Link>
+              </div>
+
+              {/* Logout */}
+              <div className="p-2 border-t border-slate-100 bg-slate-50/60">
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-red-600 hover:bg-red-50 transition cursor-pointer"
+                >
+                  <LogOut className="w-4 h-4" />
+                  Sign Out
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   );

@@ -142,8 +142,23 @@ export default function LandingPage() {
           searchDatasets({ order_by: "newest" }),
           searchDatasets({}),
         ]);
-        setPopularDatasets(pop.slice(0, 3));
-        setNewestDatasets(newests.slice(0, 3));
+
+        const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+        const isWithinLastMonth = (d) => {
+          const dateVal = d.created_at || d.createdAt || d.uploaded_at || d.date;
+          if (!dateVal) return true;
+          const time = new Date(dateVal).getTime();
+          return !Number.isNaN(time) ? (Date.now() - time) <= THIRTY_DAYS_MS : true;
+        };
+
+        const popList = Array.isArray(pop) ? pop : [];
+        const newestList = Array.isArray(newests) ? newests : [];
+
+        const recentPop = popList.filter(isWithinLastMonth);
+        const recentNewests = newestList.filter(isWithinLastMonth);
+
+        setPopularDatasets(recentPop.length > 0 ? recentPop.slice(0, 3) : popList.slice(0, 3));
+        setNewestDatasets(recentNewests.length > 0 ? recentNewests.slice(0, 3) : newestList.slice(0, 3));
 
         const list = Array.isArray(allApproved) ? allApproved : [];
         const uniqueResearchers = new Set();

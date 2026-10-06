@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Search, SlidersHorizontal, Bell } from "lucide-react";
 import { useAuth } from "../context/useAuth";
-import { getDisplayName, getDashboardPath } from "../utils/userRoles";
+import { getDisplayName, getDashboardPath, getProfilePicture } from "../utils/userRoles";
 import { fetchBellNotifications } from "../api/notifications";
 import logo from "../assets/aastulogo.png";
 
@@ -107,8 +107,16 @@ export default function TopBar() {
                 to={getDashboardPath(user)}
                 className="flex items-center gap-2 text-sm font-semibold text-navy hover:bg-gray-50 rounded-xl px-3 py-1.5 border border-slate-200/80 shadow-xs transition"
               >
-                <span className="w-8 h-8 rounded-full bg-gold-light flex items-center justify-center text-xs font-bold text-navy shrink-0">
-                  {initial}
+                <span className="w-8 h-8 rounded-full bg-gold-light ring-1 ring-gold/40 flex items-center justify-center text-xs font-bold text-navy shrink-0 overflow-hidden shadow-2xs">
+                  {getProfilePicture(user) ? (
+                    <img
+                      src={getProfilePicture(user)}
+                      alt={displayName}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    initial
+                  )}
                 </span>
                 <span className="inline max-w-[130px] sm:max-w-[160px] truncate text-xs sm:text-sm font-bold text-navy">
                   {displayName}

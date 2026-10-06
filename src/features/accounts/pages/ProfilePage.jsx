@@ -626,12 +626,22 @@ export default function ProfilePage() {
 
     try {
       const res = await authApi.uploadProfilePicture(file);
-      const remoteUrl = res?.url || res?.profile_picture_url;
+      const remoteUrl = res?.url || res?.profile_picture_url || res?.profile_picture;
       if (remoteUrl) {
         setAvatarUrl(remoteUrl);
-        if (setUser && user) {
-          setUser({ ...user, profile_picture_url: remoteUrl });
+        localStorage.setItem("ordp:profile_picture", remoteUrl);
+        if (setUser) {
+          setUser((curr) => ({
+            ...(curr || {}),
+            profile_picture: remoteUrl,
+            profile_picture_url: remoteUrl,
+          }));
         }
+        window.dispatchEvent(
+          new CustomEvent("ordp:profile-updated", {
+            detail: { profile_picture: remoteUrl },
+          })
+        );
       }
     } catch (err) {
       console.warn("Direct upload error, keep local preview:", err);
@@ -641,22 +651,20 @@ export default function ProfilePage() {
   }
 
   /**
-   * POST /accounts/profile/interests/other/ — request an unlisted category.
-   * Mirrors the onboarding page: shows the new interest as a "(pending)"
-   * chip immediately, since the backend attaches it to the profile
-   * server-side on this call already.
+   * POST /accounts/profile/interests/other/ — add unlisted category/interest.
+   * New categories are approved immediately on the backend and visible to everyone.
    */
   async function handleRequestCategory(name) {
     const created = await authApi.addCustomInterest(name);
-    const newId = created?.category_id;
+    const newId = created?.category_id || created?.id;
 
-    if (newId) {
+    if (newId || name) {
       setResearchInterests((prev) => [
         ...prev,
         {
-          id: newId,
+          id: newId || `new-${Date.now()}`,
           name,
-          pending: true,
+          pending: false,
         },
       ]);
     }
@@ -787,6 +795,8 @@ export default function ProfilePage() {
         orcid_id: orcidId,
         profile_visibility: profileVisibility,
         terms_accepted: termsAccepted,
+        profile_picture: avatarUrl || user?.profile_picture || completion?.profile_picture,
+        profile_picture_url: avatarUrl || user?.profile_picture_url || completion?.profile_picture_url,
         profile_complete: true,
         is_profile_complete: true,
         can_upload_datasets: true,

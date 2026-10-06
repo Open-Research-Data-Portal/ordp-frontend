@@ -16,12 +16,20 @@ import { ProfileSavedNotice } from "../../../components/dashboard/dashboardUi";
 import { useAuth } from "../../../context/useAuth";
 import { getDisplayName, isProfileComplete as checkProfileComplete } from "../../../utils/userRoles";
 import * as datasetsApi from "../hooks/datasetsApi";
-import { getDiscoverFeed } from "../../../api/search";
+import { getDiscoverFeed, searchDatasets } from "../../../api/search";
 import { getDatasetImage } from "../../../utils/datasetImage";
 
 function normalizeList(data) {
   if (Array.isArray(data)) return data;
   return data?.results || [];
+}
+
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+function isWithinLastMonth(d) {
+  const dateVal = d.created_at || d.createdAt || d.uploaded_at || d.date;
+  if (!dateVal) return true;
+  const time = new Date(dateVal).getTime();
+  return !Number.isNaN(time) ? (Date.now() - time) <= THIRTY_DAYS_MS : true;
 }
 
 function formatRelativeTime(value) {
@@ -62,12 +70,14 @@ export default function ResearcherDashboardPage() {
 
   const [feed, setFeed] = useState([]);
   const [bookmarks, setBookmarks] = useState([]);
+  const [recentDatasets, setRecentDatasets] = useState([]);
   const [stats, setStats] = useState(null);
   const [totalDatasets, setTotalDatasets] = useState(0);
   const [pendingDatasets, setPendingDatasets] = useState(0);
   const [loadingStats, setLoadingStats] = useState(true);
   const [loadingDatasets, setLoadingDatasets] = useState(true);
   const [loadingFeed, setLoadingFeed] = useState(true);
+  const [loadingRecentDatasets, setLoadingRecentDatasets] = useState(true);
   const [loadingBookmarks, setLoadingBookmarks] = useState(true);
   const [statsError, setStatsError] = useState(null);
   const [datasetsError, setDatasetsError] = useState(null);
@@ -101,19 +111,21 @@ export default function ResearcherDashboardPage() {
       setLoadingStats(true);
       setLoadingDatasets(true);
       setLoadingFeed(true);
+      setLoadingRecentDatasets(true);
       setLoadingBookmarks(true);
       setLoadingActivity(true);
       setStatsError(null);
       setDatasetsError(null);
       setActivityError(null);
 
-      const [statsResult, datasetsResult, pendingResult, feedResult, bookmarksResult, activityResult] = await Promise.allSettled([
+      const [statsResult, datasetsResult, pendingResult, feedResult, bookmarksResult, activityResult, recentResult] = await Promise.allSettled([
         datasetsApi.getDashboardStats(),
         datasetsApi.getMyDatasets(),
         datasetsApi.getMyDatasets({ status: "pending" }),
         datasetsApi.getDashboardFeed(),
         datasetsApi.getMyBookmarks?.() ?? Promise.resolve([]),
         datasetsApi.getDashboardRecentActivity(),
+        searchDatasets({ order_by: "newest" }),
       ]);
 
       if (!active) return;
@@ -144,9 +156,16 @@ export default function ResearcherDashboardPage() {
         setActivityError("Failed to load recent activity.");
       }
 
+      if (recentResult.status === "fulfilled") {
+        const rawRecent = normalizeList(recentResult.value);
+        const filteredRecent = rawRecent.filter(isWithinLastMonth);
+        setRecentDatasets(filteredRecent.length > 0 ? filteredRecent : rawRecent);
+      }
+
       setLoadingStats(false);
       setLoadingDatasets(false);
       setLoadingFeed(false);
+      setLoadingRecentDatasets(false);
       setLoadingBookmarks(false);
       setLoadingActivity(false);
     }
@@ -357,6 +376,92 @@ export default function ResearcherDashboardPage() {
                   </span>
                   <p className="text-sm font-semibold text-navy mt-2 line-clamp-2">{item.title}</p>
                   <p className="text-xs text-gray-500 mt-1 line-clamp-2">{item.metadata?.description || item.description || ""}</p>
+                  <div className="flex items-center gap-4 mt-3 text-xs text-gray-400">
+                    <span className="flex items-center gap-1">
+                      <Eye className="w-3.5 h-3.5" />
+                      {((item.view_count ?? item.views) || 0).toLocaleString()} Views
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Download className="w-3.5 h-3.5" />
+                      {((item.download_count ?? item.downloads) || 0).toLocaleString()} Downloads
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* ── Recent Datasets (uploaded in the last month) ── */}
+      <section className="mb-8 animate-fade-in-up" style={{ animationDelay: "250ms" }}>
+        <div className="flex items-end justify-between mb-4">
+          <div>
+            <h2 className="text-lg font-serif font-bold text-navy">Recent Datasets</h2>
+            <p className="text-sm text-gray-500 mt-0.5">Explore datasets newly uploaded across the portal within the last month.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate("/datasets?sort=newest")}
+            className="flex items-center gap-1 text-sm font-medium text-gold hover:text-gold-dark cursor-pointer"
+          >
+            View All
+            <ArrowRight className="w-4 h-4" />
+          </button>
+        </div>
+
+        {loadingRecentDatasets ? (
+          <p className="text-sm text-gray-500">Loading recent datasets…</p>
+        ) : recentDatasets.length === 0 ? (
+          <div className="bg-white rounded-xl border border-border shadow-sm py-10 flex flex-col items-center text-center px-6">
+            <p className="text-sm font-semibold text-navy">No datasets uploaded in the last month</p>
+            <p className="text-xs text-gray-500 mt-1 max-w-sm">
+              Be the first to publish fresh research data this month!
+            </p>
+            <button
+              type="button"
+              onClick={handleNewDatasetClick}
+              className="mt-4 border border-gold text-gold hover:bg-gold hover:text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors cursor-pointer"
+            >
+              Upload a Dataset
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {recentDatasets.slice(0, 3).map((item) => (
+              <div
+                key={item.id}
+                onClick={() => navigate(`/datasets/${item.id}`)}
+                className="bg-white rounded-xl border border-border shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition-shadow group"
+              >
+                <div className="h-32 bg-gray-100 overflow-hidden">
+                  {getDatasetImage(item) ? (
+                    <img
+                      src={getDatasetImage(item)}
+                      alt={item.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-navy/10 to-gold/10" />
+                  )}
+                </div>
+                <div className="p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                      {item.metadata?.category_name || item.category || "Research"}
+                    </span>
+                    {(item.created_at || item.uploaded_at || item.date) && (
+                      <span className="text-[10px] text-gray-400 font-mono">
+                        {formatRelativeTime(item.created_at || item.uploaded_at || item.date)}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm font-semibold text-navy mt-2 line-clamp-2 group-hover:text-gold transition-colors">
+                    {item.title}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1 line-clamp-2">
+                    {item.metadata?.description || item.description || ""}
+                  </p>
                   <div className="flex items-center gap-4 mt-3 text-xs text-gray-400">
                     <span className="flex items-center gap-1">
                       <Eye className="w-3.5 h-3.5" />

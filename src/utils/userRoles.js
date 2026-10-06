@@ -131,10 +131,18 @@ export function isResearcher(user) {
 // Single dashboard for every non-admin, non-reviewer user — profile
 // completion no longer decides which dashboard you land on, only whether
 // the "New Dataset" action is available once you're there.
-export function getDashboardPath(user) {
-  if (isAdmin(user)) return "/admin-dashboard";
-  if (isReviewer(user)) return "/reviewer-dashboard";
+// Single dashboard for every non-admin, non-reviewer user — profile
+// completion no longer decides which dashboard you land on, only whether
+// the "New Dataset" action is available once you're there.
+export function getRoleDashboardPath(role) {
+  if (role === "admin") return "/admin-dashboard";
+  if (role === "reviewer") return "/reviewer-dashboard";
   return "/researcher-dashboard";
+}
+
+export function getDashboardPath(user) {
+  const activeRole = getActiveRole(user);
+  return getRoleDashboardPath(activeRole);
 }
 
 export function mergeAuthUser(sessionUser, profile) {
@@ -180,4 +188,53 @@ export function getMediaUrl(url) {
   const apiBase = import.meta.env.VITE_API_BASE_URL || "";
   const host = apiBase.replace(/\/api\/?$/, "");
   return host ? `${host}${url.startsWith("/") ? "" : "/"}${url}` : url;
+}
+
+export function getProfilePicture(user) {
+  if (!user) return null;
+  const raw =
+    user?.profile_picture ||
+    user?.profile_picture_url ||
+    user?.avatar ||
+    user?.avatar_url ||
+    user?.profile?.profile_picture ||
+    user?.profile?.profile_picture_url ||
+    user?.profile?.avatar ||
+    user?.profile?.avatar_url ||
+    (typeof localStorage !== "undefined" ? localStorage.getItem("ordp:profile_picture") : null);
+  return getMediaUrl(raw);
+}
+
+export function getAvailableRoles(user) {
+  if (!user) return [];
+  const raw = getEffectiveRoles(user);
+  const set = new Set();
+  if (isAdmin(user) || raw.includes("admin") || raw.includes("staff") || raw.includes("superuser")) {
+    set.add("admin");
+  }
+  if (raw.includes("reviewer") || Boolean(user?.is_reviewer)) {
+    set.add("reviewer");
+  }
+  // All authenticated users have access to researcher/user role
+  set.add("user");
+  return Array.from(set);
+}
+
+export function getActiveRole(user) {
+  if (!user) return "user";
+  const available = getAvailableRoles(user);
+  const stored = typeof sessionStorage !== "undefined" ? sessionStorage.getItem("ordp:active-role") : null;
+  if (stored && available.includes(stored)) {
+    return stored;
+  }
+  if (available.includes("admin")) return "admin";
+  if (available.includes("reviewer")) return "reviewer";
+  return "user";
+}
+
+export function setActiveRole(role) {
+  if (typeof sessionStorage !== "undefined") {
+    sessionStorage.setItem("ordp:active-role", role);
+    window.dispatchEvent(new CustomEvent("ordp:active-role-changed", { detail: { role } }));
+  }
 }

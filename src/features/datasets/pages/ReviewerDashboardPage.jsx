@@ -56,6 +56,7 @@ export default function ReviewerDashboardPage() {
   const [metrics, setMetrics] = useState(null);
   const [guidelines, setGuidelines] = useState(null);
   const [showGuidelines, setShowGuidelines] = useState(false);
+  const [showRoleModal, setShowRoleModal] = useState(false);
 
   const [datasetQueue, setDatasetQueue] = useState([]);
   const [contentUpdates, setContentUpdates] = useState([]);

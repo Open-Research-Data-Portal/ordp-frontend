@@ -29,7 +29,7 @@ export default function AuthFooter() {
             <Link to="/datasets/contribute" className="hover:text-navy">Contribute</Link>
             <a href="/ethics" className="hover:text-navy">Ethics Committee</a>
             <a href="/data-governance" className="hover:text-navy">Data Governance</a>
-            <a href="/support" className="hover:text-navy">Contact Support</a>
+            <Link to="/support" className="hover:text-navy">Contact Support</Link>
           </div>
         </div>
         <p className="text-[11px] text-gray-400 mt-6 text-center sm:text-left">

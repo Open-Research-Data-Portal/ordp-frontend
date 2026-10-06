@@ -1,6 +1,6 @@
 import { X } from "lucide-react";
 import { useState } from "react";
-import { useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 
 export function ProfileSavedNotice() {
   const location = useLocation();
@@ -114,7 +114,7 @@ export function DashboardFooter() {
       <div className="flex items-center gap-4">
         <a href="/privacy" className="hover:text-navy">Privacy Policy</a>
         <a href="/terms" className="hover:text-navy">Terms of Service</a>
-        <a href="/support" className="hover:text-navy">Support</a>
+        <Link to="/support" className="hover:text-navy">Support</Link>
       </div>
     </footer>
   );

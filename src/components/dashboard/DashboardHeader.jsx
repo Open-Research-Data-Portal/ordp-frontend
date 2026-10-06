@@ -337,15 +337,14 @@ export default function DashboardHeader({
           )}
         </div>
 
-        <button
-          type="button"
+        <Link
+          to="/support"
           aria-label="Help"
           title="Help & Support"
-          onClick={() => navigate("/support")}
           className="p-2 rounded-lg hover:bg-gray-50 text-gray-500 hover:text-navy cursor-pointer transition"
         >
           <HelpCircle className="w-5 h-5" />
-        </button>
+        </Link>
 
         {/* Profile Dropdown */}
         <div className="relative" ref={profileRef}>

@@ -182,7 +182,12 @@ export function getDisplayName(user) {
 
 export function getMediaUrl(url) {
   if (!url) return null;
-  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("blob:")) {
+  if (
+    url.startsWith("http://") ||
+    url.startsWith("https://") ||
+    url.startsWith("blob:") ||
+    url.startsWith("data:")
+  ) {
     return url;
   }
   const apiBase = import.meta.env.VITE_API_BASE_URL || "";

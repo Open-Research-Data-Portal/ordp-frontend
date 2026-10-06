@@ -175,7 +175,7 @@ export default function DashboardHeader({
   // Memoize avatarUrl so we don't re-read from localStorage on every render.
   // The profile-picture cache in userRoles.js handles the heavy lifting;
   // useMemo adds a React-level guard so even that cheap call is skipped.
-  const avatarUrl = useMemo(() => getProfilePicture(user), [user]);
+  const avatarUrl = useMemo(() => getProfilePicture(user), [user, roleTick]);
   const displayName = getDisplayName(user);
 
   const handleSwitchRole = (role, path) => {

@@ -2,7 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import * as authApi from "../features/accounts/api/authApi";
 import client from "../api/client";
 import AuthContext from "./AuthContextInstance";
-import { mergeAuthUser, claimsFromAccessToken } from "../utils/userRoles";
+import {
+  mergeAuthUser,
+  claimsFromAccessToken,
+  invalidateProfilePictureCache,
+} from "../utils/userRoles";
 import {
   setTokens,
   clearTokens,
@@ -215,6 +219,10 @@ export function AuthProvider({ children }) {
       delete client.defaults.headers.common.Authorization;
       setAccessToken(null);
       setUser(null);
+      invalidateProfilePictureCache();
+      try {
+        localStorage.removeItem("ordp:profile_picture");
+      } catch {}
     }
   }, []);
 

@@ -35,6 +35,7 @@ import BookmarksPage from "../features/datasets/pages/BookmarksPage";
 import NotificationsPage from "../pages/NotificationsPage";
 import ClaimAccessPage from "../pages/ClaimAccessPage.jsx";
 import AcceptInvitationPage from "../pages/AcceptInvitationPage.jsx";
+import HelpSupportPage from "../pages/HelpSupportPage.jsx";
 
 import { useAuth } from "../context/useAuth";
 import { isProfileComplete } from "../utils/userRoles";
@@ -207,6 +208,8 @@ export default function AppRoutes() {
       <Route path="/notifications" element={
         <ProtectedRoute><NotificationsPage /></ProtectedRoute>
       } />
+      <Route path="/support" element={<HelpSupportPage />} />
+      <Route path="/help" element={<HelpSupportPage />} />
 
       {/* Catch-all — kept last on purpose */}
       <Route path="*" element={<Navigate to="/login" replace />} />

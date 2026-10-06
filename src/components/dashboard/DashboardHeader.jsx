@@ -340,7 +340,9 @@ export default function DashboardHeader({
         <button
           type="button"
           aria-label="Help"
-          className="p-2 rounded-lg hover:bg-gray-50 text-gray-500 cursor-pointer"
+          title="Help & Support"
+          onClick={() => navigate("/support")}
+          className="p-2 rounded-lg hover:bg-gray-50 text-gray-500 hover:text-navy cursor-pointer transition"
         >
           <HelpCircle className="w-5 h-5" />
         </button>

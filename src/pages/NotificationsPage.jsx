@@ -30,6 +30,7 @@ import {
   markNotificationAsRead,
   markAllNotificationsAsRead,
   deleteNotificationItem,
+  getNotificationActionTitle,
 } from "../api/notifications";
 
 function getIconForType(type) {
@@ -224,7 +225,7 @@ export default function NotificationsPage() {
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex flex-wrap items-center gap-2">
                           <h2 className="text-sm sm:text-base leading-snug font-bold text-navy">
-                            {n.title}
+                            {getNotificationActionTitle(n)}
                           </h2>
                           {isCategory && (
                             <span

@@ -78,7 +78,7 @@ export default function DashboardHeader({
   const [bellOpen, setBellOpen] = useState(false);
   const [bellLoading, setBellLoading] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [, setRoleTick] = useState(0);
+  const [roleTick, setRoleTick] = useState(0);
 
   const bellRef = useRef(null);
   const profileRef = useRef(null);

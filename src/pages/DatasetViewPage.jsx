@@ -759,31 +759,25 @@ export default function DatasetViewPage() {
   return (
     <DashboardAwareLayout>
       <div className="w-full py-4 flex-1">
-        {/* Back to previous page / navigation */}
-        <div className="mb-5 flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={() => navigate(-1)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:text-navy hover:bg-slate-50 transition shadow-2xs cursor-pointer"
-          >
-            ← Back
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate(isAuthenticated ? getDashboardPath(user) : "/")}
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-navy transition-colors"
-          >
-            Dashboard
-          </button>
-          <span className="text-gray-300">•</span>
-          <button
-            type="button"
-            onClick={() => navigate("/datasets")}
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-navy transition-colors"
-          >
-            Browse All Datasets
-          </button>
-        </div>
+        {/* Back navigation - only displayed when page is opened without sidebar */}
+        {!isAuthenticated && (
+          <div className="mb-5 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:text-navy hover:bg-slate-50 transition shadow-2xs cursor-pointer"
+            >
+              ← Back
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate("/datasets")}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-navy transition-colors"
+            >
+              Browse All Datasets
+            </button>
+          </div>
+        )}
       {/* Header & About Card restructured as requested:
           Left side: About datasets part + download button below it.
           Right side: Title at top, then image below it, with nothing below the image.

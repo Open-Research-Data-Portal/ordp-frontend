@@ -501,19 +501,33 @@ export async function setAdminUserPrimaryRole(userId, role) {
 }
 
 export async function toggleAdminUserActive(userId, isActive) {
-  try {
-    const { data } = await client.patch(`/admin-panel/users/${userId}/`, { is_active: isActive });
-    return data;
-  } catch {
+  const payload = { is_active: Boolean(isActive), status: isActive ? "active" : "inactive" };
+  const candidateEndpoints = isActive
+    ? [
+        () => client.post(`/admin-panel/users/${userId}/activate/`, payload),
+        () => client.post(`/admin-panel/users/${userId}/reactivate/`, payload),
+        () => client.patch(`/admin-panel/users/${userId}/`, payload),
+        () => client.post(`/admin-panel/users/${userId}/toggle-active/`, payload),
+        () => client.patch(`/admin-panel/users/${userId}/status/`, payload),
+        () => client.put(`/admin-panel/users/${userId}/`, payload),
+      ]
+    : [
+        () => client.post(`/admin-panel/users/${userId}/deactivate/`, payload),
+        () => client.patch(`/admin-panel/users/${userId}/`, payload),
+        () => client.post(`/admin-panel/users/${userId}/toggle-active/`, payload),
+        () => client.put(`/admin-panel/users/${userId}/`, payload),
+      ];
+
+  let lastErr = null;
+  for (const call of candidateEndpoints) {
     try {
-      const endpoint = isActive ? "activate" : "deactivate";
-      const { data } = await client.post(`/admin-panel/users/${userId}/${endpoint}/`);
+      const { data } = await call();
       return data;
-    } catch {
-      const { data } = await client.put(`/admin-panel/users/${userId}/`, { is_active: isActive });
-      return data;
+    } catch (err) {
+      lastErr = err;
     }
   }
+  throw lastErr;
 }
 
 export async function deleteAdminUser(userId) {

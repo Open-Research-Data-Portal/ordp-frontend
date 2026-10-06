@@ -138,12 +138,6 @@ export default function AdminDashboardPage() {
   const [createError, setCreateError] = useState("");
   const [successNotice, setSuccessNotice] = useState("");
 
-  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
-  const [deletingId, setDeletingId] = useState(null);
-  const [opsLoading, setOpsLoading] = useState(false);
-  const [successionPreviousId, setSuccessionPreviousId] = useState("");
-  const [successionEmail, setSuccessionEmail] = useState("");
-  const [successionFullName, setSuccessionFullName] = useState("");
   const [deactivateWarningModal, setDeactivateWarningModal] = useState(null);
   const [togglingActiveId, setTogglingActiveId] = useState(null);
   const [roleUpdatingId, setRoleUpdatingId] = useState(null);
@@ -161,14 +155,12 @@ export default function AdminDashboardPage() {
     let active = true;
     async function load() {
       setLoading(true);
-      const [cardsRes, auditRes, usersRes, queueRes, reviewsRes, inactiveRes, draftRes] = await Promise.allSettled([
+      const [cardsRes, auditRes, usersRes, queueRes, reviewsRes] = await Promise.allSettled([
         datasetsApi.getAdminCards?.() ?? Promise.resolve(null),
         datasetsApi.getAdminAuditLog?.() ?? Promise.resolve([]),
         datasetsApi.getAdminUsers?.() ?? Promise.resolve([]),
         datasetsApi.getAdminQueue?.() ?? Promise.resolve([]),
         datasetsApi.getMyReviews?.() ?? Promise.resolve([]),
-        datasetsApi.getInactiveUsers?.() ?? Promise.resolve({ users: [] }),
-        datasetsApi.getDraftExpirationPreview?.() ?? Promise.resolve(null),
       ]);
       if (!active) return;
       if (cardsRes.status === "fulfilled") setCards(cardsRes.value);
@@ -176,8 +168,6 @@ export default function AdminDashboardPage() {
       if (usersRes.status === "fulfilled") setUsers(normalizeList(usersRes.value));
       if (queueRes.status === "fulfilled") setQueue(normalizeList(queueRes.value));
       if (reviewsRes.status === "fulfilled") setReviews(normalizeList(reviewsRes.value));
-      if (inactiveRes.status === "fulfilled") setInactiveUsers(normalizeList(inactiveRes.value?.users || inactiveRes.value));
-      if (draftRes.status === "fulfilled") setDraftExpiration(draftRes.value);
 
       // The moderation queue can be empty/unavailable even when datasets
       // exist — fall back to the full directory so the datasets tab always
@@ -711,6 +701,7 @@ export default function AdminDashboardPage() {
                     const userRoles = getUserRoles(u);
                     const primaryRole = getUserPrimaryRole(u);
                     const isExpanded = expandedUserId === uid;
+                    const availableToGrant = ALL_SYSTEM_ROLES.filter((r) => !userRoles.includes(r));
 
                     return (
                       <React.Fragment key={uid}>

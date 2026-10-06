@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, Fragment } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Users,
@@ -17,6 +17,11 @@ import {
   Star,
   Shield,
   UserPlus,
+  ChevronDown,
+  ChevronUp,
+  ArrowRight,
+  Eye,
+  SlidersHorizontal,
 } from "lucide-react";
 import { Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis } from "recharts";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
@@ -143,6 +148,9 @@ export default function AdminDashboardPage() {
   const [togglingActiveId, setTogglingActiveId] = useState(null);
   const [roleUpdatingId, setRoleUpdatingId] = useState(null);
   const [roleActionBusyId, setRoleActionBusyId] = useState(null);
+  const [datasetSearch, setDatasetSearch] = useState("");
+  const [datasetStatusFilter, setDatasetStatusFilter] = useState("all");
+  const [expandedDatasetId, setExpandedDatasetId] = useState(null);
 
   const { user: authUser } = useAuth();
   const currentAdminId = authUser?.id || authUser?.user_id;
@@ -207,6 +215,26 @@ export default function AdminDashboardPage() {
         String(u.id || u.user_id || "").includes(q)
     );
   }, [users, userSearch]);
+
+  const filteredDatasets = useMemo(() => {
+    let list = normalizeList(queue);
+    if (datasetSearch.trim()) {
+      const q = datasetSearch.trim().toLowerCase();
+      list = list.filter(
+        (d) =>
+          String(d.title || d.name || "").toLowerCase().includes(q) ||
+          String(d.id || d.dataset_id || "").includes(q) ||
+          String(d.owner_name || d.author || d.uploader_name || "").toLowerCase().includes(q) ||
+          String(d.category || d.metadata?.category_name || "").toLowerCase().includes(q)
+      );
+    }
+    if (datasetStatusFilter !== "all") {
+      list = list.filter(
+        (d) => String(d.status || "pending").toLowerCase() === datasetStatusFilter.toLowerCase()
+      );
+    }
+    return list;
+  }, [queue, datasetSearch, datasetStatusFilter]);
 
   const reviewStats = useMemo(() => {
     const list = normalizeList(reviews);
@@ -748,21 +776,6 @@ export default function AdminDashboardPage() {
               </div>
             </section>
 
-            <section className="rounded-xl border border-slate-200 bg-white p-4">
-              <p className="text-sm font-semibold text-navy">Draft Expiration</p>
-              <p className="mt-1 text-xs text-gray-500">Automatically remove inactive draft datasets after the configured period.</p>
-              <p className="mt-4 text-2xl font-bold text-navy">{draftExpiration?.expired_count ?? 0}</p>
-              <p className="text-xs text-gray-500">Expired draft(s), {draftExpiration?.days ?? 30} day window</p>
-              <button
-                type="button"
-                onClick={handleRunDraftExpiration}
-                disabled={opsLoading || !draftExpiration?.expired_count}
-                className="mt-4 rounded-lg bg-navy px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
-              >
-                Delete expired drafts
-              </button>
-            </section>
-
             <form onSubmit={handleAdminSuccession} className="rounded-xl border border-slate-200 bg-white p-4">
               <p className="text-sm font-semibold text-navy">Admin Succession</p>
               <p className="mt-1 text-xs text-gray-500">Create a successor admin, revoke the previous admin role, and block old credentials.</p>
@@ -993,36 +1006,195 @@ export default function AdminDashboardPage() {
         </section>
       ) : tab === "datasets" ? (
         <section className="bg-white rounded-xl border border-border shadow-sm overflow-hidden animate-fade-in-up">
-          <div className="px-5 py-4 border-b border-border">
-            <h2 className="text-base font-semibold text-navy">Datasets</h2>
-            <p className="text-xs text-gray-500 mt-1">View datasets and browse repository records.</p>
+          <div className="px-5 py-4 border-b border-border flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-base font-semibold text-navy">Datasets Management</h2>
+              <p className="text-xs text-gray-500 mt-0.5">Search, filter, and inspect institutional repository records.</p>
+            </div>
+
+            {/* Search and Filters */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              <div className="relative min-w-[220px]">
+                <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={datasetSearch}
+                  onChange={(e) => setDatasetSearch(e.target.value)}
+                  placeholder="Search title, author, category…"
+                  className="w-full bg-gray-50 border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-gold/30 focus:border-gold focus:bg-white transition"
+                />
+                {datasetSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setDatasetSearch("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-navy"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+
+              {/* Status Filter */}
+              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl p-1">
+                {[
+                  { id: "all", label: "All" },
+                  { id: "approved", label: "Approved" },
+                  { id: "pending", label: "Pending" },
+                  { id: "under_review", label: "Under Review" },
+                  { id: "rejected", label: "Rejected" },
+                ].map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setDatasetStatusFilter(s.id)}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition cursor-pointer ${
+                      datasetStatusFilter === s.id
+                        ? "bg-navy text-white shadow-xs"
+                        : "text-slate-600 hover:text-navy hover:bg-white"
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
+
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="text-xs uppercase text-gray-500 bg-gray-50">
                 <tr>
                   <th className="px-5 py-3 text-left font-semibold">Dataset</th>
+                  <th className="px-5 py-3 text-left font-semibold">Category</th>
                   <th className="px-5 py-3 text-left font-semibold">Status</th>
                   <th className="px-5 py-3 text-right font-semibold">Actions</th>
                 </tr>
               </thead>
-              <tbody>
-                {queue.length === 0 ? (
-                  <tr><td colSpan={3} className="px-5 py-8 text-center text-sm text-gray-500">No datasets available.</td></tr>
-                ) : queue.map((dataset) => {
-                  const id = dataset.id || dataset.dataset_id;
-                  return (
-                    <tr key={id} className="border-t border-gray-100">
-                      <td className="px-5 py-3 font-medium text-navy">{dataset.title || dataset.name || `Dataset ${id}`}</td>
-                      <td className="px-5 py-3"><StatusBadge status={dataset.status || "pending"} /></td>
-                      <td className="px-5 py-3">
-                        <div className="flex justify-end gap-2">
-                          <button type="button" onClick={() => navigate(`/datasets/${id}`)} className="border border-gold text-gold-dark rounded-md px-3 py-1.5 text-xs font-semibold hover:bg-gold-light cursor-pointer">View</button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+              <tbody className="divide-y divide-gray-100">
+                {filteredDatasets.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-5 py-12 text-center text-sm text-gray-500">
+                      {datasetSearch || datasetStatusFilter !== "all"
+                        ? "No datasets matching your search criteria."
+                        : "No datasets available."}
+                    </td>
+                  </tr>
+                ) : (
+                  filteredDatasets.map((dataset) => {
+                    const id = dataset.id || dataset.dataset_id;
+                    const isExpanded = expandedDatasetId === id;
+                    const catName =
+                      dataset.metadata?.category_name ||
+                      dataset.category_name ||
+                      dataset.category ||
+                      "General Research";
+                    const authorName =
+                      dataset.owner_name ||
+                      dataset.author ||
+                      dataset.uploader_name ||
+                      dataset.owner?.full_name ||
+                      "AASTU Researcher";
+                    const createdDate = dataset.created_at || dataset.date || dataset.createdAt;
+                    const desc =
+                      dataset.description ||
+                      dataset.abstract ||
+                      dataset.metadata?.description ||
+                      "No extended description provided for this submission.";
+
+                    return (
+                      <React.Fragment key={id}>
+                        <tr className={`transition-colors ${isExpanded ? "bg-amber-50/40" : "hover:bg-slate-50/60"}`}>
+                          <td className="px-5 py-3.5 font-medium text-navy">
+                            <p className="font-semibold text-navy leading-snug line-clamp-1">
+                              {dataset.title || dataset.name || `Dataset #${id}`}
+                            </p>
+                            <p className="text-xs text-gray-400 mt-0.5 font-mono">ID: {id}</p>
+                          </td>
+                          <td className="px-5 py-3.5 text-xs text-slate-600">
+                            <span className="inline-block bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md font-medium text-[11px]">
+                              {catName}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <StatusBadge status={dataset.status || "pending"} />
+                          </td>
+                          <td className="px-5 py-3.5 text-right">
+                            <button
+                              type="button"
+                              onClick={() => setExpandedDatasetId(isExpanded ? null : id)}
+                              className={`inline-flex items-center gap-1.5 border rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
+                                isExpanded
+                                  ? "bg-gold text-white border-gold shadow-xs"
+                                  : "border-gold/60 text-navy hover:bg-gold-light/40 hover:border-gold"
+                              }`}
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              See
+                              {isExpanded ? (
+                                <ChevronUp className="w-3.5 h-3.5" />
+                              ) : (
+                                <ChevronDown className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          </td>
+                        </tr>
+
+                        {/* Dropdown details box */}
+                        {isExpanded && (
+                          <tr className="bg-gradient-to-b from-[#FDFBF7] to-white border-t border-b border-gold/30">
+                            <td colSpan={4} className="px-6 py-4 animate-fade-in">
+                              <div className="bg-white rounded-xl border border-gold/30 p-4 shadow-xs space-y-3">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pb-3 border-b border-slate-100">
+                                  <div>
+                                    <p className="text-[10px] uppercase font-bold text-gray-400">Researcher / Author</p>
+                                    <p className="text-xs font-semibold text-navy mt-0.5 truncate">{authorName}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] uppercase font-bold text-gray-400">Category</p>
+                                    <p className="text-xs font-semibold text-navy mt-0.5 truncate">{catName}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] uppercase font-bold text-gray-400">Uploaded Date</p>
+                                    <p className="text-xs font-semibold text-navy mt-0.5 truncate">
+                                      {createdDate ? new Date(createdDate).toLocaleDateString() : "Recent"}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] uppercase font-bold text-gray-400">Engagement</p>
+                                    <p className="text-xs font-semibold text-navy mt-0.5">
+                                      {(dataset.view_count || dataset.views || 0).toLocaleString()} views · {(dataset.download_count || dataset.downloads || 0).toLocaleString()} downloads
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div>
+                                  <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Summary Details</p>
+                                  <p className="text-xs text-slate-700 leading-relaxed line-clamp-3">
+                                    {desc}
+                                  </p>
+                                </div>
+
+                                <div className="flex items-center justify-between pt-2">
+                                  <div className="text-[11px] text-slate-400 font-mono">
+                                    Format: {dataset.format || dataset.data_format || "Tabular/Archive"}
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => navigate(`/datasets/${id}`)}
+                                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-navy hover:bg-navy-light text-white text-xs font-semibold shadow-xs hover:shadow transition cursor-pointer"
+                                  >
+                                    More
+                                    <ArrowRight className="w-3.5 h-3.5 text-gold" />
+                                  </button>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>

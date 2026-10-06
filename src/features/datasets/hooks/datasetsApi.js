@@ -20,6 +20,19 @@ export async function listCategories() {
   return data;
 }
 
+export async function getCategorySuggestions(query) {
+  if (!query || !query.trim()) return [];
+  try {
+    const { data } = await client.get(`${METADATA_BASE}/categories/suggestions/`, {
+      params: { q: query.trim() },
+    });
+    return Array.isArray(data) ? data : data?.results || [];
+  } catch (err) {
+    console.warn("Category suggestions API error:", err);
+    return [];
+  }
+}
+
 export async function listInterestCategories() {
   const { data } = await client.get(`${METADATA_BASE}/categories/interests/`);
   return Array.isArray(data) ? data : data?.results || [];

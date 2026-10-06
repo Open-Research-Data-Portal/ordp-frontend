@@ -22,13 +22,13 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "../../context/useAuth";
-import { getDashboardPath, isAdmin, isReviewer, isResearcher } from "../../utils/userRoles";
+import { getDashboardPath, isAdmin, isReviewer, isResearcher, getActiveRole } from "../../utils/userRoles";
 import logo from "../../assets/aastulogo.png";
 
 const ROLE_CONFIG = {
   user: {
-    title: "Research Hub",
-    subtitle: "AASTU Academic Portal",
+    title: "AASTU ORDP",
+    subtitle: "Open Research Data",
     cta: { label: "New Submission", to: "/datasets/contribute", icon: Plus },
     nav: [
       { label: "Dashboard", icon: LayoutGrid, to: "/user-dashboard" },
@@ -53,8 +53,8 @@ const ROLE_CONFIG = {
     ],
   },
   reviewer: {
-    title: "ORDP",
-    subtitle: "Academic Intelligence",
+    title: "AASTU ORDP",
+    subtitle: "Open Research Data",
     nav: [
       { label: "Dashboard", icon: LayoutGrid, to: "/reviewer-dashboard" },
       { label: "Datasets", icon: Database, to: "/datasets" },
@@ -65,8 +65,8 @@ const ROLE_CONFIG = {
     ],
   },
   admin: {
-    title: "ORDP Admin",
-    subtitle: "Research Portal",
+    title: "AASTU ORDP",
+    subtitle: "Open Research Data",
     cta: { label: "System Audit", to: "/admin-dashboard?tab=audit", icon: Shield },
     nav: [
       { label: "Overview", icon: LayoutGrid, to: "/admin-dashboard" },
@@ -81,9 +81,10 @@ const ROLE_CONFIG = {
 };
 
 function getRoleKey(user) {
-  if (isAdmin(user)) return "admin";
-  if (isReviewer(user)) return "reviewer";
-  if (isResearcher(user)) return "researcher";
+  const active = getActiveRole(user);
+  if (active === "admin") return "admin";
+  if (active === "reviewer") return "reviewer";
+  if (active === "researcher" || isResearcher(user)) return "researcher";
   return "user";
 }
 
@@ -105,6 +106,14 @@ export default function DashboardSidebar({
   const location = useLocation();
   const navigate = useNavigate();
   const { logout, user } = useAuth();
+  const [, setRoleTick] = useState(0);
+
+  useEffect(() => {
+    const handleRoleChanged = () => setRoleTick((t) => t + 1);
+    window.addEventListener("ordp:active-role-changed", handleRoleChanged);
+    return () => window.removeEventListener("ordp:active-role-changed", handleRoleChanged);
+  }, []);
+
   const roleKey = getRoleKey(user);
   const config = ROLE_CONFIG[roleKey];
   const dashboardPath = getDashboardPath(user);
@@ -175,11 +184,11 @@ export default function DashboardSidebar({
           <button
             type="button"
             onClick={handleToggleCollapse}
-            className="p-1.5 rounded-lg text-slate-400 hover:bg-white/10 hover:text-white transition shrink-0 ml-auto"
+            className="flex items-center justify-center w-7 h-7 rounded-lg bg-white/5 hover:bg-gold/20 text-slate-300 hover:text-gold border border-white/10 hover:border-gold/40 shadow-xs transition-all duration-200 shrink-0 ml-auto active:scale-95 cursor-pointer"
             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
-            {collapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronLeft className="w-5 h-5" />}
+            {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
           </button>
         </div>
 

@@ -84,7 +84,7 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <AuthSplitCard logoSize="xlarge">
+    <AuthSplitCard logoSize="xlarge" showFooter={false}>
       {success ? (
         <div className="flex flex-col items-center text-center animate-fade-in">
           <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mb-5">

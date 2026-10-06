@@ -195,6 +195,15 @@ export function getMediaUrl(url) {
   return host ? `${host}${url.startsWith("/") ? "" : "/"}${url}` : url;
 }
 
+// Module-level cache for the profile picture stored in localStorage.
+// Reading large base64 strings from localStorage on every render is expensive;
+// cache the value and only re-read when explicitly invalidated.
+let _cachedProfilePic = undefined; // undefined = not yet loaded
+
+export function invalidateProfilePictureCache() {
+  _cachedProfilePic = undefined;
+}
+
 export function getProfilePicture(user) {
   if (!user) return null;
   const raw =
@@ -206,7 +215,13 @@ export function getProfilePicture(user) {
     user?.profile?.profile_picture_url ||
     user?.profile?.avatar ||
     user?.profile?.avatar_url ||
-    (typeof localStorage !== "undefined" ? localStorage.getItem("ordp:profile_picture") : null);
+    (() => {
+      if (typeof localStorage === "undefined") return null;
+      if (_cachedProfilePic === undefined) {
+        _cachedProfilePic = localStorage.getItem("ordp:profile_picture") || null;
+      }
+      return _cachedProfilePic;
+    })();
   return getMediaUrl(raw);
 }
 

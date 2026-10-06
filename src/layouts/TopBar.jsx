@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Search, SlidersHorizontal, Bell } from "lucide-react";
 import { useAuth } from "../context/useAuth";
@@ -48,6 +48,7 @@ export default function TopBar() {
 
   const displayName = getDisplayName(user);
   const initial = (displayName.charAt(0) || "U").toUpperCase();
+  const profilePic = useMemo(() => getProfilePicture(user), [user]);
 
   return (
     <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm border-b border-border shadow-sm">
@@ -108,11 +109,13 @@ export default function TopBar() {
                 className="flex items-center gap-2 text-sm font-semibold text-navy hover:bg-gray-50 rounded-xl px-3 py-1.5 border border-slate-200/80 shadow-xs transition"
               >
                 <span className="w-8 h-8 rounded-full bg-gold-light ring-1 ring-gold/40 flex items-center justify-center text-xs font-bold text-navy shrink-0 overflow-hidden shadow-2xs">
-                  {getProfilePicture(user) ? (
+                  {profilePic ? (
                     <img
-                      src={getProfilePicture(user)}
+                      src={profilePic}
                       alt={displayName}
                       className="w-full h-full object-cover"
+                      loading="eager"
+                      decoding="async"
                     />
                   ) : (
                     initial

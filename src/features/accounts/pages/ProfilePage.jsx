@@ -37,7 +37,7 @@ import {
   BIO_MAX_LENGTH,
   toOptionValue,
 } from "./constants";
-import { getDashboardPath } from "../../../utils/userRoles";
+import { getDashboardPath, invalidateProfilePictureCache } from "../../../utils/userRoles";
 import { useNavigate } from "react-router-dom";
 
 const DRAFT_STORAGE_PREFIX = "ordp:profile-draft:";
@@ -629,6 +629,7 @@ export default function ProfilePage() {
       if (dataUrl) {
         setAvatarUrl(dataUrl);
         localStorage.setItem("ordp:profile_picture", dataUrl);
+        invalidateProfilePictureCache();
         if (setUser) {
           setUser((curr) => ({
             ...(curr || {}),
@@ -649,6 +650,7 @@ export default function ProfilePage() {
         if (remoteUrl) {
           setAvatarUrl(remoteUrl);
           localStorage.setItem("ordp:profile_picture", remoteUrl);
+          invalidateProfilePictureCache();
           if (setUser) {
             setUser((curr) => ({
               ...(curr || {}),
@@ -835,6 +837,7 @@ export default function ProfilePage() {
 
       if (avatarUrl) {
         localStorage.setItem("ordp:profile_picture", avatarUrl);
+        invalidateProfilePictureCache();
       }
 
       setUser?.(nextUser);

@@ -24,6 +24,81 @@ export function saveLocalNotifications(userId, list) {
   }
 }
 
+export function getNotificationActionTitle(item, type, textBlob) {
+  let rawTitle = (item?.title || item?.subject || "").trim();
+  const isGeneric =
+    !rawTitle ||
+    rawTitle.toLowerCase() === "notification" ||
+    rawTitle.toLowerCase() === "notifications" ||
+    rawTitle.toLowerCase() === "notification alert" ||
+    rawTitle.toLowerCase() === "notice" ||
+    rawTitle.toLowerCase() === "alert" ||
+    rawTitle.toLowerCase() === "system notice" ||
+    rawTitle.toLowerCase() === "new notification" ||
+    rawTitle.toLowerCase() === "update";
+
+  if (!isGeneric && rawTitle.length > 0) {
+    return rawTitle;
+  }
+
+  const t = String(type || item?.type || item?.notification_type || "").toLowerCase();
+  const blob = String(textBlob || `${item?.message || ""} ${item?.body || ""}`).toLowerCase();
+
+  // Category decisions & suggestions
+  if (t.includes("category_approv") || (t.includes("category") && t.includes("approv")) || (blob.includes("category") && blob.includes("approv"))) {
+    return "Category Suggestion Approved";
+  }
+  if (t.includes("category_reject") || (t.includes("category") && t.includes("reject")) || (blob.includes("category") && blob.includes("reject"))) {
+    return "Category Suggestion Rejected";
+  }
+  if (t.includes("category_merge") || (t.includes("category") && t.includes("merge")) || (blob.includes("category") && blob.includes("merge"))) {
+    return "Category Merged with Existing Topic";
+  }
+  if (t.includes("category") || blob.includes("category")) {
+    return "Category Suggestion Evaluated";
+  }
+
+  // Reviews & Evaluation assignments
+  if (t.includes("review_assign") || t.includes("assigned") || blob.includes("assigned to review") || blob.includes("assigned reviewer")) {
+    return "Dataset Review Assigned";
+  }
+  if (t.includes("review_submit") || blob.includes("review submitted") || blob.includes("evaluation completed")) {
+    return "Peer Review Completed";
+  }
+  if (t.includes("dataset_approv") || t.includes("published") || blob.includes("published")) {
+    return "Dataset Approved & Published";
+  }
+  if (t.includes("dataset_reject") || blob.includes("dataset rejected")) {
+    return "Dataset Revision Required";
+  }
+
+  // Access & Download requests
+  if (t.includes("access_request") || blob.includes("requested access")) {
+    return "Dataset Access Requested";
+  }
+  if (t.includes("access_grant") || blob.includes("access granted")) {
+    return "Dataset Access Granted";
+  }
+  if (t.includes("download") || blob.includes("download")) {
+    return "Dataset Download Ready";
+  }
+
+  // Revision & modifications
+  if (t.includes("revision") || t.includes("modif") || blob.includes("revision")) {
+    return "Dataset Revision Requested";
+  }
+
+  // Account & role delegations
+  if (t.includes("role") || blob.includes("role")) {
+    return "Account Role Updated";
+  }
+  if (t.includes("welcome") || blob.includes("welcome")) {
+    return "Account Activated";
+  }
+
+  return "Activity Update";
+}
+
 /**
  * Normalize a raw backend notification object into the shape the UI expects.
  * Correctly identifies category decisions (approved, rejected, merged) and attaches action links.
@@ -52,16 +127,8 @@ export function normalizeNotification(item) {
     }
   }
 
-  // Determine user-friendly title if empty
-  let title = item.title || item.subject;
-  if (!title) {
-    if (type === "category_approved") title = "Category Suggestion Approved";
-    else if (type === "category_rejected") title = "Category Suggestion Rejected";
-    else if (type === "category_merged") title = "Category Merged";
-    else if (type === "category_decision") title = "Category Decision";
-    else title = "Notification";
-  }
-
+  // Determine user-friendly action title
+  const title = getNotificationActionTitle(item, type, textBlob);
   const message = item.message || item.body || item.description || "";
 
   // Resolve link_path for navigation

@@ -26,7 +26,7 @@ export default function CheckEmailPage() {
   }
 
   return (
-    <AuthSplitCard logoSize="xlarge">
+    <AuthSplitCard logoSize="xlarge" showFooter={false}>
       <div className="w-16 h-16 rounded-full bg-[#F5C453]/25 flex items-center justify-center mb-5">
         <CheckCircle2 className="w-9 h-9 text-[#B8860B]" strokeWidth={2} />
       </div>

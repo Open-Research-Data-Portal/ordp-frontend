@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Search,
@@ -172,7 +172,10 @@ export default function DashboardHeader({
 
   const activeRole = getActiveRole(user);
   const availableRoles = getAvailableRoles(user);
-  const avatarUrl = getProfilePicture(user);
+  // Memoize avatarUrl so we don't re-read from localStorage on every render.
+  // The profile-picture cache in userRoles.js handles the heavy lifting;
+  // useMemo adds a React-level guard so even that cheap call is skipped.
+  const avatarUrl = useMemo(() => getProfilePicture(user), [user]);
   const displayName = getDisplayName(user);
 
   const handleSwitchRole = (role, path) => {
@@ -337,13 +340,14 @@ export default function DashboardHeader({
           )}
         </div>
 
-        <button
-          type="button"
+        <Link
+          to="/support"
           aria-label="Help"
-          className="p-2 rounded-lg hover:bg-gray-50 text-gray-500 cursor-pointer"
+          title="Help & Support"
+          className="p-2 rounded-lg hover:bg-gray-50 text-gray-500 hover:text-navy cursor-pointer transition"
         >
           <HelpCircle className="w-5 h-5" />
-        </button>
+        </Link>
 
         {/* Profile Dropdown */}
         <div className="relative" ref={profileRef}>
@@ -363,6 +367,8 @@ export default function DashboardHeader({
                   src={avatarUrl}
                   alt={displayName}
                   className="w-full h-full object-cover"
+                  loading="eager"
+                  decoding="async"
                 />
               ) : (
                 displayName.charAt(0).toUpperCase()
@@ -389,6 +395,8 @@ export default function DashboardHeader({
                         src={avatarUrl}
                         alt={displayName}
                         className="w-full h-full object-cover"
+                        loading="eager"
+                        decoding="async"
                       />
                     ) : (
                       displayName.charAt(0).toUpperCase()

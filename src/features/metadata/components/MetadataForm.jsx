@@ -106,6 +106,55 @@ export default function MetadataForm({ initialValues = {}, onNext, onBack, isSub
 
   const selectedCategory = categories.find((c) => String(c.id) === String(categoryId));
 
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+
+  const handleCreateAndSelectCategory = async () => {
+    const name = otherCategory.trim();
+    if (!name) return;
+
+    setIsAddingCategory(true);
+    try {
+      let created = null;
+      try {
+        created = await datasetsApi.createAdminCategory({ name });
+      } catch {
+        try {
+          created = await datasetsApi.proposeCategoryRequest(name);
+        } catch {
+          // Fallback to local
+        }
+      }
+
+      const newId = created?.id || created?.category_id || `custom-${Date.now()}`;
+      const newCategoryObj = { id: newId, name: created?.name || name };
+
+      // Add to categories list if not present
+      setCategories((prev) => {
+        const exists = prev.some(
+          (c) => String(c.id) === String(newId) || c.name.toLowerCase() === name.toLowerCase()
+        );
+        if (exists) return prev;
+        return [...prev, newCategoryObj];
+      });
+
+      // Select it in the dropdown
+      setCategoryId(newId);
+      setOtherCategory("");
+      setSuggestions([]);
+      setSelectedSuggestionNote(`Added "${name}" to category list and selected.`);
+    } catch (err) {
+      console.warn("Failed to create category on backend:", err);
+      const fallbackId = `custom-${Date.now()}`;
+      setCategories((prev) => [...prev, { id: fallbackId, name }]);
+      setCategoryId(fallbackId);
+      setOtherCategory("");
+      setSuggestions([]);
+      setSelectedSuggestionNote(`Added "${name}" to category list and selected.`);
+    } finally {
+      setIsAddingCategory(false);
+    }
+  };
+
   const handleSelectSuggestion = (sug) => {
     const existing = categories.find(
       (c) => String(c.id) === String(sug.id) || c.name.toLowerCase() === (sug.name || "").toLowerCase()
@@ -193,16 +242,27 @@ export default function MetadataForm({ initialValues = {}, onNext, onBack, isSub
         {categoryId === "__other__" && (
           <div className="mt-4 space-y-3">
             <FormField label="New Category Name" required>
-              <input
-                type="text"
-                value={otherCategory}
-                onChange={(e) => {
-                  setOtherCategory(e.target.value);
-                  setSelectedSuggestionNote("");
-                }}
-                placeholder="e.g., Computational Linguistics"
-                className={inputClass}
-              />
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                <input
+                  type="text"
+                  value={otherCategory}
+                  onChange={(e) => {
+                    setOtherCategory(e.target.value);
+                    setSelectedSuggestionNote("");
+                  }}
+                  placeholder="e.g., Computational Linguistics"
+                  className={inputClass}
+                />
+                <button
+                  type="button"
+                  onClick={handleCreateAndSelectCategory}
+                  disabled={!otherCategory.trim() || isAddingCategory}
+                  className="shrink-0 px-4 py-3 bg-gold hover:bg-gold-dark text-white rounded-md text-xs font-semibold disabled:opacity-50 transition shadow-2xs cursor-pointer flex items-center justify-center gap-1.5"
+                  title="Add directly to available category list"
+                >
+                  {isAddingCategory ? "Adding…" : "+ Add Category"}
+                </button>
+              </div>
             </FormField>
 
             {isSearchingSuggestions && (
@@ -233,21 +293,37 @@ export default function MetadataForm({ initialValues = {}, onNext, onBack, isSub
                         onClick={() => handleSelectSuggestion(sug)}
                         className="shrink-0 text-xs px-2.5 py-1 bg-navy text-white rounded hover:bg-navy-dark transition-colors font-medium"
                       >
-                        Use this category
+                        Use this suggestion
                       </button>
                     </div>
                   ))}
                 </div>
-                <p className="text-xs text-gray-500">
-                  Select a match to reuse it, or continue typing if you want to create your new category.
-                </p>
+                <div className="flex items-center justify-between pt-1 border-t border-blue-100 text-xs text-gray-500">
+                  <span>Want to keep your custom name anyway?</span>
+                  <button
+                    type="button"
+                    onClick={handleCreateAndSelectCategory}
+                    disabled={isAddingCategory}
+                    className="text-gold hover:text-gold-dark font-semibold underline ml-2"
+                  >
+                    Add &ldquo;{otherCategory.trim()}&rdquo; as new
+                  </button>
+                </div>
               </div>
             )}
 
             {!isSearchingSuggestions && suggestions.length === 0 && otherCategory.trim() && (
-              <p className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded p-2.5">
-                ✓ No matching category found. <strong>&ldquo;{otherCategory.trim()}&rdquo;</strong> will be created as a new category upon submission.
-              </p>
+              <div className="flex items-center justify-between p-2.5 bg-emerald-50 border border-emerald-200 rounded text-xs text-emerald-800">
+                <span>✓ No matching category found. Ready to add <strong>&ldquo;{otherCategory.trim()}&rdquo;</strong>.</span>
+                <button
+                  type="button"
+                  onClick={handleCreateAndSelectCategory}
+                  disabled={isAddingCategory}
+                  className="ml-3 font-bold text-emerald-900 underline hover:no-underline"
+                >
+                  Add Now
+                </button>
+              </div>
             )}
           </div>
         )}

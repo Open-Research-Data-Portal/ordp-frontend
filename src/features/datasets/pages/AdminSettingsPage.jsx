@@ -22,6 +22,10 @@ import {
   RefreshCw,
   X,
   Trash2,
+  UserX,
+  Shield,
+  UserCheck,
+  Users,
 } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import { EmptyState } from "../../../components/dashboard/dashboardUi";
@@ -226,6 +230,15 @@ export default function AdminSettingsPage() {
   const [notifyOnDeletion, setNotifyOnDeletion] = useState(true);
   const [systemSaving, setSystemSaving] = useState(false);
 
+  // Inactive Users & Succession (Migrated from User Management)
+  const [inactiveUsers, setInactiveUsers] = useState([]);
+  const [loadingInactive, setLoadingInactive] = useState(false);
+  const [adminUsers, setAdminUsers] = useState([]);
+  const [successionPreviousId, setSuccessionPreviousId] = useState("");
+  const [successionEmail, setSuccessionEmail] = useState("");
+  const [successionFullName, setSuccessionFullName] = useState("");
+  const [successionLoading, setSuccessionLoading] = useState(false);
+
   useEffect(() => {
     fetchSavedWeights().then((saved) => {
       if (saved && typeof saved === "object") {
@@ -244,9 +257,81 @@ export default function AdminSettingsPage() {
     }
   }, []);
 
+  const loadInactiveUsers = useCallback(async () => {
+    setLoadingInactive(true);
+    try {
+      const data = await datasetsApi.getInactiveUsers();
+      const list = Array.isArray(data) ? data : data?.users || data?.results || [];
+      setInactiveUsers(list);
+    } catch (err) {
+      console.warn("Could not load inactive users:", err);
+    } finally {
+      setLoadingInactive(false);
+    }
+  }, []);
+
+  const loadAdminUsers = useCallback(async () => {
+    try {
+      const data = await datasetsApi.getAdminUsers();
+      const list = Array.isArray(data) ? data : data?.results || [];
+      const admins = list.filter((u) => {
+        const roles = Array.isArray(u.roles) ? u.roles : [u.role || u.primary_role];
+        return roles.some((r) => String(r).toLowerCase().includes("admin"));
+      });
+      setAdminUsers(admins);
+    } catch (err) {
+      console.warn("Could not load admin users:", err);
+    }
+  }, []);
+
   useEffect(() => {
     loadDraftExpiration();
-  }, [loadDraftExpiration]);
+    loadInactiveUsers();
+    loadAdminUsers();
+  }, [loadDraftExpiration, loadInactiveUsers, loadAdminUsers]);
+
+  async function handlePermanentInactiveDelete(user) {
+    const id = user.id || user.user_id;
+    if (!id || !window.confirm(`Permanently delete inactive account for ${user.email}?`)) return;
+    setLoadingInactive(true);
+    try {
+      await datasetsApi.permanentlyDeleteInactiveUser(id);
+      setInactiveUsers((prev) => prev.filter((u) => (u.id || u.user_id) !== id));
+      addToast("Inactive user permanently deleted.", "success");
+    } catch (err) {
+      addToast(err?.response?.data?.detail || "Failed to permanently delete inactive user.", "error");
+    } finally {
+      setLoadingInactive(false);
+    }
+  }
+
+  async function handleAdminSuccession(e) {
+    e.preventDefault();
+    if (!successionPreviousId || !successionEmail.trim()) {
+      addToast("Please select a previous admin and provide a new admin email.", "error");
+      return;
+    }
+    if (!window.confirm(`Confirm admin succession? This will grant full admin privileges to ${successionEmail} and deactivate the previous admin account.`)) return;
+    setSuccessionLoading(true);
+    try {
+      await datasetsApi.runAdminSuccession({
+        previous_admin_id: successionPreviousId,
+        email: successionEmail.trim(),
+        full_name: successionFullName.trim(),
+        deactivate_previous: true,
+      });
+      addToast("Admin succession completed successfully.", "success");
+      setSuccessionPreviousId("");
+      setSuccessionEmail("");
+      setSuccessionFullName("");
+      await loadAdminUsers();
+      await loadInactiveUsers();
+    } catch (err) {
+      addToast(err?.response?.data?.detail || "Admin succession failed.", "error");
+    } finally {
+      setSuccessionLoading(false);
+    }
+  }
 
   async function handleRunDraftExpiration() {
     if (!window.confirm(`Delete inactive drafts older than ${draftDays} days now?`)) return;
@@ -522,6 +607,145 @@ export default function AdminSettingsPage() {
               {systemSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 text-gold" />}
               Save System Settings
             </button>
+          </div>
+        </CollapsibleSection>
+
+        {/* ── SECTION 3: ADMINISTRATIVE OPERATIONS & SUCCESSION ── */}
+        <CollapsibleSection title="Administrative Operations & Account Succession" icon={Shield} defaultOpen>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Inactive Users */}
+            <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <div className="flex items-center gap-2">
+                    <UserX className="w-4 h-4 text-slate-500" />
+                    <p className="text-sm font-semibold text-slate-700">Inactive User Accounts</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={loadInactiveUsers}
+                    disabled={loadingInactive}
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-gold hover:text-gold-dark disabled:opacity-50 transition cursor-pointer"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${loadingInactive ? "animate-spin" : ""}`} />
+                    Refresh
+                  </button>
+                </div>
+                <p className="text-xs text-slate-500 mb-3">
+                  Accounts marked inactive are kept safe by default. Permanently purge only when compliance or storage policy mandates.
+                </p>
+
+                <div className="flex items-baseline gap-2 mb-4">
+                  <span className="text-2xl font-bold text-navy">{inactiveUsers.length}</span>
+                  <span className="text-xs text-slate-400">inactive user(s) recorded</span>
+                </div>
+
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                  {inactiveUsers.length === 0 ? (
+                    <div className="text-center py-8 bg-slate-50 rounded-lg border border-slate-100">
+                      <p className="text-xs text-slate-400">No inactive accounts found.</p>
+                    </div>
+                  ) : (
+                    inactiveUsers.map((u) => {
+                      const uid = u.id || u.user_id;
+                      return (
+                        <div
+                          key={uid}
+                          className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 border border-slate-100 px-3 py-2 text-xs"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate font-semibold text-navy">{u.full_name || u.name || u.email}</p>
+                            <p className="truncate text-[11px] text-slate-500">{u.email}</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handlePermanentInactiveDelete(u)}
+                            disabled={loadingInactive}
+                            className="shrink-0 rounded-md bg-red-600 hover:bg-red-700 px-2.5 py-1 text-[11px] font-semibold text-white transition disabled:opacity-50 shadow-2xs cursor-pointer"
+                            title="Permanently remove account from database"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Admin Succession */}
+            <form onSubmit={handleAdminSuccession} className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Shield className="w-4 h-4 text-slate-500" />
+                  <p className="text-sm font-semibold text-slate-700">Admin Succession</p>
+                </div>
+                <p className="text-xs text-slate-500 mb-4">
+                  Designate a successor administrator. This securely transfers administrative credentials, grants the Admin role, and deactivates the retiring administrator account.
+                </p>
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1">
+                      Retiring / Current Admin
+                    </label>
+                    <select
+                      required
+                      value={successionPreviousId}
+                      onChange={(e) => setSuccessionPreviousId(e.target.value)}
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-navy bg-white focus:outline-none focus:ring-2 focus:ring-navy/30"
+                    >
+                      <option value="">Select previous administrator…</option>
+                      {adminUsers.map((u) => (
+                        <option key={u.id || u.user_id} value={u.id || u.user_id}>
+                          {u.full_name || u.name || u.email} ({u.email})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1">
+                      Successor Full Name
+                    </label>
+                    <input
+                      required
+                      type="text"
+                      value={successionFullName}
+                      onChange={(e) => setSuccessionFullName(e.target.value)}
+                      placeholder="e.g. Dr. Abebe Bikila"
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-navy placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-navy/30"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1">
+                      Successor Email Address
+                    </label>
+                    <input
+                      required
+                      type="email"
+                      value={successionEmail}
+                      onChange={(e) => setSuccessionEmail(e.target.value)}
+                      placeholder="e.g. abebe.b@aastu.edu.et"
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-navy placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-navy/30"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-4 mt-4 border-t border-slate-100 flex justify-end">
+                <button
+                  type="submit"
+                  disabled={successionLoading}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-gold hover:bg-gold-dark px-4 py-2 text-xs font-semibold text-white transition disabled:opacity-50 cursor-pointer shadow-2xs"
+                >
+                  {successionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserCheck className="w-3.5 h-3.5" />}
+                  Complete Admin Succession
+                </button>
+              </div>
+            </form>
           </div>
         </CollapsibleSection>
       </div>

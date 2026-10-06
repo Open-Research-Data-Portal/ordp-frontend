@@ -24,7 +24,7 @@ import {
 import { getDatasetById } from "../api/datasets";
 import { getDownloadUrl, requestShareAccess, shareDatasetWith } from "../api/sharing";
 import * as datasetsApi from "../features/datasets/hooks/datasetsApi";
-import TopBar from "../layouts/TopBar";
+import DashboardAwareLayout from "../layouts/DashboardAwareLayout";
 import { getDatasetImage } from "../utils/datasetImage";
 import { useAuth } from "../context/useAuth";
 import { getDashboardPath } from "../utils/userRoles";
@@ -656,36 +656,43 @@ export default function DatasetViewPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#F5F5F3] flex flex-col">
-        <TopBar />
-        <div className="w-full px-6 lg:px-10 py-8 flex-1">
+      <DashboardAwareLayout>
+        <div className="w-full py-4 flex-1">
           <div className="h-40 animate-pulse rounded-2xl border border-gray-200 bg-white" />
           <div className="mt-6 h-32 animate-pulse rounded-2xl border border-gray-200 bg-white" />
           <div className="mt-6 h-64 animate-pulse rounded-2xl border border-gray-200 bg-white" />
         </div>
-      </div>
+      </DashboardAwareLayout>
     );
   }
 
   if (error || !dataset) {
     return (
-      <div className="min-h-screen bg-[#F5F5F3] flex flex-col">
-        <TopBar />
-        <div className="w-full px-6 lg:px-10 py-16 text-center flex-1">
+      <DashboardAwareLayout>
+        <div className="w-full py-16 text-center flex-1">
           <p className="text-sm text-gray-500">
             {error
               ? "Couldn't load this dataset right now. Please try again shortly."
               : "This dataset couldn't be found."}
           </p>
-          <button
-            type="button"
-            onClick={() => navigate(isAuthenticated ? getDashboardPath(user) : "/datasets")}
-            className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
-          >
-            {isAuthenticated ? "Back to dashboard" : "Back to Datasets"}
-          </button>
+          <div className="mt-4 flex items-center justify-center gap-3">
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-navy hover:bg-slate-50 transition"
+            >
+              ← Go back
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate(isAuthenticated ? getDashboardPath(user) : "/datasets")}
+              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 transition"
+            >
+              {isAuthenticated ? "Back to dashboard" : "Back to Datasets"}
+            </button>
+          </div>
         </div>
-      </div>
+      </DashboardAwareLayout>
     );
   }
 
@@ -750,26 +757,27 @@ export default function DatasetViewPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F5F5F3] flex flex-col">
-      <TopBar />
-      <div className="w-full px-6 lg:px-10 py-8 flex-1">
-      {/* Back to Datasets navigation */}
-      <div className="mb-4 flex flex-wrap items-center gap-4">
-        <button
-          type="button"
-          onClick={() => navigate(isAuthenticated ? getDashboardPath(user) : "/")}
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-navy transition-colors"
-        >
-          ← Back to dashboard
-        </button>
-        <button
-          type="button"
-          onClick={() => navigate("/datasets")}
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-navy transition-colors"
-        >
-          ← Back to Datasets
-        </button>
-      </div>
+    <DashboardAwareLayout>
+      <div className="w-full py-4 flex-1">
+        {/* Back navigation - only displayed when page is opened without sidebar */}
+        {!isAuthenticated && (
+          <div className="mb-5 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:text-navy hover:bg-slate-50 transition shadow-2xs cursor-pointer"
+            >
+              ← Back
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate("/datasets")}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-navy transition-colors"
+            >
+              Browse All Datasets
+            </button>
+          </div>
+        )}
       {/* Header & About Card restructured as requested:
           Left side: About datasets part + download button below it.
           Right side: Title at top, then image below it, with nothing below the image.
@@ -1014,6 +1022,6 @@ export default function DatasetViewPage() {
         onClose={() => setRevisionModalOpen(false)}
       />
     )}
-  </div>
-);
+    </DashboardAwareLayout>
+  );
 }

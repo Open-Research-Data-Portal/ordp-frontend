@@ -138,12 +138,6 @@ export default function AdminDashboardPage() {
   const [createError, setCreateError] = useState("");
   const [successNotice, setSuccessNotice] = useState("");
 
-  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
-  const [deletingId, setDeletingId] = useState(null);
-  const [opsLoading, setOpsLoading] = useState(false);
-  const [successionPreviousId, setSuccessionPreviousId] = useState("");
-  const [successionEmail, setSuccessionEmail] = useState("");
-  const [successionFullName, setSuccessionFullName] = useState("");
   const [deactivateWarningModal, setDeactivateWarningModal] = useState(null);
   const [togglingActiveId, setTogglingActiveId] = useState(null);
   const [roleUpdatingId, setRoleUpdatingId] = useState(null);
@@ -151,6 +145,7 @@ export default function AdminDashboardPage() {
   const [datasetSearch, setDatasetSearch] = useState("");
   const [datasetStatusFilter, setDatasetStatusFilter] = useState("all");
   const [expandedDatasetId, setExpandedDatasetId] = useState(null);
+  const [expandedUserId, setExpandedUserId] = useState(null);
 
   const { user: authUser } = useAuth();
   const currentAdminId = authUser?.id || authUser?.user_id;
@@ -160,14 +155,12 @@ export default function AdminDashboardPage() {
     let active = true;
     async function load() {
       setLoading(true);
-      const [cardsRes, auditRes, usersRes, queueRes, reviewsRes, inactiveRes, draftRes] = await Promise.allSettled([
+      const [cardsRes, auditRes, usersRes, queueRes, reviewsRes] = await Promise.allSettled([
         datasetsApi.getAdminCards?.() ?? Promise.resolve(null),
         datasetsApi.getAdminAuditLog?.() ?? Promise.resolve([]),
         datasetsApi.getAdminUsers?.() ?? Promise.resolve([]),
         datasetsApi.getAdminQueue?.() ?? Promise.resolve([]),
         datasetsApi.getMyReviews?.() ?? Promise.resolve([]),
-        datasetsApi.getInactiveUsers?.() ?? Promise.resolve({ users: [] }),
-        datasetsApi.getDraftExpirationPreview?.() ?? Promise.resolve(null),
       ]);
       if (!active) return;
       if (cardsRes.status === "fulfilled") setCards(cardsRes.value);
@@ -175,8 +168,6 @@ export default function AdminDashboardPage() {
       if (usersRes.status === "fulfilled") setUsers(normalizeList(usersRes.value));
       if (queueRes.status === "fulfilled") setQueue(normalizeList(queueRes.value));
       if (reviewsRes.status === "fulfilled") setReviews(normalizeList(reviewsRes.value));
-      if (inactiveRes.status === "fulfilled") setInactiveUsers(normalizeList(inactiveRes.value?.users || inactiveRes.value));
-      if (draftRes.status === "fulfilled") setDraftExpiration(draftRes.value);
 
       // The moderation queue can be empty/unavailable even when datasets
       // exist — fall back to the full directory so the datasets tab always
@@ -229,9 +220,16 @@ export default function AdminDashboardPage() {
       );
     }
     if (datasetStatusFilter !== "all") {
-      list = list.filter(
-        (d) => String(d.status || "pending").toLowerCase() === datasetStatusFilter.toLowerCase()
-      );
+      list = list.filter((d) => {
+        const s = String(d.status || "").toLowerCase();
+        if (datasetStatusFilter === "published" || datasetStatusFilter === "approved") {
+          return s === "published" || s === "approved";
+        }
+        if (datasetStatusFilter === "draft" || datasetStatusFilter === "under_review") {
+          return s === "draft" || s === "under_review" || s === "in_review";
+        }
+        return s === datasetStatusFilter.toLowerCase();
+      });
     }
     return list;
   }, [queue, datasetSearch, datasetStatusFilter]);
@@ -535,73 +533,7 @@ export default function AdminDashboardPage() {
     }
   }
 
-  async function refreshAdminOps() {
-    setOpsLoading(true);
-    try {
-      const [inactive, drafts] = await Promise.all([
-        datasetsApi.getInactiveUsers(),
-        datasetsApi.getDraftExpirationPreview(),
-      ]);
-      setInactiveUsers(normalizeList(inactive?.users || inactive));
-      setDraftExpiration(drafts);
-    } finally {
-      setOpsLoading(false);
-    }
-  }
 
-  async function handlePermanentInactiveDelete(user) {
-    const id = user.id || user.user_id;
-    if (!id || !window.confirm(`Permanently delete inactive user ${user.email}?`)) return;
-    setOpsLoading(true);
-    try {
-      await datasetsApi.permanentlyDeleteInactiveUser(id);
-      setUsers((list) => list.filter((u) => (u.id || u.user_id) !== id));
-      setInactiveUsers((list) => list.filter((u) => (u.id || u.user_id) !== id));
-      addToast("Inactive user permanently deleted.", "success");
-    } catch (err) {
-      addToast(err?.response?.data?.detail || "Failed to permanently delete inactive user.", "error");
-    } finally {
-      setOpsLoading(false);
-    }
-  }
-
-  async function handleRunDraftExpiration() {
-    if (!window.confirm("Delete expired inactive drafts now?")) return;
-    setOpsLoading(true);
-    try {
-      const result = await datasetsApi.runDraftExpiration({});
-      addToast(`${result.deleted_count || 0} expired draft(s) deleted.`, "success");
-      await refreshAdminOps();
-    } catch (err) {
-      addToast(err?.response?.data?.detail || "Failed to expire drafts.", "error");
-    } finally {
-      setOpsLoading(false);
-    }
-  }
-
-  async function handleAdminSuccession(e) {
-    e.preventDefault();
-    setOpsLoading(true);
-    try {
-      await datasetsApi.runAdminSuccession({
-        previous_admin_id: successionPreviousId,
-        email: successionEmail.trim(),
-        full_name: successionFullName.trim(),
-        deactivate_previous: true,
-      });
-      addToast("Admin succession completed.", "success");
-      setSuccessionPreviousId("");
-      setSuccessionEmail("");
-      setSuccessionFullName("");
-      const freshUsers = await datasetsApi.getAdminUsers();
-      setUsers(normalizeList(freshUsers));
-      await refreshAdminOps();
-    } catch (err) {
-      addToast(err?.response?.data?.detail || "Admin succession failed.", "error");
-    } finally {
-      setOpsLoading(false);
-    }
-  }
 
   return (
     <DashboardShell title="ORDP Admin Console" subtitle="System status and key metrics">
@@ -742,79 +674,6 @@ export default function AdminDashboardPage() {
             </form>
           )}
 
-          <div className="mx-5 my-4 grid gap-4 lg:grid-cols-3">
-            <section className="rounded-xl border border-slate-200 bg-white p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-navy">Inactive Users</p>
-                  <p className="mt-1 text-xs text-gray-500">Accounts are kept inactive by default. Permanently delete only when appropriate.</p>
-                </div>
-                <button type="button" onClick={refreshAdminOps} disabled={opsLoading} className="text-xs font-semibold text-gold disabled:opacity-50">
-                  Refresh
-                </button>
-              </div>
-              <p className="mt-4 text-2xl font-bold text-navy">{inactiveUsers.length}</p>
-              <div className="mt-3 space-y-2">
-                {inactiveUsers.slice(0, 3).map((u) => (
-                  <div key={u.id || u.user_id} className="flex items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-xs font-semibold text-navy">{u.full_name || u.email}</p>
-                      <p className="truncate text-[11px] text-gray-500">{u.email}</p>
-                    </div>
-                    {u.eligible_for_delete && (
-                      <button
-                        type="button"
-                        onClick={() => handlePermanentInactiveDelete(u)}
-                        disabled={opsLoading}
-                        className="shrink-0 rounded-md bg-red-600 px-2 py-1 text-[11px] font-semibold text-white disabled:opacity-50"
-                      >
-                        Delete
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <form onSubmit={handleAdminSuccession} className="rounded-xl border border-slate-200 bg-white p-4">
-              <p className="text-sm font-semibold text-navy">Admin Succession</p>
-              <p className="mt-1 text-xs text-gray-500">Create a successor admin, revoke the previous admin role, and block old credentials.</p>
-              <div className="mt-3 grid gap-2">
-                <select
-                  required
-                  value={successionPreviousId}
-                  onChange={(e) => setSuccessionPreviousId(e.target.value)}
-                  className="rounded-lg border border-slate-200 px-3 py-2 text-xs"
-                >
-                  <option value="">Previous admin</option>
-                  {users.filter((u) => Array.isArray(u.roles) && u.roles.includes("admin")).map((u) => (
-                    <option key={u.id || u.user_id} value={u.id || u.user_id}>
-                      {u.full_name || u.email}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  required
-                  type="email"
-                  value={successionEmail}
-                  onChange={(e) => setSuccessionEmail(e.target.value)}
-                  placeholder="new.admin@aastu.edu.et"
-                  className="rounded-lg border border-slate-200 px-3 py-2 text-xs"
-                />
-                <input
-                  required
-                  value={successionFullName}
-                  onChange={(e) => setSuccessionFullName(e.target.value)}
-                  placeholder="New admin full name"
-                  className="rounded-lg border border-slate-200 px-3 py-2 text-xs"
-                />
-              </div>
-              <button type="submit" disabled={opsLoading} className="mt-3 rounded-lg bg-gold px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">
-                Complete succession
-              </button>
-            </form>
-          </div>
-
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="text-xs uppercase text-gray-500 bg-gray-50">
@@ -823,12 +682,13 @@ export default function AdminDashboardPage() {
                   <th className="px-5 py-3 text-left font-semibold">Role</th>
                   <th className="px-5 py-3 text-left font-semibold">Status</th>
                   <th className="px-5 py-3 text-right font-semibold">Account Status</th>
+                  <th className="px-5 py-3 text-right font-semibold">Details</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredUsers.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-5 py-10 text-center text-sm text-gray-500">
+                    <td colSpan={5} className="px-5 py-10 text-center text-sm text-gray-500">
                       No users found.
                     </td>
                   </tr>
@@ -840,10 +700,12 @@ export default function AdminDashboardPage() {
                     const isActive = userStatus === "active";
                     const userRoles = getUserRoles(u);
                     const primaryRole = getUserPrimaryRole(u);
+                    const isExpanded = expandedUserId === uid;
                     const availableToGrant = ALL_SYSTEM_ROLES.filter((r) => !userRoles.includes(r));
 
                     return (
-                      <tr key={uid} className="border-t border-gray-100 hover:bg-bg/50">
+                      <React.Fragment key={uid}>
+                        <tr className={`border-t border-gray-100 transition-colors ${isExpanded ? "bg-amber-50/40" : "hover:bg-bg/50"}`}>
                         <td className="px-5 py-4">
                           <div className="flex items-center gap-3">
                             <span className="w-9 h-9 rounded-full bg-navy text-white text-xs font-bold flex items-center justify-center shrink-0">
@@ -996,9 +858,109 @@ export default function AdminDashboardPage() {
                             </span>
                           </div>
                         </td>
+                        <td className="px-5 py-4 text-right">
+                          <button
+                            type="button"
+                            onClick={() => setExpandedUserId(isExpanded ? null : uid)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-200 bg-white hover:bg-slate-50 text-navy transition shadow-2xs"
+                            title={isExpanded ? "Hide user details" : "Show user details"}
+                          >
+                            <Eye className="w-3.5 h-3.5 text-navy/70" />
+                            <span>See</span>
+                            {isExpanded ? (
+                              <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
+                            ) : (
+                              <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                            )}
+                          </button>
+                        </td>
                       </tr>
-                    );
-                  })
+                      {isExpanded && (
+                        <tr className="bg-slate-50/70 border-t border-slate-200/80">
+                          <td colSpan={5} className="px-6 py-4">
+                            <div className="rounded-xl border border-slate-200 bg-white p-4 text-xs text-slate-700 shadow-sm space-y-3">
+                              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                                <div>
+                                  <h4 className="font-bold text-navy text-sm">
+                                    {u.full_name || u.name || "User Profile Details"}
+                                  </h4>
+                                  <p className="text-[11px] text-slate-500">
+                                    ID: <span className="font-mono">{uid}</span> • Email: <span className="font-mono">{u.email}</span>
+                                  </p>
+                                </div>
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                  isActive ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-700"
+                                }`}>
+                                  {isActive ? "Account Active" : "Account Inactive"}
+                                </span>
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+                                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Academic Rank / Title</p>
+                                  <p className="font-semibold text-navy mt-0.5">{u.academic_rank || u.academic_title || u.rank || "Not set"}</p>
+                                </div>
+                                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Department</p>
+                                  <p className="font-semibold text-navy mt-0.5">{u.department || u.dept_name || "Not set"}</p>
+                                </div>
+                                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Affiliation / College</p>
+                                  <p className="font-semibold text-navy mt-0.5">{u.affiliation || u.institution || u.college || "Not set"}</p>
+                                </div>
+                                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Highest Degree</p>
+                                  <p className="font-semibold text-navy mt-0.5">{u.highest_degree || "Not set"}</p>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">ORCID ID</p>
+                                  <p className="font-mono text-slate-700 mt-0.5">{u.orcid_id || u.orcid || "Not set"}</p>
+                                </div>
+                                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Phone</p>
+                                  <p className="font-medium text-slate-700 mt-0.5">{u.phone_number || u.phone || "Not set"}</p>
+                                </div>
+                                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Role Delegation</p>
+                                  <p className="font-medium text-navy mt-0.5">
+                                    {userRoles.map((r) => formatRoleLabel(r)).join(", ")}
+                                  </p>
+                                </div>
+                                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Member Since</p>
+                                  <p className="font-medium text-slate-700 mt-0.5">
+                                    {u.created_at || u.date_joined ? new Date(u.created_at || u.date_joined).toLocaleDateString() : "—"}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {u.bio && (
+                                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Bio / Background</p>
+                                  <p className="text-slate-700 mt-0.5 leading-relaxed">{u.bio}</p>
+                                </div>
+                              )}
+
+                              {(u.research_interests || u.interests) && (
+                                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Research Interests</p>
+                                  <p className="text-slate-700 mt-0.5">
+                                    {Array.isArray(u.research_interests)
+                                      ? u.research_interests.join(", ")
+                                      : String(u.research_interests || u.interests)}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })
                 )}
               </tbody>
             </table>
@@ -1038,9 +1000,9 @@ export default function AdminDashboardPage() {
               <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl p-1">
                 {[
                   { id: "all", label: "All" },
-                  { id: "approved", label: "Approved" },
+                  { id: "published", label: "Published" },
                   { id: "pending", label: "Pending" },
-                  { id: "under_review", label: "Under Review" },
+                  { id: "draft", label: "Draft" },
                   { id: "rejected", label: "Rejected" },
                 ].map((s) => (
                   <button

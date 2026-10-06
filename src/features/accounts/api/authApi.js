@@ -99,21 +99,67 @@ export async function updateProfile(patch) {
 }
 
 /**
- * Upload a profile picture (multipart/form-data, field name "profile_picture").
- * Endpoint: POST /api/accounts/profile/picture/
- * Returns: { status: "updated", url: "<presigned url>" }
+ * Upload a profile picture (multipart/form-data).
+ * Tries candidates:
+ * - POST /api/accounts/profile/picture/ (field: profile_picture, avatar, photo)
+ * - POST /api/accounts/profile/photo/
+ * - POST /api/accounts/profile/avatar/
+ * - PATCH /api/accounts/profile/
+ * - PATCH /api/accounts/profile/complete/
  */
 export async function uploadProfilePicture(file) {
-  try {
-    const formData = new FormData();
-    formData.append("profile_picture", file);
-    const { data } = await client.post(`${BASE}/profile/picture/`, formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
-    return data;
-  } catch (err) {
-    throw normalizeError(err);
+  const fieldNames = ["profile_picture", "avatar", "photo", "image", "file"];
+  const endpoints = [
+    { url: `${BASE}/profile/picture/`, method: "post" },
+    { url: `${BASE}/profile/photo/`, method: "post" },
+    { url: `${BASE}/profile/avatar/`, method: "post" },
+    { url: `${BASE}/profile/`, method: "patch" },
+    { url: `${BASE}/profile/complete/`, method: "patch" },
+    { url: `${BASE}/me/avatar/`, method: "post" },
+    { url: `${BASE}/me/`, method: "patch" },
+  ];
+
+  let lastErr = null;
+  for (const { url, method } of endpoints) {
+    for (const field of fieldNames) {
+      try {
+        const formData = new FormData();
+        formData.append(field, file);
+        const res = await client({
+          method,
+          url,
+          data: formData,
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        const data = res.data;
+        const resolvedUrl =
+          data?.url ||
+          data?.profile_picture_url ||
+          data?.profile_picture ||
+          data?.photo_url ||
+          data?.photo ||
+          data?.avatar_url ||
+          data?.avatar ||
+          data?.image ||
+          (typeof data === "string" ? data : null);
+
+        if (resolvedUrl) {
+          return { ...data, url: resolvedUrl, profile_picture: resolvedUrl, profile_picture_url: resolvedUrl };
+        }
+        return data;
+      } catch (err) {
+        lastErr = err;
+        const status = err?.response?.status;
+        if (status === 404 || status === 405 || status === 400) continue;
+        // if unexpected error, keep trying next candidate
+      }
+    }
   }
+
+  if (lastErr) {
+    console.warn("All profile picture upload endpoints failed:", lastErr);
+  }
+  return null;
 }
 
 export async function getProfileCompletion() {

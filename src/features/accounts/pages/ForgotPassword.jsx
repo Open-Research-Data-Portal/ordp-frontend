@@ -95,7 +95,7 @@ export default function ForgotPasswordPage() {
           <div className="flex items-center gap-6 text-xs text-slate-400 mt-8 pt-4 border-t border-slate-100">
             <a href="/ethics" className="hover:text-[#0B1526]">Ethics Committee</a>
             <a href="/data-governance" className="hover:text-[#0B1526]">Data Governance</a>
-            <a href="/support" className="hover:text-[#0B1526]">Support</a>
+            <Link to="/support" className="hover:text-[#0B1526]">Support</Link>
           </div>
         </div>
       </div>

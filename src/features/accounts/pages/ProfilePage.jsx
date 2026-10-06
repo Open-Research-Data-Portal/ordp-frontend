@@ -37,7 +37,7 @@ import {
   BIO_MAX_LENGTH,
   toOptionValue,
 } from "./constants";
-import { getDashboardPath } from "../../../utils/userRoles";
+import { getDashboardPath, invalidateProfilePictureCache } from "../../../utils/userRoles";
 import { useNavigate } from "react-router-dom";
 
 const DRAFT_STORAGE_PREFIX = "ordp:profile-draft:";
@@ -619,35 +619,58 @@ export default function ProfilePage() {
       return;
     }
 
-    const localUrl = URL.createObjectURL(file);
-    setAvatarUrl(localUrl);
     setUploadingAvatar(true);
     setSaveError("");
 
-    try {
-      const res = await authApi.uploadProfilePicture(file);
-      const remoteUrl = res?.url || res?.profile_picture_url || res?.profile_picture;
-      if (remoteUrl) {
-        setAvatarUrl(remoteUrl);
-        localStorage.setItem("ordp:profile_picture", remoteUrl);
+    // Convert to persistent base64 data URL so image is never lost on refresh
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      const dataUrl = evt.target?.result;
+      if (dataUrl) {
+        setAvatarUrl(dataUrl);
+        localStorage.setItem("ordp:profile_picture", dataUrl);
+        invalidateProfilePictureCache();
         if (setUser) {
           setUser((curr) => ({
             ...(curr || {}),
-            profile_picture: remoteUrl,
-            profile_picture_url: remoteUrl,
+            profile_picture: dataUrl,
+            profile_picture_url: dataUrl,
           }));
         }
         window.dispatchEvent(
           new CustomEvent("ordp:profile-updated", {
-            detail: { profile_picture: remoteUrl },
+            detail: { profile_picture: dataUrl },
           })
         );
       }
-    } catch (err) {
-      console.warn("Direct upload error, keep local preview:", err);
-    } finally {
-      setUploadingAvatar(false);
-    }
+
+      try {
+        const res = await authApi.uploadProfilePicture(file);
+        const remoteUrl = res?.url || res?.profile_picture_url || res?.profile_picture;
+        if (remoteUrl) {
+          setAvatarUrl(remoteUrl);
+          localStorage.setItem("ordp:profile_picture", remoteUrl);
+          invalidateProfilePictureCache();
+          if (setUser) {
+            setUser((curr) => ({
+              ...(curr || {}),
+              profile_picture: remoteUrl,
+              profile_picture_url: remoteUrl,
+            }));
+          }
+          window.dispatchEvent(
+            new CustomEvent("ordp:profile-updated", {
+              detail: { profile_picture: remoteUrl },
+            })
+          );
+        }
+      } catch (err) {
+        console.warn("Direct upload error, preserving local base64 preview:", err);
+      } finally {
+        setUploadingAvatar(false);
+      }
+    };
+    reader.readAsDataURL(file);
   }
 
   /**
@@ -811,6 +834,11 @@ export default function ProfilePage() {
         "ordp:profile_completed",
         "true"
       );
+
+      if (avatarUrl) {
+        localStorage.setItem("ordp:profile_picture", avatarUrl);
+        invalidateProfilePictureCache();
+      }
 
       setUser?.(nextUser);
 

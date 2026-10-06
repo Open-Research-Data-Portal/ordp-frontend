@@ -9,6 +9,7 @@ export default function AuthSplitCard({
   sidebarSubtitle = "Addis Ababa Science & Technology University Research Portal",
   children,
   logoSize = "large",
+  showFooter = true,
 }) {
   const isXLarge = logoSize === "xlarge";
 
@@ -40,9 +41,12 @@ export default function AuthSplitCard({
           {children}
         </div>
       </div>
-      <div className="w-full max-w-4xl mt-6 rounded-2xl overflow-hidden">
-        <AuthFooter />
-      </div>
+      {showFooter && (
+        <div className="w-full max-w-4xl mt-6 rounded-2xl overflow-hidden">
+          <AuthFooter />
+        </div>
+      )}
     </div>
   );
 }
+

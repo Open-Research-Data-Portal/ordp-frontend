@@ -130,6 +130,7 @@ export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true);
 
   const [userSearch, setUserSearch] = useState("");
+  const [userStatusFilter, setUserStatusFilter] = useState("all");
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newUserFullName, setNewUserFullName] = useState("");
@@ -196,16 +197,29 @@ export default function AdminDashboardPage() {
     "User Deleted": "bg-red-50 text-red-700",
   }), []);
 
+  const userCounts = useMemo(() => {
+    const total = users.length;
+    const active = users.filter((u) => getUserStatus(u) === "active").length;
+    const inactive = total - active;
+    return { total, active, inactive };
+  }, [users]);
+
   const filteredUsers = useMemo(() => {
-    if (!userSearch.trim()) return users;
+    let list = users;
+    if (userStatusFilter === "active") {
+      list = list.filter((u) => getUserStatus(u) === "active");
+    } else if (userStatusFilter === "inactive") {
+      list = list.filter((u) => getUserStatus(u) !== "active");
+    }
+    if (!userSearch.trim()) return list;
     const q = userSearch.trim().toLowerCase();
-    return users.filter(
+    return list.filter(
       (u) =>
         String(u.email || "").toLowerCase().includes(q) ||
         String(u.full_name || u.name || "").toLowerCase().includes(q) ||
         String(u.id || u.user_id || "").includes(q)
     );
-  }, [users, userSearch]);
+  }, [users, userSearch, userStatusFilter]);
 
   const filteredDatasets = useMemo(() => {
     let list = normalizeList(queue);
@@ -558,15 +572,27 @@ export default function AdminDashboardPage() {
       {tab === "users" ? (
         <section className="bg-white rounded-xl border border-border shadow-sm overflow-hidden animate-fade-in-up">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-5 py-4 border-b border-border">
-            <div className="flex items-center gap-2">
-              <Search className="w-4 h-4 text-gray-400" />
-              <input
-                type="text"
-                value={userSearch}
-                onChange={(e) => setUserSearch(e.target.value)}
-                placeholder="Search by name, email, or ID"
-                className="rounded-lg border border-slate-200 text-sm py-2 pl-9 pr-3 bg-white"
-              />
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative flex items-center">
+                <Search className="w-4 h-4 text-gray-400 absolute left-3" />
+                <input
+                  type="text"
+                  value={userSearch}
+                  onChange={(e) => setUserSearch(e.target.value)}
+                  placeholder="Search by name, email, or ID"
+                  className="rounded-lg border border-slate-200 text-sm py-2 pl-9 pr-3 bg-white"
+                />
+              </div>
+              <select
+                value={userStatusFilter}
+                onChange={(e) => setUserStatusFilter(e.target.value)}
+                className="rounded-lg border border-slate-200 text-xs py-2 px-3 bg-white text-navy font-semibold focus:outline-none focus:ring-2 focus:ring-gold/30 cursor-pointer"
+                aria-label="Filter users by account status"
+              >
+                <option value="all">All Accounts ({userCounts.total})</option>
+                <option value="active">Active Only ({userCounts.active})</option>
+                <option value="inactive">Inactive / Deactivated ({userCounts.inactive})</option>
+              </select>
             </div>
             <button
               type="button"
@@ -935,7 +961,32 @@ export default function AdminDashboardPage() {
                                     {u.created_at || u.date_joined ? new Date(u.created_at || u.date_joined).toLocaleDateString() : "—"}
                                   </p>
                                 </div>
+                                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Last Login / Activity</p>
+                                  <p className="font-medium text-slate-700 mt-0.5">
+                                    {u.last_login ? new Date(u.last_login).toLocaleDateString() : "Never logged in"}
+                                  </p>
+                                </div>
                               </div>
+
+                              {!isActive && (
+                                <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-900 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                  <div>
+                                    <p className="font-semibold text-amber-950">Account Deactivated</p>
+                                    <p className="text-amber-800 text-[11px] mt-0.5">
+                                      This user is blocked from logging in (auto-deactivated after 6 months of inactivity or toggled by admin).
+                                    </p>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => executeToggleActive(u, true)}
+                                    disabled={togglingActiveId === uid}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shrink-0 transition-colors shadow-2xs cursor-pointer"
+                                  >
+                                    Reactivate Account
+                                  </button>
+                                </div>
+                              )}
 
                               {u.bio && (
                                 <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">

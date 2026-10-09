@@ -37,5 +37,17 @@ export function formatApiError(err, fallback = "An unexpected error occurred.") 
     return "Too many requests. Please try again later.";
   }
 
+  // Check if it's an inactive / deactivated account message
+  if (
+    lower.includes("account_inactive") ||
+    lower.includes("account inactive") ||
+    lower.includes("account is inactive") ||
+    lower.includes("user account is disabled") ||
+    lower.includes("deactivated due to inactivity") ||
+    lower.includes("account has been deactivated")
+  ) {
+    return "This account has been deactivated due to 6 months of inactivity. Please contact an administrator or support to reactivate your account.";
+  }
+
   return str;
 }

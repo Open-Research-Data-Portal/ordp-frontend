@@ -195,14 +195,30 @@ export function getMediaUrl(url) {
   return host ? `${host}${url.startsWith("/") ? "" : "/"}${url}` : url;
 }
 
-// Module-level cache for the profile picture stored in localStorage.
-// Reading large base64 strings from localStorage on every render is expensive;
-// cache the value and only re-read when explicitly invalidated.
-let _cachedProfilePic = undefined; // undefined = not yet loaded
-
-export function invalidateProfilePictureCache() {
-  _cachedProfilePic = undefined;
+export function getUserProfilePictureKey(user) {
+  if (!user) return null;
+  const id = user?.id ?? user?.user_id ?? user?.username ?? user?.email;
+  return id ? `ordp:profile_picture:${id}` : null;
 }
+
+// In-memory cache for profile pictures per user identifier so re-reading
+// large base64 strings from localStorage on every render is skipped.
+const _cachedProfilePics = new Map();
+
+export function invalidateProfilePictureCache(userId) {
+  if (userId) {
+    _cachedProfilePics.delete(String(userId));
+  } else {
+    _cachedProfilePics.clear();
+  }
+}
+
+// Clean up any legacy un-scoped key on startup so it never pollutes any account
+try {
+  if (typeof localStorage !== "undefined") {
+    localStorage.removeItem("ordp:profile_picture");
+  }
+} catch {}
 
 export function getProfilePicture(user) {
   if (!user) return null;
@@ -214,15 +230,28 @@ export function getProfilePicture(user) {
     user?.profile?.profile_picture ||
     user?.profile?.profile_picture_url ||
     user?.profile?.avatar ||
-    user?.profile?.avatar_url ||
-    (() => {
-      if (typeof localStorage === "undefined") return null;
-      if (_cachedProfilePic === undefined) {
-        _cachedProfilePic = localStorage.getItem("ordp:profile_picture") || null;
-      }
-      return _cachedProfilePic;
-    })();
-  return getMediaUrl(raw);
+    user?.profile?.avatar_url;
+
+  if (raw) return getMediaUrl(raw);
+
+  // Each user has their own isolated profile picture in localStorage.
+  // Never read an un-scoped global key so one user's picture is never shared with others.
+  if (typeof localStorage === "undefined") return null;
+  const userId = user?.id ?? user?.user_id ?? user?.username ?? user?.email;
+  if (!userId) return null;
+
+  const cacheKey = String(userId);
+  if (!_cachedProfilePics.has(cacheKey)) {
+    const userKey = `ordp:profile_picture:${userId}`;
+    let stored = null;
+    try {
+      stored = localStorage.getItem(userKey) || null;
+    } catch {}
+    _cachedProfilePics.set(cacheKey, stored);
+  }
+
+  const cached = _cachedProfilePics.get(cacheKey);
+  return cached ? getMediaUrl(cached) : null;
 }
 
 export function getAvailableRoles(user) {

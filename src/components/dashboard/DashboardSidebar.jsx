@@ -18,11 +18,10 @@ import {
   Archive,
   ChevronLeft,
   ChevronRight,
-  UserCheck,
   X,
 } from "lucide-react";
 import { useAuth } from "../../context/useAuth";
-import { getDashboardPath, isAdmin, isReviewer, isResearcher, getActiveRole } from "../../utils/userRoles";
+import { getDashboardPath, isAdmin, isResearcher, getActiveRole } from "../../utils/userRoles";
 import logo from "../../assets/aastulogo.png";
 
 const ROLE_CONFIG = {
@@ -31,7 +30,7 @@ const ROLE_CONFIG = {
     subtitle: "Open Research Data",
     cta: { label: "New Submission", to: "/datasets/contribute", icon: Plus },
     nav: [
-      { label: "Dashboard", icon: LayoutGrid, to: "/user-dashboard" },
+      { label: "Dashboard", icon: LayoutGrid, to: "/researcher-dashboard" },
       { label: "Other Datasets", icon: Database, to: "/datasets" },
       { label: "Archived", icon: Archive, to: "/archived-datasets" },
       { label: "Bookmarks", icon: Bookmark, to: "/bookmarks" },
@@ -214,48 +213,6 @@ export default function DashboardSidebar({
               </Link>
             );
           })}
-
-          {isReviewer(user) && roleKey !== "reviewer" && (
-            <Link
-              to="/reviewer-dashboard"
-              title={collapsed ? "Reviewer Console" : undefined}
-              className={[
-                "flex items-center gap-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:bg-white/5 hover:text-white transition",
-                collapsed ? "justify-center px-0" : "px-3",
-              ].join(" ")}
-            >
-              <ClipboardCheck className="w-5 h-5 shrink-0 text-gold" />
-              {!collapsed && <span className="truncate">Reviewer Console</span>}
-            </Link>
-          )}
-
-          {roleKey === "reviewer" && (
-            <Link
-              to="/user-dashboard"
-              title={collapsed ? "User Dashboard" : undefined}
-              className={[
-                "flex items-center gap-3 py-2.5 rounded-lg text-sm font-medium text-slate-300 hover:bg-white/5 hover:text-white transition",
-                collapsed ? "justify-center px-0" : "px-3",
-              ].join(" ")}
-            >
-              <UserCheck className="w-5 h-5 shrink-0 text-gold" />
-              {!collapsed && <span className="truncate">User Dashboard</span>}
-            </Link>
-          )}
-
-          {isAdmin(user) && roleKey !== "admin" && (
-            <Link
-              to="/admin-dashboard"
-              title={collapsed ? "Admin" : undefined}
-              className={[
-                "flex items-center gap-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:bg-white/5 hover:text-white transition",
-                collapsed ? "justify-center px-0" : "px-3",
-              ].join(" ")}
-            >
-              <ShieldCheck className="w-5 h-5 shrink-0" />
-              {!collapsed && <span className="truncate">Admin</span>}
-            </Link>
-          )}
         </nav>
 
         {/* Footer Actions */}
@@ -335,28 +292,6 @@ export default function DashboardSidebar({
                   </Link>
                 );
               })}
-
-              {isReviewer(user) && roleKey !== "reviewer" && (
-                <Link
-                  to="/reviewer/review-queue"
-                  onClick={handleCloseMobile}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:bg-white/5 hover:text-white transition"
-                >
-                  <ClipboardCheck className="w-5 h-5 shrink-0" />
-                  <span>Review Queue</span>
-                </Link>
-              )}
-
-              {isAdmin(user) && roleKey !== "admin" && (
-                <Link
-                  to="/admin-dashboard"
-                  onClick={handleCloseMobile}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:bg-white/5 hover:text-white transition"
-                >
-                  <ShieldCheck className="w-5 h-5 shrink-0" />
-                  <span>Admin</span>
-                </Link>
-              )}
             </nav>
 
             {/* Mobile Footer */}

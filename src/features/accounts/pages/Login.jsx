@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
-import { Mail, Lock, ArrowRight, ArrowLeft } from "lucide-react";
+import { Mail, Lock, ArrowRight, ArrowLeft, AlertTriangle } from "lucide-react";
 import { useAuth } from "../../../context/useAuth";
 import * as authApi from "../api/authApi";
 import { INTERESTS_ONBOARDING_PATH, isInterestsOnboardingSatisfied } from "../onboarding";
@@ -192,11 +192,47 @@ export default function LoginPage() {
             {successMessage}
           </div>
         )}
-        {apiError && (
+        {apiError?.code === "ACCOUNT_INACTIVE" ? (
+          <div
+            role="alert"
+            className="mb-5 w-full rounded-2xl border border-amber-300 bg-amber-50/95 p-4 text-left shadow-xs animate-fade-in"
+          >
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-xl bg-amber-100 border border-amber-300 text-amber-800 flex items-center justify-center shrink-0 mt-0.5">
+                <AlertTriangle className="w-4 h-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-bold text-amber-950">
+                  Account Deactivated (Inactivity)
+                </h3>
+                <p className="text-xs text-amber-900 mt-1 leading-relaxed">
+                  {apiError.message ||
+                    "This account has been automatically deactivated due to 6 months of inactivity. An administrator can reactivate your account upon request."}
+                </p>
+                <div className="mt-3 flex flex-wrap items-center gap-3 pt-2 border-t border-amber-200/80">
+                  <Link
+                    to="/support"
+                    className="inline-flex items-center gap-1 text-xs font-bold text-navy hover:underline"
+                  >
+                    <span>Request Reactivation via Support</span>
+                    <ArrowRight className="w-3 h-3" />
+                  </Link>
+                  <span className="text-xs text-amber-600">•</span>
+                  <a
+                    href="mailto:support.ordp@aastu.edu.et"
+                    className="text-xs text-amber-800 hover:text-navy underline"
+                  >
+                    support.ordp@aastu.edu.et
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : apiError ? (
           <div role="alert" className="mb-4 w-full rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 text-center">
             {apiError.message}
           </div>
-        )}
+        ) : null}
         {formError && !apiError && (
           <div role="alert" className="mb-4 w-full rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700 text-center">
             {formError}

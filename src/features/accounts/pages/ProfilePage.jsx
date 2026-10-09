@@ -37,19 +37,25 @@ import {
   BIO_MAX_LENGTH,
   toOptionValue,
 } from "./constants";
-import { getDashboardPath, invalidateProfilePictureCache } from "../../../utils/userRoles";
+import {
+  getDashboardPath,
+  invalidateProfilePictureCache,
+  getUserProfilePictureKey,
+} from "../../../utils/userRoles";
 import { useNavigate } from "react-router-dom";
 
 const DRAFT_STORAGE_PREFIX = "ordp:profile-draft:";
 
 function getDraftKey(user) {
-  const id = user?.id ?? user?.user_id ?? user?.email ?? user?.username ?? "current";
-  return `${DRAFT_STORAGE_PREFIX}${id}`;
+  const id = user?.id ?? user?.user_id ?? user?.email ?? user?.username;
+  return id ? `${DRAFT_STORAGE_PREFIX}${id}` : null;
 }
 
 function loadLocalDraft(user) {
   try {
-    const raw = localStorage.getItem(getDraftKey(user));
+    const key = getDraftKey(user);
+    if (!key) return null;
+    const raw = localStorage.getItem(key);
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
@@ -58,13 +64,17 @@ function loadLocalDraft(user) {
 
 function saveLocalDraft(user, draft) {
   try {
-    localStorage.setItem(getDraftKey(user), JSON.stringify(draft));
+    const key = getDraftKey(user);
+    if (!key) return;
+    localStorage.setItem(key, JSON.stringify(draft));
   } catch {}
 }
 
 function clearLocalDraft(user) {
   try {
-    localStorage.removeItem(getDraftKey(user));
+    const key = getDraftKey(user);
+    if (!key) return;
+    localStorage.removeItem(key);
   } catch {}
 }
 
@@ -508,6 +518,14 @@ export default function ProfilePage() {
             user?.profile_picture;
           if (remoteAvatar) {
             setAvatarUrl(remoteAvatar);
+          } else {
+            const userPicKey = getUserProfilePictureKey(user);
+            const userPic = userPicKey ? localStorage.getItem(userPicKey) : null;
+            if (userPic) {
+              setAvatarUrl(userPic);
+            } else {
+              setAvatarUrl(null);
+            }
           }
 
           // Restore any unfinished local draft (survives browser refresh and closing the tab)
@@ -628,8 +646,14 @@ export default function ProfilePage() {
       const dataUrl = evt.target?.result;
       if (dataUrl) {
         setAvatarUrl(dataUrl);
-        localStorage.setItem("ordp:profile_picture", dataUrl);
-        invalidateProfilePictureCache();
+        const userPicKey = getUserProfilePictureKey(user);
+        if (userPicKey) {
+          localStorage.setItem(userPicKey, dataUrl);
+        }
+        try {
+          localStorage.removeItem("ordp:profile_picture");
+        } catch {}
+        invalidateProfilePictureCache(user?.id ?? user?.username);
         if (setUser) {
           setUser((curr) => ({
             ...(curr || {}),
@@ -639,7 +663,7 @@ export default function ProfilePage() {
         }
         window.dispatchEvent(
           new CustomEvent("ordp:profile-updated", {
-            detail: { profile_picture: dataUrl },
+            detail: { profile_picture: dataUrl, user_id: user?.id ?? user?.username },
           })
         );
       }
@@ -649,8 +673,14 @@ export default function ProfilePage() {
         const remoteUrl = res?.url || res?.profile_picture_url || res?.profile_picture;
         if (remoteUrl) {
           setAvatarUrl(remoteUrl);
-          localStorage.setItem("ordp:profile_picture", remoteUrl);
-          invalidateProfilePictureCache();
+          const userPicKey = getUserProfilePictureKey(user);
+          if (userPicKey) {
+            localStorage.setItem(userPicKey, remoteUrl);
+          }
+          try {
+            localStorage.removeItem("ordp:profile_picture");
+          } catch {}
+          invalidateProfilePictureCache(user?.id ?? user?.username);
           if (setUser) {
             setUser((curr) => ({
               ...(curr || {}),
@@ -660,7 +690,7 @@ export default function ProfilePage() {
           }
           window.dispatchEvent(
             new CustomEvent("ordp:profile-updated", {
-              detail: { profile_picture: remoteUrl },
+              detail: { profile_picture: remoteUrl, user_id: user?.id ?? user?.username },
             })
           );
         }
@@ -836,8 +866,14 @@ export default function ProfilePage() {
       );
 
       if (avatarUrl) {
-        localStorage.setItem("ordp:profile_picture", avatarUrl);
-        invalidateProfilePictureCache();
+        const userPicKey = getUserProfilePictureKey(nextUser || user);
+        if (userPicKey) {
+          localStorage.setItem(userPicKey, avatarUrl);
+        }
+        try {
+          localStorage.removeItem("ordp:profile_picture");
+        } catch {}
+        invalidateProfilePictureCache((nextUser || user)?.id ?? (nextUser || user)?.username);
       }
 
       setUser?.(nextUser);
@@ -984,7 +1020,29 @@ export default function ProfilePage() {
 
                   <button
                     type="button"
-                    onClick={() => setAvatarUrl(null)}
+                    onClick={() => {
+                      setAvatarUrl(null);
+                      const userPicKey = getUserProfilePictureKey(user);
+                      if (userPicKey) {
+                        localStorage.removeItem(userPicKey);
+                      }
+                      try {
+                        localStorage.removeItem("ordp:profile_picture");
+                      } catch {}
+                      invalidateProfilePictureCache(user?.id ?? user?.username);
+                      if (setUser) {
+                        setUser((curr) => ({
+                          ...(curr || {}),
+                          profile_picture: null,
+                          profile_picture_url: null,
+                        }));
+                      }
+                      window.dispatchEvent(
+                        new CustomEvent("ordp:profile-updated", {
+                          detail: { profile_picture: null, user_id: user?.id ?? user?.username },
+                        })
+                      );
+                    }}
                     className="absolute -bottom-1 -left-1 w-auto px-2 h-7 rounded-md bg-white border border-slate-200 text-xs text-slate-600 flex items-center gap-1 shadow-sm"
                     aria-label="Delete profile picture"
                   >

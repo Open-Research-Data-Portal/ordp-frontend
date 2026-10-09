@@ -9,6 +9,7 @@ import {
   User,
   X,
   ArrowRight,
+  Clock,
 } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import StatCard from "../../../components/dashboard/StatCard";
@@ -26,10 +27,10 @@ function normalizeList(data) {
 
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 function isWithinLastMonth(d) {
-  const dateVal = d.created_at || d.createdAt || d.uploaded_at || d.date;
-  if (!dateVal) return true;
+  const dateVal = d?.created_at || d?.createdAt || d?.uploaded_at || d?.date || d?.updated_at;
+  if (!dateVal) return false;
   const time = new Date(dateVal).getTime();
-  return !Number.isNaN(time) ? (Date.now() - time) <= THIRTY_DAYS_MS : true;
+  return !Number.isNaN(time) ? (Date.now() - time) <= THIRTY_DAYS_MS : false;
 }
 
 function formatRelativeTime(value) {
@@ -86,6 +87,8 @@ export default function ResearcherDashboardPage() {
   const [activityError, setActivityError] = useState(null);
 
   const [discoverFeed, setDiscoverFeed] = useState(null);
+  const [showAllFeed, setShowAllFeed] = useState(false);
+  const [showAllRecent, setShowAllRecent] = useState(false);
 
   // Single source of truth — mirrors the backend's is_profile_complete() exactly.
   const profileComplete = checkProfileComplete(user);
@@ -148,7 +151,18 @@ export default function ResearcherDashboardPage() {
         setPendingDatasets(pendingList.length);
       }
 
-      if (feedResult.status === "fulfilled") setFeed(normalizeList(feedResult.value));
+      if (feedResult.status === "fulfilled") {
+        const rawFeed = normalizeList(feedResult.value);
+        // Rank recommendations by high views and downloads (engagement)
+        const sortedFeed = [...rawFeed].sort((a, b) => {
+          const aViews = Number(a.view_count ?? a.views ?? 0);
+          const aDownloads = Number(a.download_count ?? a.downloads ?? 0);
+          const bViews = Number(b.view_count ?? b.views ?? 0);
+          const bDownloads = Number(b.download_count ?? b.downloads ?? 0);
+          return (bViews + bDownloads) - (aViews + aDownloads);
+        });
+        setFeed(sortedFeed);
+      }
       if (bookmarksResult.status === "fulfilled") setBookmarks(normalizeList(bookmarksResult.value));
       if (activityResult.status === "fulfilled") {
         setRecentActivity(normalizeList(activityResult.value));
@@ -159,7 +173,10 @@ export default function ResearcherDashboardPage() {
       if (recentResult.status === "fulfilled") {
         const rawRecent = normalizeList(recentResult.value);
         const filteredRecent = rawRecent.filter(isWithinLastMonth);
-        setRecentDatasets(filteredRecent.length > 0 ? filteredRecent : rawRecent);
+        // Strictly only show datasets from the last 30 days. If none exist, show empty state.
+        setRecentDatasets(filteredRecent);
+      } else {
+        setRecentDatasets([]);
       }
 
       setLoadingStats(false);
@@ -285,196 +302,287 @@ export default function ResearcherDashboardPage() {
         </div>
       )}
 
+      {/* ── Recent Datasets (uploaded in the last 30 days) ── */}
       <section className="mb-8 animate-fade-in-up" style={{ animationDelay: "225ms" }}>
         <div className="flex items-end justify-between mb-4">
           <div>
-            <h2 className="text-lg font-serif font-bold text-navy">Recommendations</h2>
-            <p className="text-sm text-gray-500 mt-0.5">Discover trending research materials tailored to you.</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => navigate("/datasets")}
-            className="flex items-center gap-1 text-sm font-medium text-gold hover:text-gold-dark"
-          >
-            View All
-            <ArrowRight className="w-4 h-4" />
-          </button>
-        </div>
-
-        {loadingFeed ? (
-          <p className="text-sm text-gray-500">Loading…</p>
-        ) : feed.length === 0 ? (
-          discoverFeed === null ? (
-            <p className="text-sm text-gray-500">Loading…</p>
-          ) : discoverFeed.length === 0 ? (
-            <div className="bg-white rounded-xl border border-border shadow-sm py-14 flex flex-col items-center text-center px-6">
-              <p className="text-sm font-semibold text-navy">No recommendations yet</p>
-              <p className="text-xs text-gray-500 mt-1 max-w-sm">
-                We don't have personalized picks for you yet — start exploring the full directory instead.
-              </p>
-              <button
-                type="button"
-                onClick={() => navigate("/datasets")}
-                className="mt-4 border border-gold text-gold hover:bg-gold hover:text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors"
-              >
-                Explore Datasets
-              </button>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-serif font-bold text-navy">Recent Datasets</h2>
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-gold/15 text-gold-dark border border-gold/30">
+                Last 30 Days
+              </span>
             </div>
-          ) : (
-            <>
-              <p className="text-sm text-gray-500 mb-4">No personalized recommendations yet — here's what's trending.</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                {discoverFeed.slice(0, 3).map((item) => (
-                  <div
-                    key={item.id}
-                    onClick={() => navigate(`/datasets/${item.id}`)}
-                    className="bg-white rounded-xl border border-border shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition-shadow"
-                  >
-                    <div className="h-32 bg-gray-100 overflow-hidden">
-                      {getDatasetImage(item) ? (
-                        <img src={getDatasetImage(item)} alt={item.title} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full bg-gradient-to-br from-navy/10 to-gold/10" />
-                      )}
-                    </div>
-                    <div className="p-4">
-                      <p className="text-sm font-semibold text-navy line-clamp-2">{item.title}</p>
-                      <div className="flex items-center gap-4 mt-3 text-xs text-gray-400">
-                        <span className="flex items-center gap-1">
-                          <Eye className="w-3.5 h-3.5" />
-                          {(item.view_count || 0).toLocaleString()} Views
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Download className="w-3.5 h-3.5" />
-                          {(item.download_count || 0).toLocaleString()} Downloads
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </>
-          )
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {feed.slice(0, 3).map((item) => (
-              <div
-                key={item.id}
-                onClick={() => navigate(`/datasets/${item.id}`)}
-                className="bg-white rounded-xl border border-border shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition-shadow"
-              >
-                <div className="h-32 bg-gray-100 overflow-hidden">
-                  {getDatasetImage(item) ? (
-                    <img src={getDatasetImage(item)} alt={item.title} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-navy/10 to-gold/10" />
-                  )}
-                </div>
-                <div className="p-4">
-                  <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
-                    {item.metadata?.category_name || item.category || "General"}
-                  </span>
-                  <p className="text-sm font-semibold text-navy mt-2 line-clamp-2">{item.title}</p>
-                  <p className="text-xs text-gray-500 mt-1 line-clamp-2">{item.metadata?.description || item.description || ""}</p>
-                  <div className="flex items-center gap-4 mt-3 text-xs text-gray-400">
-                    <span className="flex items-center gap-1">
-                      <Eye className="w-3.5 h-3.5" />
-                      {((item.view_count ?? item.views) || 0).toLocaleString()} Views
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Download className="w-3.5 h-3.5" />
-                      {((item.download_count ?? item.downloads) || 0).toLocaleString()} Downloads
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* ── Recent Datasets (uploaded in the last month) ── */}
-      <section className="mb-8 animate-fade-in-up" style={{ animationDelay: "250ms" }}>
-        <div className="flex items-end justify-between mb-4">
-          <div>
-            <h2 className="text-lg font-serif font-bold text-navy">Recent Datasets</h2>
-            <p className="text-sm text-gray-500 mt-0.5">Explore datasets newly uploaded across the portal within the last month.</p>
+            <p className="text-sm text-gray-500 mt-0.5">
+              Newly published datasets across the portal within the last 30 days.
+            </p>
           </div>
           <button
             type="button"
             onClick={() => navigate("/datasets?sort=newest")}
             className="flex items-center gap-1 text-sm font-medium text-gold hover:text-gold-dark cursor-pointer"
           >
-            View All
+            <span>View All</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </div>
 
         {loadingRecentDatasets ? (
-          <p className="text-sm text-gray-500">Loading recent datasets…</p>
+          <div className="bg-white rounded-xl border border-border shadow-xs p-8 flex items-center justify-center">
+            <p className="text-sm text-gray-500">Loading recent datasets…</p>
+          </div>
         ) : recentDatasets.length === 0 ? (
-          <div className="bg-white rounded-xl border border-border shadow-sm py-10 flex flex-col items-center text-center px-6">
-            <p className="text-sm font-semibold text-navy">No datasets uploaded in the last month</p>
-            <p className="text-xs text-gray-500 mt-1 max-w-sm">
-              Be the first to publish fresh research data this month!
+          <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-8 sm:p-10 text-center flex flex-col items-center shadow-xs">
+            <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 text-amber-700 flex items-center justify-center mb-3">
+              <Clock className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-serif font-bold text-navy">
+              No Datasets Published in the Last 30 Days
+            </h3>
+            <p className="text-xs text-slate-500 max-w-md mt-1.5 leading-relaxed">
+              There have been no new datasets published across the portal within the past 30 days. Be the first to publish fresh research data!
             </p>
-            <button
-              type="button"
-              onClick={handleNewDatasetClick}
-              className="mt-4 border border-gold text-gold hover:bg-gold hover:text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors cursor-pointer"
-            >
-              Upload a Dataset
-            </button>
+            <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => navigate("/datasets")}
+                className="inline-flex items-center gap-2 bg-navy hover:bg-navy-dark text-white text-xs font-semibold rounded-xl px-4 py-2.5 transition-colors cursor-pointer shadow-xs"
+              >
+                <FolderOpen className="w-3.5 h-3.5 text-gold" />
+                <span>Browse All Datasets</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleNewDatasetClick}
+                className="inline-flex items-center gap-2 bg-gold hover:bg-gold-dark text-white text-xs font-semibold rounded-xl px-4 py-2.5 transition-colors cursor-pointer shadow-xs"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Contribute Dataset</span>
+              </button>
+            </div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {recentDatasets.slice(0, 3).map((item) => (
-              <div
-                key={item.id}
-                onClick={() => navigate(`/datasets/${item.id}`)}
-                className="bg-white rounded-xl border border-border shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition-shadow group"
-              >
-                <div className="h-32 bg-gray-100 overflow-hidden">
-                  {getDatasetImage(item) ? (
-                    <img
-                      src={getDatasetImage(item)}
-                      alt={item.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-navy/10 to-gold/10" />
-                  )}
-                </div>
-                <div className="p-4">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
-                      {item.metadata?.category_name || item.category || "Research"}
-                    </span>
-                    {(item.created_at || item.uploaded_at || item.date) && (
-                      <span className="text-[10px] text-gray-400 font-mono">
-                        {formatRelativeTime(item.created_at || item.uploaded_at || item.date)}
-                      </span>
+          <div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {recentDatasets.slice(0, showAllRecent ? 20 : 6).map((item) => (
+                <div
+                  key={item.id}
+                  onClick={() => navigate(`/datasets/${item.id}`)}
+                  className="bg-white rounded-xl border border-border shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition-shadow group"
+                >
+                  <div className="h-32 bg-gray-100 overflow-hidden">
+                    {getDatasetImage(item) ? (
+                      <img
+                        src={getDatasetImage(item)}
+                        alt={item.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-navy/10 to-gold/10" />
                     )}
                   </div>
-                  <p className="text-sm font-semibold text-navy mt-2 line-clamp-2 group-hover:text-gold transition-colors">
-                    {item.title}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1 line-clamp-2">
-                    {item.metadata?.description || item.description || ""}
-                  </p>
-                  <div className="flex items-center gap-4 mt-3 text-xs text-gray-400">
-                    <span className="flex items-center gap-1">
-                      <Eye className="w-3.5 h-3.5" />
-                      {((item.view_count ?? item.views) || 0).toLocaleString()} Views
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Download className="w-3.5 h-3.5" />
-                      {((item.download_count ?? item.downloads) || 0).toLocaleString()} Downloads
-                    </span>
+                  <div className="p-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500 bg-gray-100 px-2 py-0.5 rounded truncate">
+                        {item.metadata?.category_name || item.category || "Research"}
+                      </span>
+                      {(item.created_at || item.uploaded_at || item.date) && (
+                        <span className="text-[10px] text-gray-400 font-mono shrink-0">
+                          {formatRelativeTime(item.created_at || item.uploaded_at || item.date)}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm font-semibold text-navy mt-2 line-clamp-2 group-hover:text-gold transition-colors">
+                      {item.title}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1 line-clamp-2">
+                      {item.metadata?.description || item.description || ""}
+                    </p>
+                    <div className="flex items-center gap-4 mt-3 text-xs text-gray-400">
+                      <span className="flex items-center gap-1">
+                        <Eye className="w-3.5 h-3.5" />
+                        {((item.view_count ?? item.views) || 0).toLocaleString()} Views
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Download className="w-3.5 h-3.5" />
+                        {((item.download_count ?? item.downloads) || 0).toLocaleString()} Downloads
+                      </span>
+                    </div>
                   </div>
                 </div>
+              ))}
+            </div>
+            {recentDatasets.length > 6 && (
+              <div className="mt-4 text-center">
+                <button
+                  type="button"
+                  onClick={() => setShowAllRecent((prev) => !prev)}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-gold-dark hover:text-navy px-4 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition cursor-pointer"
+                >
+                  <span>{showAllRecent ? "Show Less" : `View All (${recentDatasets.length} Recent)`}</span>
+                </button>
               </div>
-            ))}
+            )}
+          </div>
+        )}
+      </section>
+
+      {/* ── Recommendations (Based on research interests & high views/downloads) ── */}
+      <section className="mb-8 animate-fade-in-up" style={{ animationDelay: "250ms" }}>
+        <div className="flex items-end justify-between mb-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-serif font-bold text-navy">Recommendations</h2>
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                Personalized
+              </span>
+            </div>
+            <p className="text-sm text-gray-500 mt-0.5">
+              Curated research materials tailored to your interests, ranked by views and downloads.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate("/datasets")}
+            className="flex items-center gap-1 text-sm font-medium text-gold hover:text-gold-dark cursor-pointer"
+          >
+            <span>View All</span>
+            <ArrowRight className="w-4 h-4" />
+          </button>
+        </div>
+
+        {loadingFeed ? (
+          <div className="bg-white rounded-xl border border-border shadow-xs p-8 flex items-center justify-center">
+            <p className="text-sm text-gray-500">Loading recommendations…</p>
+          </div>
+        ) : feed.length === 0 ? (
+          <div className="space-y-6">
+            <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-8 sm:p-10 text-center flex flex-col items-center shadow-xs">
+              <div className="w-12 h-12 rounded-2xl bg-slate-50 border border-slate-200 text-slate-600 flex items-center justify-center mb-3">
+                <Bookmark className="w-6 h-6 text-gold" />
+              </div>
+              <h3 className="text-base font-serif font-bold text-navy">
+                No Recommendations Matching Your Interests Yet
+              </h3>
+              <p className="text-xs text-slate-500 max-w-md mt-1.5 leading-relaxed">
+                Recommendations are personalized based on your research interests and trending community engagement. Explore all datasets or configure your academic focus.
+              </p>
+              <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => navigate("/datasets")}
+                  className="inline-flex items-center gap-2 bg-navy hover:bg-navy-dark text-white text-xs font-semibold rounded-xl px-4 py-2.5 transition-colors cursor-pointer shadow-xs"
+                >
+                  <FolderOpen className="w-3.5 h-3.5 text-gold" />
+                  <span>Browse All Datasets</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate("/profile")}
+                  className="inline-flex items-center gap-2 bg-gold hover:bg-gold-dark text-white text-xs font-semibold rounded-xl px-4 py-2.5 transition-colors cursor-pointer shadow-xs"
+                >
+                  <User className="w-3.5 h-3.5" />
+                  <span>Update Research Interests</span>
+                </button>
+              </div>
+            </div>
+
+            {discoverFeed && discoverFeed.length > 0 && (
+              <div className="pt-2">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                    Popular Across ORDP (High Views & Downloads)
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {discoverFeed.slice(0, 6).map((item) => (
+                    <div
+                      key={item.id}
+                      onClick={() => navigate(`/datasets/${item.id}`)}
+                      className="bg-white rounded-xl border border-border shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition-shadow group"
+                    >
+                      <div className="h-32 bg-gray-100 overflow-hidden">
+                        {getDatasetImage(item) ? (
+                          <img src={getDatasetImage(item)} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                        ) : (
+                          <div className="w-full h-full bg-gradient-to-br from-navy/10 to-gold/10" />
+                        )}
+                      </div>
+                      <div className="p-4">
+                        <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                          {item.metadata?.category_name || item.category || "General"}
+                        </span>
+                        <p className="text-sm font-semibold text-navy mt-2 line-clamp-2 group-hover:text-gold transition-colors">{item.title}</p>
+                        <div className="flex items-center gap-4 mt-3 text-xs text-gray-400">
+                          <span className="flex items-center gap-1">
+                            <Eye className="w-3.5 h-3.5" />
+                            {((item.view_count ?? item.views) || 0).toLocaleString()} Views
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Download className="w-3.5 h-3.5" />
+                            {((item.download_count ?? item.downloads) || 0).toLocaleString()} Downloads
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {feed.slice(0, showAllFeed ? 20 : 6).map((item) => (
+                <div
+                  key={item.id}
+                  onClick={() => navigate(`/datasets/${item.id}`)}
+                  className="bg-white rounded-xl border border-border shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition-shadow group"
+                >
+                  <div className="h-32 bg-gray-100 overflow-hidden">
+                    {getDatasetImage(item) ? (
+                      <img src={getDatasetImage(item)} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-navy/10 to-gold/10" />
+                    )}
+                  </div>
+                  <div className="p-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500 bg-gray-100 px-2 py-0.5 rounded truncate">
+                        {item.metadata?.category_name || item.category || "General"}
+                      </span>
+                      {item.created_at && (
+                        <span className="text-[10px] text-slate-400 shrink-0">
+                          {formatRelativeTime(item.created_at)}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm font-semibold text-navy mt-2 line-clamp-2 group-hover:text-gold transition-colors">{item.title}</p>
+                    <p className="text-xs text-gray-500 mt-1 line-clamp-2">{item.metadata?.description || item.description || ""}</p>
+                    <div className="flex items-center gap-4 mt-3 text-xs text-gray-400">
+                      <span className="flex items-center gap-1">
+                        <Eye className="w-3.5 h-3.5" />
+                        {((item.view_count ?? item.views) || 0).toLocaleString()} Views
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Download className="w-3.5 h-3.5" />
+                        {((item.download_count ?? item.downloads) || 0).toLocaleString()} Downloads
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {feed.length > 6 && (
+              <div className="mt-4 text-center">
+                <button
+                  type="button"
+                  onClick={() => setShowAllFeed((prev) => !prev)}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-gold-dark hover:text-navy px-4 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition cursor-pointer"
+                >
+                  <span>{showAllFeed ? "Show Less" : `View All (${feed.length} Recommendations)`}</span>
+                </button>
+              </div>
+            )}
           </div>
         )}
       </section>

@@ -46,9 +46,16 @@ export default function TopBar() {
     }
   }
 
+  const [profileTick, setProfileTick] = useState(0);
+  useEffect(() => {
+    const handleProfileUpdate = () => setProfileTick((t) => t + 1);
+    window.addEventListener("ordp:profile-updated", handleProfileUpdate);
+    return () => window.removeEventListener("ordp:profile-updated", handleProfileUpdate);
+  }, []);
+
   const displayName = getDisplayName(user);
   const initial = (displayName.charAt(0) || "U").toUpperCase();
-  const profilePic = useMemo(() => getProfilePicture(user), [user]);
+  const profilePic = useMemo(() => getProfilePicture(user), [user, profileTick]);
 
   return (
     <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm border-b border-border shadow-sm">

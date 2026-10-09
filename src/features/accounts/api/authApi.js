@@ -352,6 +352,28 @@ function normalizeError(
     });
   }
 
+  // Explicit check for inactive accounts blocked by backend
+  const isInactive =
+    String(body?.code || "").toUpperCase() === "ACCOUNT_INACTIVE" ||
+    String(body?.error?.code || "").toUpperCase() === "ACCOUNT_INACTIVE" ||
+    (typeof body?.detail === "string" && /inactive|deactivated|disabled/i.test(body.detail)) ||
+    (typeof body?.message === "string" && /inactive|deactivated|disabled/i.test(body.message)) ||
+    (Array.isArray(body?.non_field_errors) &&
+      body.non_field_errors.some(
+        (e) => typeof e === "string" && /inactive|disabled|deactivated/i.test(e)
+      ));
+
+  if (isInactive) {
+    const formatted = formatApiError({ response: { data: body } });
+    return new AuthApiError({
+      code: "ACCOUNT_INACTIVE",
+      message:
+        formatted ||
+        "This account has been deactivated due to 6 months of inactivity. Please contact an administrator or support to reactivate your account.",
+      status: status || 403,
+    });
+  }
+
   if (body?.error) {
     const formatted = formatApiError({ response: { data: body } });
     return new AuthApiError({

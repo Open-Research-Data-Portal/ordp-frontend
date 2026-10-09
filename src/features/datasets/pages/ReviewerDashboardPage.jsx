@@ -17,7 +17,6 @@ import {
   Layers,
   ArrowRight,
   Loader2,
-  UserCheck,
 } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import ReviewerRoleNoticeModal from "../../../components/dashboard/ReviewerRoleNoticeModal";
@@ -211,14 +210,6 @@ export default function ReviewerDashboardPage() {
             <Layers className="w-4 h-4" />
             Open Review Queue
             <ArrowRight className="w-4 h-4" />
-          </Link>
-          <Link
-            to="/user-dashboard"
-            className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-white bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl px-4 py-2.5 transition"
-            title="Switch to your personal User Dashboard"
-          >
-            <UserCheck className="w-4 h-4 text-gold" />
-            User Dashboard
           </Link>
           <button
             type="button"

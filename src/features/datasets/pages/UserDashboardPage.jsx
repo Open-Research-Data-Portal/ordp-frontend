@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bookmark, Download, Eye, UploadCloud, KeyRound, GitBranch, ShieldCheck, ArrowRight } from "lucide-react";
+import { Bookmark, Download, Eye, UploadCloud, KeyRound, GitBranch } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import { ProfileBanner, ProfileSavedNotice, SectionHeader, EmptyState } from "../../../components/dashboard/dashboardUi";
-import ReviewerRoleNoticeModal from "../../../components/dashboard/ReviewerRoleNoticeModal";
 import { useAuth } from "../../../context/useAuth";
-import { getDisplayName, isReviewer, isAdmin } from "../../../utils/userRoles";
+import { getDisplayName } from "../../../utils/userRoles";
 import * as datasetsApi from "../hooks/datasetsApi";
 import * as authApi from "../../accounts/api/authApi";
 import { getDatasetImage } from "../../../utils/datasetImage";
@@ -24,30 +23,6 @@ export default function UserDashboardPage() {
   const [profileComplete, setProfileComplete] = useState(true);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [showReviewerModal, setShowReviewerModal] = useState(false);
-
-  useEffect(() => {
-    if (isAdmin(user)) {
-      navigate("/admin-dashboard", { replace: true });
-      return;
-    }
-  }, [user, navigate]);
-
-  useEffect(() => {
-    if (isReviewer(user)) {
-      const storageKey = `ordp:reviewer_role_modal_seen_${user?.id || user?.email}`;
-      if (!localStorage.getItem(storageKey)) {
-        setShowReviewerModal(true);
-      }
-    }
-  }, [user]);
-
-  const handleCloseReviewerModal = () => {
-    setShowReviewerModal(false);
-    if (user) {
-      localStorage.setItem(`ordp:reviewer_role_modal_seen_${user?.id || user?.email}`, "true");
-    }
-  };
 
   useEffect(() => {
     let active = true;
@@ -99,44 +74,13 @@ export default function UserDashboardPage() {
     return () => { active = false; };
   }, [user]);
 
-  const exploreItems = feed.slice(0, 3);
+  const exploreItems = feed.slice(0, 6);
 
   return (
     <DashboardShell title="Research Hub" subtitle="AASTU Academic Portal">
       <ProfileSavedNotice />
       {!profileComplete && !bannerDismissed && (
         <ProfileBanner onDismiss={() => setBannerDismissed(true)} onGoToProfile={() => navigate("/profile")} />
-      )}
-
-      {isReviewer(user) && (
-        <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 rounded-2xl border border-gold/40 bg-gradient-to-r from-gold-light/40 via-white to-gold-light/20 shadow-xs animate-fade-in-up">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gold/20 flex items-center justify-center shrink-0">
-              <ShieldCheck className="w-5 h-5 text-gold" />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-navy">Reviewer Role Active</p>
-              <p className="text-xs text-slate-600">You hold reviewer privileges to moderate datasets, evaluate changes, and cast peer votes.</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() => setShowReviewerModal(true)}
-              className="px-3 py-1.5 text-xs font-semibold text-navy hover:text-navy-light underline cursor-pointer"
-            >
-              View Privileges
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate("/reviewer-dashboard")}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-navy hover:bg-navy-light text-white text-xs font-semibold shadow-xs transition cursor-pointer"
-            >
-              <span>Reviewer Dashboard</span>
-              <ArrowRight className="w-3.5 h-3.5 text-gold" />
-            </button>
-          </div>
-        </div>
       )}
 
       <div className="mb-2 animate-fade-in-up">
@@ -168,7 +112,22 @@ export default function UserDashboardPage() {
           actionLabel="View All →"
           onAction={() => navigate("/datasets")}
         />
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        {exploreItems.length === 0 ? (
+          <div className="bg-white rounded-xl border border-dashed border-slate-300 p-8 text-center flex flex-col items-center">
+            <p className="text-sm font-semibold text-navy">No new recommendations in the last 30 days</p>
+            <p className="text-xs text-gray-500 mt-1 max-w-sm">
+              Explore the entire repository catalog to discover research datasets.
+            </p>
+            <button
+              type="button"
+              onClick={() => navigate("/datasets")}
+              className="mt-3 border border-gold text-gold hover:bg-gold hover:text-white text-xs font-semibold rounded-lg px-3.5 py-1.5 transition-colors cursor-pointer"
+            >
+              Explore Datasets
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           {exploreItems.map((item, i) => (
             <div
               key={item.id}
@@ -197,6 +156,7 @@ export default function UserDashboardPage() {
             </div>
           ))}
         </div>
+        )}
       </section>
 
       {/* My Bookmarks */}
@@ -223,11 +183,6 @@ export default function UserDashboardPage() {
           </div>
         )}
       </section>
-
-      <ReviewerRoleNoticeModal
-        isOpen={showReviewerModal}
-        onClose={handleCloseReviewerModal}
-      />
     </DashboardShell>
   );
 }

@@ -226,6 +226,25 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  /**
+   * Directly clear local authentication state and tokens without calling the
+   * backend logout endpoint (e.g. after a password change where refresh tokens
+   * were already revoked server-side).
+   */
+  const clearLocalAuth = useCallback(() => {
+    clearTokens();
+    delete client.defaults.headers.common.Authorization;
+    setAccessToken(null);
+    setUser(null);
+    invalidateProfilePictureCache();
+    try {
+      localStorage.removeItem("ordp:profile_picture");
+      sessionStorage.removeItem(AUTH_FLAGS_KEY);
+      localStorage.removeItem("ordp:profile_completed");
+      sessionStorage.removeItem("ordp:profile_completed");
+    } catch {}
+  }, []);
+
   const value = useMemo(
     () => ({
       user,
@@ -235,10 +254,11 @@ export function AuthProvider({ children }) {
       loading,
       login,
       logout,
+      clearLocalAuth,
       updateProfile,
       establishSession,
     }),
-    [user, accessToken, loading, login, logout, updateProfile, establishSession]
+    [user, accessToken, loading, login, logout, clearLocalAuth, updateProfile, establishSession]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

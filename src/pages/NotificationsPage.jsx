@@ -31,6 +31,7 @@ import {
   markAllNotificationsAsRead,
   deleteNotificationItem,
   getNotificationActionTitle,
+  getDatasetIdFromNotification,
 } from "../api/notifications";
 
 function getIconForType(type) {
@@ -138,10 +139,11 @@ export default function NotificationsPage() {
     if (!notification.is_read) {
       handleMarkRead(notification.id);
     }
-    if (notification.link_path) {
+    const datasetId = getDatasetIdFromNotification(notification);
+    if (datasetId) {
+      navigate(`/datasets/${datasetId}`);
+    } else if (notification.link_path && !notification.link_path.startsWith("/api/")) {
       navigate(notification.link_path);
-    } else {
-      navigate("/datasets");
     }
   }
 
@@ -338,14 +340,16 @@ export default function NotificationsPage() {
                               </button>
                             </div>
 
-                            <button
-                              type="button"
-                              onClick={() => handleActionClick(n)}
-                              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-navy hover:bg-navy-light text-white text-xs font-semibold shadow-xs hover:shadow transition cursor-pointer"
-                            >
-                              More
-                              <ArrowRight className="w-3.5 h-3.5 text-gold" />
-                            </button>
+                            {getDatasetIdFromNotification(n) && (
+                              <button
+                                type="button"
+                                onClick={() => handleActionClick(n)}
+                                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-navy hover:bg-navy-light text-white text-xs font-semibold shadow-xs hover:shadow transition cursor-pointer"
+                              >
+                                View Dataset
+                                <ArrowRight className="w-3.5 h-3.5 text-gold" />
+                              </button>
+                            )}
                           </div>
                         </div>
                       )}

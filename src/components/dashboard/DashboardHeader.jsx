@@ -37,6 +37,7 @@ import {
   fetchBellNotifications,
   markNotificationAsRead,
   markAllNotificationsAsRead,
+  getDatasetIdFromNotification,
 } from "../../api/notifications";
 
 function formatRelativeTime(dateStr) {
@@ -163,7 +164,10 @@ export default function DashboardHeader({
       } catch {}
     }
     setBellOpen(false);
-    if (notif.link_path) {
+    const dsId = getDatasetIdFromNotification(notif);
+    if (dsId) {
+      navigate(`/datasets/${dsId}`);
+    } else if (notif.link_path && !notif.link_path.startsWith("/api/")) {
       navigate(notif.link_path);
     } else {
       navigate("/notifications");

@@ -9,6 +9,7 @@ import ForgotPasswordPage from "../features/accounts/pages/ForgotPassword.jsx";
 import CheckEmailPage from "../features/accounts/pages/CheckEmail.jsx";
 import ResetPasswordPage from "../features/accounts/pages/ResetPassword.jsx";
 import ProfilePage from "../features/accounts/pages/ProfilePage.jsx";
+import ChangePasswordPage from "../features/accounts/pages/ChangePasswordPage.jsx";
 import ResearchInterestsOnboardingPage from "../features/accounts/pages/ResearchInterestsOnboardingPage.jsx";
 
 import DashboardRouter from "../pages/Dashboard/DashboardRouter.jsx";
@@ -180,6 +181,9 @@ export default function AppRoutes() {
       } />
       <Route path="/profile" element={
         <ProtectedRoute><ProfilePage /></ProtectedRoute>
+      } />
+      <Route path="/change-password" element={
+        <ProtectedRoute><ChangePasswordPage /></ProtectedRoute>
       } />
       <Route path="/my-datasets" element={
         <ProtectedRoute><DatasetListPage /></ProtectedRoute>

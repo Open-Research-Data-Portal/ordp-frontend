@@ -323,17 +323,39 @@ export async function confirmPasswordReset({ uid, token, new_password, confirm_p
 }
 
 /**
+ * Change password for the currently authenticated user.
+ * Endpoint: POST /api/accounts/change-password/
+ *
+ * @param {{current_password: string, new_password: string, confirm_password: string}} payload
+ * @returns {Promise<{detail?: string, message?: string}>}
+ * @throws {AuthApiError}
+ */
+export async function changePassword({ current_password, new_password, confirm_password }) {
+  try {
+    const { data } = await client.post(`${BASE}/change-password/`, {
+      current_password,
+      new_password,
+      confirm_password,
+    });
+    return data;
+  } catch (err) {
+    throw normalizeError(err, { allowDjangoFieldErrors: true });
+  }
+}
+
+/**
  * Normalizes both error shapes documented in the API reference into one
  * consistent object the UI layer can rely on:
  *   { code, message, field, status }
  */
 export class AuthApiError extends Error {
-  constructor({ code, message, field = null, status }) {
+  constructor({ code, message, field = null, status, fieldErrors = {} }) {
     super(message);
     this.name = "AuthApiError";
     this.code = code;
     this.field = field;
     this.status = status;
+    this.fieldErrors = fieldErrors || {};
   }
 }
 
@@ -381,16 +403,26 @@ function normalizeError(
       message: formatted,
       field: body.error.field,
       status,
+      fieldErrors: body.error.field ? { [body.error.field]: formatted } : {},
     });
   }
 
   if (allowDjangoFieldErrors && body && typeof body === "object") {
     const message = pickFirstFieldErrorMessage(body);
     if (message) {
+      const fieldErrors = {};
+      for (const [key, val] of Object.entries(body)) {
+        if (Array.isArray(val) && val.length) {
+          fieldErrors[key] = val.join(" ");
+        } else if (typeof val === "string") {
+          fieldErrors[key] = val;
+        }
+      }
       return new AuthApiError({
         code: "VALIDATION_ERROR",
         message,
         status,
+        fieldErrors,
       });
     }
   }

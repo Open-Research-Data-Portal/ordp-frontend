@@ -42,7 +42,7 @@ import {
   invalidateProfilePictureCache,
   getUserProfilePictureKey,
 } from "../../../utils/userRoles";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 
 const DRAFT_STORAGE_PREFIX = "ordp:profile-draft:";
 
@@ -1114,13 +1114,13 @@ export default function ProfilePage() {
               />
 
               <div className="mt-1">
-                <a
-                  href="/forgot-password"
+                <Link
+                  to="/change-password"
                   className="inline-flex items-center gap-1 text-xs font-semibold text-[#B8860B] hover:underline"
                 >
                   <RotateCcw className="w-3 h-3" />
                   Change Password
-                </a>
+                </Link>
               </div>
             </div>
           </div>

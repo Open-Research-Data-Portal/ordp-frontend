@@ -99,6 +99,47 @@ export function getNotificationActionTitle(item, type, textBlob) {
   return "Activity Update";
 }
 
+export function getDatasetIdFromNotification(n) {
+  if (!n || typeof n !== "object") return null;
+
+  // 1. Direct dataset identifiers
+  const directId =
+    n.dataset_id ||
+    n.datasetId ||
+    (typeof n.dataset === "object" ? n.dataset?.id : n.dataset) ||
+    n.data?.dataset_id ||
+    n.data?.datasetId ||
+    n.data?.id ||
+    n.metadata?.dataset_id ||
+    n.metadata?.id ||
+    (n.type?.includes("dataset") || n.type?.includes("review") || n.type?.includes("archive")
+      ? (n.target_id || n.object_id)
+      : null);
+
+  if (directId && String(directId).trim() && String(directId) !== "undefined" && String(directId) !== "null") {
+    return String(directId).trim();
+  }
+
+  // 2. Extract from link_path, action_url, url
+  const rawUrl = n.link_path || n.action_url || n.action_link || n.url;
+  if (typeof rawUrl === "string") {
+    const match = rawUrl.match(/(?:^|\/)(?:datasets?|my-datasets)\/([a-zA-Z0-9_-]+)/i);
+    if (match && match[1] && !["contribute", "new", "browse"].includes(match[1].toLowerCase())) {
+      return match[1];
+    }
+  }
+
+  // 3. Extract from message if text mentions dataset id
+  if (typeof n.message === "string") {
+    const msgMatch = n.message.match(/dataset\s+(?:id[:\s#]+|#)([a-zA-Z0-9_-]+)/i);
+    if (msgMatch && msgMatch[1]) {
+      return msgMatch[1];
+    }
+  }
+
+  return null;
+}
+
 /**
  * Normalize a raw backend notification object into the shape the UI expects.
  * Correctly identifies category decisions (approved, rejected, merged) and attaches action links.
@@ -132,8 +173,11 @@ export function normalizeNotification(item) {
   const message = item.message || item.body || item.description || "";
 
   // Resolve link_path for navigation
+  const datasetId = getDatasetIdFromNotification(item);
   let link_path = item.link_path || item.action_url || item.action_link || item.url || null;
-  if (!link_path && type.startsWith("category_")) {
+  if (datasetId) {
+    link_path = `/datasets/${datasetId}`;
+  } else if (!link_path && type.startsWith("category_")) {
     link_path = "/profile";
   }
 
@@ -146,6 +190,7 @@ export function normalizeNotification(item) {
     is_read,
     created_at,
     link_path,
+    dataset_id: datasetId,
     category_id: item.category_id || item.category?.id || null,
     decision: item.decision || (type.includes("approv") ? "approve" : type.includes("reject") ? "reject" : null),
   };

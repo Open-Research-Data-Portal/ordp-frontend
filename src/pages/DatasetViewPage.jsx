@@ -354,28 +354,58 @@ function ShareAccessModal({ dataset, mode = "download", onClose, onDownloadReady
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!purpose.trim()) return;
     setSubmitting(true);
     setError(null);
     try {
       const payload = {
-        purpose,
+        purpose: purpose.trim(),
+        reason: purpose.trim(),
         purpose_type: "read",
-        justification: isRestricted ? justification : "",
-        requested_duration_days: Number(durationDays) || undefined,
+        ...(isRestricted && justification.trim() ? { justification: justification.trim() } : {}),
+        ...(isShareMode || isRestricted ? { requested_duration_days: Number(durationDays) || undefined } : {}),
       };
       const result = isShareMode
         ? await shareDatasetWith(dataset.id, { ...payload, email })
         : await requestShareAccess(dataset.id, payload);
-      if (result?.download_url) {
-        onDownloadReady(result.download_url);
+
+      if (isShareMode) {
+        onShared?.(result);
+        setSubmitted(true);
         return;
       }
-      if (isShareMode) onShared?.(result);
+
+      // For download mode: automatically trigger download
+      let downloadUrl = result?.download_url || result?.url;
+      if (!downloadUrl && !isRestricted) {
+        try {
+          downloadUrl = await getDownloadUrl(dataset.id);
+        } catch {
+          downloadUrl = dataset?.dataFile?.fileUrl || dataset?.files?.[0]?.file || dataset?.files?.[0]?.file_url;
+        }
+      }
+
+      if (downloadUrl) {
+        onDownloadReady(downloadUrl);
+        return;
+      }
+
       setSubmitted(true);
     } catch (err) {
       console.error("Failed to submit access request:", err);
+      // For public datasets, if access-request fails, fallback to direct download URL so user is never blocked
+      if (!isRestricted && !isShareMode) {
+        try {
+          const directUrl = await getDownloadUrl(dataset.id);
+          if (directUrl) {
+            onDownloadReady(directUrl);
+            return;
+          }
+        } catch {}
+      }
       setError(
         err.response?.data?.detail ||
+          err.response?.data?.message ||
           "Couldn't submit your request right now. Please try again."
       );
     } finally {
@@ -433,7 +463,12 @@ function ShareAccessModal({ dataset, mode = "download", onClose, onDownloadReady
 
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">
-                {isShareMode ? "Purpose of share" : "Purpose of download"} <span className="text-red-500">*</span>
+                {isShareMode
+                  ? "Purpose of share"
+                  : isRestricted
+                  ? "Purpose of download"
+                  : "Reason to download the dataset"}{" "}
+                <span className="text-red-500">*</span>
               </label>
               <textarea
                 required
@@ -441,7 +476,11 @@ function ShareAccessModal({ dataset, mode = "download", onClose, onDownloadReady
                 onChange={(e) => setPurpose(e.target.value)}
                 rows={2}
                 className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
-                placeholder="e.g. Research, teaching, replication, or academic evaluation..."
+                placeholder={
+                  isShareMode || isRestricted
+                    ? "e.g. Research, teaching, replication, or academic evaluation..."
+                    : "e.g. Academic research, study, replication, or evaluation..."
+                }
               />
             </div>
 
@@ -461,27 +500,35 @@ function ShareAccessModal({ dataset, mode = "download", onClose, onDownloadReady
               </div>
             )}
 
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">
-                Requested duration (days)
-              </label>
-              <input
-                type="number"
-                min={1}
-                value={durationDays}
-                onChange={(e) => setDurationDays(e.target.value)}
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
-              />
-            </div>
+            {(isShareMode || isRestricted) && (
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">
+                  Requested duration (days)
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  value={durationDays}
+                  onChange={(e) => setDurationDays(e.target.value)}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+                />
+              </div>
+            )}
 
             {error && <p className="text-xs text-red-500">{error}</p>}
 
             <button
               type="submit"
               disabled={submitting}
-              className="w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+              className="w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50 cursor-pointer"
             >
-              {submitting ? "Submitting..." : isShareMode ? "Share Dataset" : "Submit Request"}
+              {submitting
+                ? "Submitting..."
+                : isShareMode
+                ? "Share Dataset"
+                : isRestricted
+                ? "Submit Request"
+                : "Submit Reason"}
             </button>
           </form>
         )}
@@ -737,7 +784,17 @@ export default function DatasetViewPage() {
   const handleDownloadReady = (url) => {
     setShareModalOpen(false);
     setDownloadError(null);
-    window.location.assign(url);
+    if (!url) return;
+    try {
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", "");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch {
+      window.location.assign(url);
+    }
   };
 
   const handleShare = async () => {

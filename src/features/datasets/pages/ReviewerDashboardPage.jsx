@@ -165,16 +165,12 @@ export default function ReviewerDashboardPage() {
   const pendingCounts = useMemo(() => {
     const datasets = datasetQueue.length;
     const content = contentUpdates.length;
-    const revisions = revisionRequests.length;
-    const access = accessRequests.length;
     return {
       datasets,
       contentUpdates: content,
-      revisionRequests: revisions,
-      accessRequests: access,
-      total: datasets + content + revisions + access,
+      total: datasets + content,
     };
-  }, [datasetQueue, contentUpdates, revisionRequests, accessRequests]);
+  }, [datasetQueue, contentUpdates]);
 
   const reviewStats = useMemo(() => {
     const approved = myReviews.filter(r => {
@@ -366,7 +362,7 @@ export default function ReviewerDashboardPage() {
                 View all queues &rarr;
               </Link>
             </div>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Link
                 to="/reviewer/review-queue?tab=datasets"
                 className="bg-white hover:bg-slate-50 border border-border hover:border-red-300 rounded-2xl p-5 transition group shadow-xs"
@@ -397,35 +393,7 @@ export default function ReviewerDashboardPage() {
                 </p>
               </Link>
 
-              <Link
-                to="/reviewer/review-queue?tab=revision-requests"
-                className="bg-white hover:bg-slate-50 border border-border hover:border-blue-300 rounded-2xl p-5 transition group shadow-xs"
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold text-blue-700">Revision Requests</span>
-                  <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
-                </div>
-                <p className="text-3xl font-bold text-blue-600">{pendingCounts.revisionRequests}</p>
-                <p className="text-xs text-gray-500 mt-1 flex items-center justify-between">
-                  <span>Author edit permissions</span>
-                  <ChevronRight className="w-4 h-4 text-gray-400 group-hover:translate-x-1 transition-transform" />
-                </p>
-              </Link>
 
-              <Link
-                to="/reviewer/review-queue?tab=access-requests"
-                className="bg-white hover:bg-slate-50 border border-border hover:border-violet-300 rounded-2xl p-5 transition group shadow-xs"
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold text-violet-700">Access Requests</span>
-                  <span className="w-2.5 h-2.5 rounded-full bg-violet-500" />
-                </div>
-                <p className="text-3xl font-bold text-violet-600">{pendingCounts.accessRequests}</p>
-                <p className="text-xs text-gray-500 mt-1 flex items-center justify-between">
-                  <span>Restricted dataset access</span>
-                  <ChevronRight className="w-4 h-4 text-gray-400 group-hover:translate-x-1 transition-transform" />
-                </p>
-              </Link>
             </div>
           </div>
 

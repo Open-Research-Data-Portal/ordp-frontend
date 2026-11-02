@@ -282,16 +282,7 @@ export default function DashboardHeader({
                     </span>
                   )}
                 </div>
-                {unreadCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={handleMarkAll}
-                    className="inline-flex items-center gap-1 text-[11px] font-medium text-navy hover:text-gold-dark cursor-pointer transition"
-                  >
-                    <CheckCheck className="w-3.5 h-3.5" />
-                    Mark all read
-                  </button>
-                )}
+                
               </div>
 
               <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">

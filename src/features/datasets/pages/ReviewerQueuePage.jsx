@@ -38,8 +38,6 @@ function formatDate(dateString) {
 const TABS = [
   { id: "datasets", label: "Review Datasets" },
   { id: "content-updates", label: "Content Updates" },
-  { id: "revision-requests", label: "Revision Requests" },
-  { id: "access-requests", label: "Access Requests" },
   { id: "my-reviews", label: "My Reviews" },
 ];
 

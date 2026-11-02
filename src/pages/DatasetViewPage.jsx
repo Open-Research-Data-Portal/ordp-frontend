@@ -175,13 +175,43 @@ function normalizeDataset(raw) {
   const files = raw.files || [];
   const primaryFile = files[0];
 
+  const ownerId =
+    raw.owner_id ??
+    (typeof raw.owner === "object" ? raw.owner?.id : raw.owner) ??
+    raw.user_id ??
+    raw.user ??
+    raw.uploader ??
+    raw.created_by ??
+    null;
+
+  const ownerEmail =
+    raw.owner_email ??
+    (typeof raw.owner === "object" ? raw.owner?.email : null);
+
+  const ownerUsername =
+    raw.owner_username ??
+    (typeof raw.owner === "object" ? raw.owner?.username : (typeof raw.owner === "string" ? raw.owner : null));
+
+  const ownerName =
+    raw.owner_name ??
+    raw.author ??
+    (typeof raw.owner === "object" ? (raw.owner?.full_name || raw.owner?.name) : null) ??
+    "Unknown";
+
   return {
+    ...raw,
     id: raw.id, // needed by download/share API calls
     visibility: raw.visibility, // ASSUMPTION: field name on DatasetSerializer — confirm/adjust if different
     title: raw.title,
+    owner_id: ownerId,
+    owner_email: ownerEmail,
+    owner_username: ownerUsername,
+    owner_name: ownerName,
+    is_owner: Boolean(raw.is_owner),
+    can_edit: Boolean(raw.can_edit),
     description: meta.description || raw.description || "",
     author: {
-      name: raw.author || raw.owner_name || "Unknown",
+      name: ownerName,
       avatarUrl: null,
     },
     updatedLabel: formatRelativeDate(raw.updated_at) || "—",
@@ -341,7 +371,7 @@ function DownloadsChart({ data }) {
   );
 }
 
-function ShareAccessModal({ dataset, mode = "download", onClose, onDownloadReady, onShared }) {
+function ShareAccessModal({ dataset, mode = "download", isOwner = false, onClose, onDownloadReady, onShared }) {
   const [email, setEmail] = useState("");
   const [purpose, setPurpose] = useState("");
   const [justification, setJustification] = useState("");
@@ -352,9 +382,41 @@ function ShareAccessModal({ dataset, mode = "download", onClose, onDownloadReady
   const isRestricted = dataset?.visibility === "restricted";
   const isShareMode = mode === "share";
 
+  // Safeguard: Owner should never submit request for their own dataset.
+  // Backend allows direct download, so handle immediately.
+  useEffect(() => {
+    if (isOwner && !isShareMode) {
+      (async () => {
+        try {
+          const directUrl = await getDownloadUrl(dataset.id);
+          if (directUrl) {
+            onDownloadReady(directUrl);
+          }
+        } catch (err) {
+          console.warn("Direct owner download error:", err);
+        }
+      })();
+    }
+  }, [isOwner, isShareMode, dataset?.id, onDownloadReady]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!purpose.trim()) return;
+
+    // Safeguard: If owner in download mode, download directly
+    if (isOwner && !isShareMode) {
+      let downloadUrl;
+      try {
+        downloadUrl = await getDownloadUrl(dataset.id);
+      } catch {
+        downloadUrl = dataset?.dataFile?.fileUrl || dataset?.files?.[0]?.file || dataset?.files?.[0]?.file_url;
+      }
+      if (downloadUrl) {
+        onDownloadReady(downloadUrl);
+        return;
+      }
+    }
+
     setSubmitting(true);
     setError(null);
     try {
@@ -743,6 +805,20 @@ export default function DatasetViewPage() {
     );
   }
 
+  const isOwner = Boolean(
+    dataset?.is_owner ||
+    dataset?.can_edit ||
+    (user && dataset && (
+      (dataset.owner_id && String(dataset.owner_id) === String(user.id || user.user_id)) ||
+      (dataset.owner_email && user.email && dataset.owner_email.toLowerCase() === user.email.toLowerCase()) ||
+      (dataset.owner_username && user.username && dataset.owner_username.toLowerCase() === user.username.toLowerCase()) ||
+      (dataset.owner_name && (user.full_name || user.username) && (
+        dataset.owner_name.toLowerCase() === (user.full_name || "").toLowerCase() ||
+        dataset.owner_name.toLowerCase() === (user.username || "").toLowerCase()
+      ))
+    ))
+  );
+
   const toggleSection = (key) => {
     setExpandedSections((prev) => {
       const next = new Set(prev);
@@ -756,6 +832,28 @@ export default function DatasetViewPage() {
   };
 
   const handleDownload = async () => {
+    // If the logged-in user is the owner, download directly — owner should NEVER see Request Access!
+    // The backend already allows the owner to download directly.
+    if (isOwner) {
+      setDownloading(true);
+      setDownloadError(null);
+      try {
+        const url = await getDownloadUrl(dataset.id);
+        handleDownloadReady(url);
+      } catch (err) {
+        console.error("Failed to get download URL for owner:", err);
+        const fallbackUrl = dataset?.dataFile?.fileUrl || dataset?.files?.[0]?.file || dataset?.files?.[0]?.file_url;
+        if (fallbackUrl) {
+          handleDownloadReady(fallbackUrl);
+        } else {
+          setDownloadError(err?.response?.data?.detail || "Couldn't download your dataset right now.");
+        }
+      } finally {
+        setDownloading(false);
+      }
+      return;
+    }
+
     if (dataset.visibility === "public" || dataset.visibility === "restricted") {
       setShareModalMode("download");
       setShareModalOpen(true);
@@ -766,7 +864,7 @@ export default function DatasetViewPage() {
     setDownloadError(null);
     try {
       const url = await getDownloadUrl(dataset.id);
-      window.location.assign(url);
+      handleDownloadReady(url);
     } catch (err) {
       console.error("Failed to get download URL:", err);
       if (err.response?.status === 403) {
@@ -798,7 +896,19 @@ export default function DatasetViewPage() {
   };
 
   const handleShare = async () => {
-    if (dataset.visibility === "public" || dataset.visibility === "restricted") {
+    if (isOwner) {
+      setShareModalMode("share");
+      setShareModalOpen(true);
+      return;
+    }
+
+    if (dataset.visibility === "restricted") {
+      setShareModalMode("download");
+      setShareModalOpen(true);
+      return;
+    }
+
+    if (dataset.visibility === "public") {
       setShareModalMode("share");
       setShareModalOpen(true);
       return;
@@ -1064,6 +1174,7 @@ export default function DatasetViewPage() {
       <ShareAccessModal
         dataset={dataset}
         mode={shareModalMode}
+        isOwner={isOwner}
         onClose={() => setShareModalOpen(false)}
         onDownloadReady={handleDownloadReady}
         onShared={() => {

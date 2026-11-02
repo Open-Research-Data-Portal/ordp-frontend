@@ -26,6 +26,7 @@ import { useAuth } from "../../../context/useAuth";
 import { isReviewer, isAdmin, getDashboardPath } from "../../../utils/userRoles";
 import { useToast } from "../../../context/ToastContext.jsx";
 import * as datasetsApi from "../hooks/datasetsApi.js";
+import { formatApiError } from "../../../utils/errorFormatter";
 
 const EVALUATION_QUESTIONS = [
   {
@@ -149,8 +150,9 @@ export default function ReviewDatasetPage() {
         if (active) setDataset(data);
       } catch (err) {
         if (active) {
-          setError(err?.response?.data?.detail || "Could not load dataset details.");
-          addToast("Failed to load dataset.", "error");
+          const msg = formatApiError(err, "Could not load dataset details.");
+          setError(msg);
+          addToast(msg, "error");
         }
       } finally {
         if (active) setLoading(false);
@@ -200,8 +202,8 @@ export default function ReviewDatasetPage() {
       } else {
         addToast("Download link not available.", "error");
       }
-    } catch {
-      addToast("Failed to initiate file download.", "error");
+    } catch (err) {
+      addToast(formatApiError(err, "Failed to initiate file download."), "error");
     } finally {
       setDownloading(false);
     }
@@ -224,14 +226,7 @@ export default function ReviewDatasetPage() {
       navigate("/reviewer/review-queue");
     } catch (err) {
       console.error("Decision submission error:", err);
-      const serverMsg =
-        err?.response?.data?.detail ||
-        err?.response?.data?.message ||
-        err?.response?.data?.error ||
-        (typeof err?.response?.data === "string" ? err.response.data : null) ||
-        (err?.response?.data ? JSON.stringify(err.response.data) : null) ||
-        err?.message ||
-        "Failed to submit decision.";
+      const serverMsg = formatApiError(err, "Failed to submit decision.");
       addToast(serverMsg, "error");
     } finally {
       setSubmitting(false);
@@ -267,7 +262,7 @@ export default function ReviewDatasetPage() {
       setThumbnailUrl("");
       setThumbnailFile(null);
     } catch (err) {
-      addToast(err?.response?.data?.detail || "Failed to submit thumbnail.", "error");
+      addToast(formatApiError(err, "Failed to submit thumbnail."), "error");
     } finally {
       setSubmittingThumb(false);
     }
@@ -283,7 +278,7 @@ export default function ReviewDatasetPage() {
       setShowDeleteModal(false);
       setDeleteReason("");
     } catch (err) {
-      addToast(err?.response?.data?.detail || "Failed to submit deletion request.", "error");
+      addToast(formatApiError(err, "Failed to submit deletion request."), "error");
     } finally {
       setSubmittingDelete(false);
     }

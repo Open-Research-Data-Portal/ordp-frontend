@@ -289,47 +289,57 @@ export async function getMyReviews() {
 }
 
 export async function decideDataset(datasetId, decision, reason) {
+  if (!datasetId || String(datasetId).trim() === "" || datasetId === "undefined" || datasetId === "null") {
+    throw new Error("Missing or invalid dataset ID for decision.");
+  }
+
+  const cleanId = String(datasetId).trim();
   const normDecision = String(decision || "approved").toLowerCase();
-  const altDecision = normDecision === "approved" ? "approve" : normDecision === "rejected" ? "reject" : normDecision;
 
   // If this is a local mock dataset (e.g. ds-mock-01), handle gracefully in demo mode
-  if (String(datasetId).startsWith("mock") || String(datasetId).startsWith("ds-mock")) {
+  if (cleanId.startsWith("mock") || cleanId.startsWith("ds-mock")) {
     return { status: "success", decision: normDecision, message: "Mock dataset decision recorded." };
   }
 
   const candidateUrls = [
-    `/admin-panel/${datasetId}/decide/`,
-    `/admin-panel/datasets/${datasetId}/decide/`,
-    `/admin-panel/queue/${datasetId}/decide/`,
-    `/datasets/${datasetId}/decide/`,
-    ...(normDecision === "approved" ? [`/datasets/${datasetId}/approve/`, `/admin-panel/datasets/${datasetId}/approve/`] : []),
-    ...(normDecision === "rejected" ? [`/datasets/${datasetId}/reject/`, `/admin-panel/datasets/${datasetId}/reject/`] : []),
+    `/admin-panel/${cleanId}/decide/`,
+    `/admin-panel/datasets/${cleanId}/decide/`,
+    `/datasets/${cleanId}/decide/`,
+    `/admin-panel/queue/${cleanId}/decide/`,
+    ...(normDecision.includes("approv") ? [`/datasets/${cleanId}/approve/`, `/admin-panel/datasets/${cleanId}/approve/`] : []),
+    ...(normDecision.includes("reject") ? [`/datasets/${cleanId}/reject/`, `/admin-panel/datasets/${cleanId}/reject/`] : []),
   ];
+
+  // Try decisions shapes: if changes_requested, also prepare fallback to rejected with changes note
+  const payloads = [];
+  if (normDecision === "changes_requested") {
+    payloads.push({ decision: "changes_requested", ...(reason ? { reason } : {}) });
+    payloads.push({ decision: "rejected", reason: reason ? `[CHANGES REQUESTED] ${reason}` : "[CHANGES REQUESTED]" });
+    payloads.push({ decision: "reject", reason: reason ? `[CHANGES REQUESTED] ${reason}` : "[CHANGES REQUESTED]" });
+  } else if (normDecision === "approved" || normDecision === "approve") {
+    payloads.push({ decision: "approved", ...(reason ? { reason } : {}) });
+    payloads.push({ decision: "approve", ...(reason ? { reason } : {}) });
+  } else if (normDecision === "rejected" || normDecision === "reject") {
+    payloads.push({ decision: "rejected", ...(reason ? { reason } : {}) });
+    payloads.push({ decision: "reject", ...(reason ? { reason } : {}) });
+  } else {
+    payloads.push({ decision: normDecision, ...(reason ? { reason } : {}) });
+  }
 
   let lastErr = null;
   for (const url of candidateUrls) {
-    try {
-      const payload = { decision: normDecision };
-      if (reason) payload.reason = reason;
-      const { data } = await client.post(url, payload);
-      return data;
-    } catch (err) {
-      lastErr = err;
-      const status = err?.response?.status;
-      // If 400 Bad Request, also try alternative decision keyword (e.g. "approve" vs "approved")
-      if (status === 400 && altDecision !== normDecision) {
-        try {
-          const altPayload = { decision: altDecision };
-          if (reason) altPayload.reason = reason;
-          const { data } = await client.post(url, altPayload);
-          return data;
-        } catch (altErr) {
-          lastErr = altErr;
+    for (const payload of payloads) {
+      try {
+        const { data } = await client.post(url, payload);
+        return data;
+      } catch (err) {
+        lastErr = err;
+        const status = err?.response?.status;
+        if (status === 400) continue;
+        if (status === 404 || status === 405) break;
+        if (status && status !== 500) {
+          throw lastErr;
         }
-      }
-      // If it's not a 404 or 405, the endpoint exists on the backend and returned a specific error
-      if (status && status !== 404 && status !== 405) {
-        throw lastErr;
       }
     }
   }

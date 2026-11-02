@@ -18,15 +18,11 @@ import {
 } from "lucide-react";
 import DashboardAwareLayout from "../layouts/DashboardAwareLayout";
 import { searchDatasets } from "../api/search";
+import { getCategories } from "../api/metadata";
 import * as bookmarksApi from "../api/bookmarks";
 import { getDatasetImage } from "../utils/datasetImage";
 import { useAuth } from "../context/useAuth";
 
-
-const QUICK_CATEGORIES = [
-  "All datasets", "Computer Science", "Education", "Classification",
-  "Computer Vision", "NLP", "Data Visualization", "Pre-Trained Model",
-];
 
 const FILE_TYPES = ["CSV", "JSON", "SQLite", "Parquet", "BigQuery"];
 function formatBytes(bytes) {
@@ -223,7 +219,8 @@ export default function BrowseDatasetsPage() {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [activeCategory, setActiveCategory] = useState("All datasets");
+  const [categories, setCategories] = useState([]);
+  const [activeCategory, setActiveCategory] = useState(null);
 
   // Backend filter states
   const [orderBy, setOrderBy] = useState("");
@@ -232,7 +229,6 @@ export default function BrowseDatasetsPage() {
   const [keywordFilter, setKeywordFilter] = useState("");
   const [languageFilter, setLanguageFilter] = useState("");
   const [sponsorFilter, setSponsorFilter] = useState("");
-  const [coverageFilter, setCoverageFilter] = useState("");
   const [doiFilter, setDoiFilter] = useState("");
   const [ownerFilter, setOwnerFilter] = useState("");
   const [minFileCount, setMinFileCount] = useState("");
@@ -253,6 +249,23 @@ export default function BrowseDatasetsPage() {
   const [searchLoading, setSearchLoading] = useState(false);
 
   const { bookmarkedIds, toggleBookmark } = useBookmarkedIds();
+
+  useEffect(() => {
+    let isMounted = true;
+    getCategories()
+      .then((data) => {
+        const categoryList = Array.isArray(data) ? data : data?.results;
+        if (isMounted) {
+          setCategories(Array.isArray(categoryList) ? categoryList : []);
+        }
+      })
+      .catch((error) => {
+        console.error("Failed to load dataset categories", error);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const filterPanelRef = useRef(null);
   const filterButtonRef = useRef(null);
@@ -331,10 +344,6 @@ export default function BrowseDatasetsPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [filtersOpen]);
 
-  const toggleInSet = (value, list, setList) => {
-    setList(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
-  };
-
   const clearFilters = () => {
     setOrderBy("");
     setVisibility("");
@@ -342,7 +351,6 @@ export default function BrowseDatasetsPage() {
     setKeywordFilter("");
     setLanguageFilter("");
     setSponsorFilter("");
-    setCoverageFilter("");
     setDoiFilter("");
     setOwnerFilter("");
     setMinFileCount("");
@@ -366,7 +374,6 @@ export default function BrowseDatasetsPage() {
     (keywordFilter ? 1 : 0) +
     (languageFilter ? 1 : 0) +
     (sponsorFilter ? 1 : 0) +
-    (coverageFilter ? 1 : 0) +
     (doiFilter ? 1 : 0) +
     (ownerFilter ? 1 : 0) +
     (minFileCount || maxFileCount ? 1 : 0) +
@@ -376,7 +383,7 @@ export default function BrowseDatasetsPage() {
     (hasMultipleVersions ? 1 : 0) +
     selectedFileTypes.length;
 
-  const isSearching = query.trim().length > 0 || activeFilterCount > 0 || activeCategory !== "All datasets";
+  const isSearching = query.trim().length > 0 || activeFilterCount > 0 || activeCategory !== null;
 
   // Debounced search — fires 400 ms after the user stops typing or changes filters
   useEffect(() => {
@@ -389,13 +396,16 @@ export default function BrowseDatasetsPage() {
       try {
         const params = {};
         if (query.trim()) params.q = query.trim();
+        if (activeCategory) {
+          params.category = String(activeCategory.id);
+          params.category_name = activeCategory.name;
+        }
         if (orderBy) params.order_by = orderBy;
         if (visibility) params.visibility = visibility;
         if (fileSize) params.file_size = fileSize;
         if (keywordFilter.trim()) params.keyword = keywordFilter.trim();
         if (languageFilter.trim()) params.language = languageFilter.trim();
         if (sponsorFilter.trim()) params.sponsor = sponsorFilter.trim();
-        if (coverageFilter.trim()) params.coverage = coverageFilter.trim();
         if (doiFilter.trim()) params.doi = doiFilter.trim();
         if (ownerFilter.trim()) params.owner = ownerFilter.trim();
         if (minFileCount) params.min_file_count = minFileCount;
@@ -425,7 +435,6 @@ export default function BrowseDatasetsPage() {
     keywordFilter,
     languageFilter,
     sponsorFilter,
-    coverageFilter,
     doiFilter,
     ownerFilter,
     minFileCount,
@@ -552,7 +561,6 @@ export default function BrowseDatasetsPage() {
               <div className="flex flex-wrap gap-2 mb-4">
                 {[
                   { label: "Public", value: "public" },
-                  { label: "Institutional", value: "institutional" },
                   { label: "Restricted", value: "restricted" },
                 ].map((item) => (
                   <button
@@ -597,7 +605,9 @@ export default function BrowseDatasetsPage() {
                     key={type}
                     label={type}
                     checked={selectedFileTypes.includes(type)}
-                    onToggle={() => toggleInSet(type, selectedFileTypes, setSelectedFileTypes)}
+                    onToggle={() => setSelectedFileTypes(
+                      selectedFileTypes.includes(type) ? [] : [type]
+                    )}
                   />
                 ))}
               </div>
@@ -625,27 +635,15 @@ export default function BrowseDatasetsPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 mb-4">
-                <div>
-                  <label className="block text-xs font-semibold tracking-wide text-gray-500 mb-1">SPONSOR / GRANT</label>
-                  <input
-                    type="text"
-                    value={sponsorFilter}
-                    onChange={(e) => setSponsorFilter(e.target.value)}
-                    placeholder="Sponsor"
-                    className="w-full bg-white border border-[#E3E1DA] rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-navy"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold tracking-wide text-gray-500 mb-1">COVERAGE</label>
-                  <input
-                    type="text"
-                    value={coverageFilter}
-                    onChange={(e) => setCoverageFilter(e.target.value)}
-                    placeholder="Coverage"
-                    className="w-full bg-white border border-[#E3E1DA] rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-navy"
-                  />
-                </div>
+              <div className="mb-4">
+                <label className="block text-xs font-semibold tracking-wide text-gray-500 mb-1">SPONSOR / GRANT</label>
+                <input
+                  type="text"
+                  value={sponsorFilter}
+                  onChange={(e) => setSponsorFilter(e.target.value)}
+                  placeholder="Sponsor"
+                  className="w-full bg-white border border-[#E3E1DA] rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-navy"
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3 mb-4">
@@ -769,18 +767,18 @@ export default function BrowseDatasetsPage() {
 
       {/* Quick category pills */}
       <div className="flex flex-wrap gap-2 mb-10 animate-fade-in-up" style={{ animationDelay: "120ms" }}>
-        {QUICK_CATEGORIES.map((cat) => (
+        {[{ id: null, name: "All datasets" }, ...categories].map((category) => (
           <button
-            key={cat}
-            onClick={() => setActiveCategory(cat)}
+            key={category.id || "all"}
+            onClick={() => setActiveCategory(category.id ? category : null)}
             className={[
               "px-4 py-2 rounded-full text-sm border transition-all duration-150 active:scale-95",
-              activeCategory === cat
+              (activeCategory?.id || null) === category.id
                 ? "bg-[#A67A0D] text-white border-[#A67A0D] scale-[1.03]"
                 : "bg-white text-navy border-[#E3E1DA] hover:border-[#A67A0D] hover:scale-[1.03]",
             ].join(" ")}
           >
-            {cat}
+            {category.name}
           </button>
         ))}
       </div>

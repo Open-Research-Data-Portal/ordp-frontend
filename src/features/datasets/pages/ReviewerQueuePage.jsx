@@ -146,6 +146,12 @@ export default function ReviewerQueuePage() {
           return isPending && notReviewed;
         });
         setDatasetQueue(pendingOnly);
+        for (const item of pendingOnly) {
+          const id = String(item.id || item.dataset_id);
+          if (id) {
+            try { sessionStorage.setItem(`ordp_dataset_${id}`, JSON.stringify(item)); } catch {}
+          }
+        }
 
         if (results[1].status === "fulfilled") setContentUpdates(normalizeList(results[1].value));
         if (results[2].status === "fulfilled") setRevisionRequests(normalizeList(results[2].value));

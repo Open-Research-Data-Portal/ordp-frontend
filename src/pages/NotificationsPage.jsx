@@ -91,24 +91,38 @@ export default function NotificationsPage() {
   const [loading, setLoading] = useState(true);
   const [expandedNotifId, setExpandedNotifId] = useState(null);
 
-  const loadNotifications = async () => {
+  const loadNotifications = async (silent = false) => {
     if (!user) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       const list = await fetchNotificationHistory(user);
       setNotifications(list);
     } catch (err) {
       console.error("Failed to load notifications history:", err);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadNotifications();
-    window.addEventListener("ordp:notifications-updated", loadNotifications);
+    loadNotifications(false);
+
+    const handleUpdate = (e) => {
+      const detail = e?.detail;
+      if (detail?.notificationId) {
+        setNotifications((prev) =>
+          prev.map((n) => (String(n.id) === String(detail.notificationId) ? { ...n, is_read: true } : n))
+        );
+      } else if (detail?.all) {
+        setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+      } else {
+        loadNotifications(true);
+      }
+    };
+
+    window.addEventListener("ordp:notifications-updated", handleUpdate);
     return () => {
-      window.removeEventListener("ordp:notifications-updated", loadNotifications);
+      window.removeEventListener("ordp:notifications-updated", handleUpdate);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
@@ -119,25 +133,33 @@ export default function NotificationsPage() {
   );
 
   async function handleMarkRead(id) {
-    const updated = await markNotificationAsRead(user, id);
-    setNotifications(updated);
+    // Instant optimistic update — no reload needed
+    setNotifications((prev) =>
+      prev.map((n) => (String(n.id) === String(id) ? { ...n, is_read: true } : n))
+    );
+    await markNotificationAsRead(user, id);
   }
 
   async function handleMarkAllRead() {
-    const updated = await markAllNotificationsAsRead(user);
-    setNotifications(updated);
+    // Instant optimistic update — zero latency
+    setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+    await markAllNotificationsAsRead(user, notifications);
     addToast("All notifications marked as read", "success");
   }
 
   async function handleDelete(id) {
-    const updated = await deleteNotificationItem(user, id);
-    setNotifications(updated);
+    setNotifications((prev) => prev.filter((n) => String(n.id) !== String(id)));
+    await deleteNotificationItem(user, id);
     addToast("Notification removed", "info");
   }
 
   function handleActionClick(notification) {
     if (!notification.is_read) {
       handleMarkRead(notification.id);
+    }
+    if (notification.request_id) {
+      navigate(`/sharing/access-requests/${notification.request_id}/decision`);
+      return;
     }
     const datasetId = getDatasetIdFromNotification(notification);
     if (datasetId) {
@@ -171,18 +193,7 @@ export default function NotificationsPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            {unreadCount > 0 && (
-              <button
-                type="button"
-                onClick={handleMarkAllRead}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-navy bg-slate-100 hover:bg-slate-200 px-3.5 py-2 rounded-xl transition cursor-pointer"
-              >
-                <CheckCheck className="w-3.5 h-3.5 text-slate-600" />
-                Mark all as read
-              </button>
-            )}
-          </div>
+          
         </div>
 
         {/* Notifications list */}
@@ -340,7 +351,16 @@ export default function NotificationsPage() {
                               </button>
                             </div>
 
-                            {getDatasetIdFromNotification(n) && (
+                            {n.request_id ? (
+                              <button
+                                type="button"
+                                onClick={() => handleActionClick(n)}
+                                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-navy hover:bg-navy-light text-white text-xs font-semibold shadow-xs hover:shadow transition cursor-pointer"
+                              >
+                                Review Request
+                                <ArrowRight className="w-3.5 h-3.5 text-gold" />
+                              </button>
+                            ) : getDatasetIdFromNotification(n) ? (
                               <button
                                 type="button"
                                 onClick={() => handleActionClick(n)}
@@ -349,7 +369,7 @@ export default function NotificationsPage() {
                                 View Dataset
                                 <ArrowRight className="w-3.5 h-3.5 text-gold" />
                               </button>
-                            )}
+                            ) : null}
                           </div>
                         </div>
                       )}

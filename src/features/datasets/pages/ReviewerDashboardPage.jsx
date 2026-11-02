@@ -81,7 +81,7 @@ export default function ReviewerDashboardPage() {
           datasetsApi.getContentUpdateQueue(), // 3
           datasetsApi.getRevisionRequestsQueue(), // 4
           datasetsApi.getAccessRequestsQueue(), // 5
-          datasetsApi.getMyReviews(),          // 6 — /admin-panel/my-reviews/
+          datasetsApi.getMyReviews(user),      // 6 — /admin-panel/my-reviews/
           datasetsApi.getAdminPendingReviews(), // 7 fallback
         ]);
         if (!active) return;
@@ -105,6 +105,24 @@ export default function ReviewerDashboardPage() {
         for (const item of [...reviewerQ, ...adminPending]) {
           const id = String(item.id || item.dataset_id);
           if (!seen.has(id)) { seen.add(id); merged.push(item); }
+        }
+
+        // Also check if any datasets in the repository are in pending/submitted/in_review status
+        if (merged.length === 0) {
+          try {
+            const myData = await datasetsApi.getMyDatasets();
+            const myList = Array.isArray(myData) ? myData : (myData?.results || []);
+            for (const item of myList) {
+              const s = String(item.status || "").toLowerCase();
+              const id = String(item.id || item.dataset_id);
+              if (id && (s === "pending" || s === "submitted" || s === "in_review") && !seen.has(id)) {
+                seen.add(id);
+                merged.push(item);
+              }
+            }
+          } catch {
+            // non-fatal
+          }
         }
         const pendingOnly = merged.filter((d) => {
           const id = String(d.id || d.dataset_id);
@@ -130,7 +148,7 @@ export default function ReviewerDashboardPage() {
     }
     load();
     return () => { active = false; };
-  }, [addToast]);
+  }, [addToast, user]);
 
   const loadGuidelines = useCallback(async () => {
     if (guidelines) { setShowGuidelines(true); return; }
@@ -143,26 +161,30 @@ export default function ReviewerDashboardPage() {
     }
   }, [guidelines, addToast]);
 
-  // ── Computed stats ───────────────────────────────────────────────────
-  const pendingCounts = useMemo(() => ({
-    datasets: overview?.assigned_datasets_pending ?? datasetQueue.length,
-    contentUpdates: overview?.content_updates_pending ?? contentUpdates.length,
-    revisionRequests: overview?.revision_requests_awaiting_my_vote ?? revisionRequests.length,
-    accessRequests: overview?.access_requests_awaiting_my_vote ?? accessRequests.length,
-    total:
-      (overview?.assigned_datasets_pending ?? datasetQueue.length)
-      + (overview?.content_updates_pending ?? contentUpdates.length)
-      + (overview?.revision_requests_awaiting_my_vote ?? revisionRequests.length)
-      + (overview?.access_requests_awaiting_my_vote ?? accessRequests.length),
-  }), [overview, datasetQueue, contentUpdates, revisionRequests, accessRequests]);
+  // ── Computed stats: strictly use real data lengths so cards never open blank space ("blackspace")
+  const pendingCounts = useMemo(() => {
+    const datasets = datasetQueue.length;
+    const content = contentUpdates.length;
+    return {
+      datasets,
+      contentUpdates: content,
+      total: datasets + content,
+    };
+  }, [datasetQueue, contentUpdates]);
 
   const reviewStats = useMemo(() => {
-    const approved = metrics?.approved ?? metrics?.total_approved ?? myReviews.filter(r => String(r.decision || r.vote || r.status || "").toLowerCase() === "approved").length;
-    const rejected = metrics?.rejected ?? metrics?.total_rejected ?? myReviews.filter(r => String(r.decision || r.vote || r.status || "").toLowerCase() === "rejected").length;
-    const total = metrics?.total_reviewed ?? myReviews.length;
-    const pending = metrics?.assigned_pending ?? overview?.assigned_datasets_pending ?? pendingCounts.datasets;
+    const approved = myReviews.filter(r => {
+      const s = String(r.decision || r.vote || r.status || "").toLowerCase();
+      return s === "approved" || s === "approve";
+    }).length;
+    const rejected = myReviews.filter(r => {
+      const s = String(r.decision || r.vote || r.status || "").toLowerCase();
+      return s === "rejected" || s === "reject" || s === "changes_requested";
+    }).length;
+    const total = myReviews.length;
+    const pending = datasetQueue.length;
     return { total, approved, rejected, pending };
-  }, [metrics, overview, myReviews, pendingCounts.datasets]);
+  }, [myReviews, datasetQueue]);
 
   // ── 403 Forbidden screen ─────────────────────────────────────────────
   if (forbidden) {
@@ -204,12 +226,24 @@ export default function ReviewerDashboardPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2.5 shrink-0">
           <Link
-            to="/reviewer/review-queue"
+            to="/reviewer/review-queue?tab=datasets"
             className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-navy bg-gold hover:bg-gold-light rounded-xl px-4 py-2.5 transition shadow-sm"
           >
             <Layers className="w-4 h-4" />
             Open Review Queue
             <ArrowRight className="w-4 h-4" />
+          </Link>
+          <Link
+            to="/reviewer/archive-requests"
+            className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-white bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl px-4 py-2.5 transition"
+          >
+            <Archive className="w-4 h-4 text-amber-300" />
+            Archive Requests
+            {archiveRequestCount > 0 && (
+              <span className="ml-1 bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                {archiveRequestCount}
+              </span>
+            )}
           </Link>
           <button
             type="button"
@@ -235,59 +269,83 @@ export default function ReviewerDashboardPage() {
               <TrendingUp className="w-4 h-4 text-gold" /> Personal Review Performance
             </h3>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-white rounded-2xl border border-border p-5 shadow-xs">
+              <Link
+                to="/reviewer/review-queue?tab=my-reviews"
+                className="bg-white hover:bg-slate-50 border border-border hover:border-slate-300 rounded-2xl p-5 shadow-xs transition group block"
+              >
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-semibold text-gray-500">Total Reviewed</span>
-                  <div className="w-8 h-8 rounded-xl bg-navy/5 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-xl bg-navy/5 flex items-center justify-center group-hover:bg-navy/10 transition-colors">
                     <Database className="w-4 h-4 text-navy" />
                   </div>
                 </div>
                 <p className="text-3xl font-extrabold text-navy">{reviewStats.total}</p>
-                <p className="text-xs text-gray-400 mt-1">Lifetime completed decisions</p>
-              </div>
+                <p className="text-xs text-gray-400 mt-1 flex items-center justify-between">
+                  <span>Lifetime decisions</span>
+                  <ChevronRight className="w-3.5 h-3.5 text-gray-400 group-hover:translate-x-0.5 transition-transform" />
+                </p>
+              </Link>
 
-              <div className="bg-white rounded-2xl border border-border p-5 shadow-xs">
+              <Link
+                to="/reviewer/review-queue?tab=my-reviews"
+                className="bg-white hover:bg-emerald-50/40 border border-border hover:border-emerald-300 rounded-2xl p-5 shadow-xs transition group block"
+              >
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-semibold text-emerald-700">Approved</span>
-                  <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center group-hover:bg-emerald-100 transition-colors">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                   </div>
                 </div>
                 <p className="text-3xl font-extrabold text-emerald-600">{reviewStats.approved}</p>
-                <p className="text-xs text-emerald-700/70 mt-1">
-                  {reviewStats.total > 0
-                    ? `${Math.round((reviewStats.approved / reviewStats.total) * 100)}% approval rate`
-                    : "Published datasets"}
+                <p className="text-xs text-emerald-700/70 mt-1 flex items-center justify-between">
+                  <span>
+                    {reviewStats.total > 0
+                      ? `${Math.round((reviewStats.approved / reviewStats.total) * 100)}% approval rate`
+                      : "Published datasets"}
+                  </span>
+                  <ChevronRight className="w-3.5 h-3.5 text-emerald-400 group-hover:translate-x-0.5 transition-transform" />
                 </p>
-              </div>
+              </Link>
 
-              <div className="bg-white rounded-2xl border border-border p-5 shadow-xs">
+              <Link
+                to="/reviewer/review-queue?tab=my-reviews"
+                className="bg-white hover:bg-red-50/40 border border-border hover:border-red-300 rounded-2xl p-5 shadow-xs transition group block"
+              >
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-semibold text-red-600">Rejected</span>
-                  <div className="w-8 h-8 rounded-xl bg-red-50 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-xl bg-red-50 flex items-center justify-center group-hover:bg-red-100 transition-colors">
                     <XCircle className="w-4 h-4 text-red-600" />
                   </div>
                 </div>
                 <p className="text-3xl font-extrabold text-red-600">{reviewStats.rejected}</p>
-                <p className="text-xs text-red-600/70 mt-1">
-                  {reviewStats.total > 0
-                    ? `${Math.round((reviewStats.rejected / reviewStats.total) * 100)}% rejection rate`
-                    : "Returned or rejected"}
+                <p className="text-xs text-red-600/70 mt-1 flex items-center justify-between">
+                  <span>
+                    {reviewStats.total > 0
+                      ? `${Math.round((reviewStats.rejected / reviewStats.total) * 100)}% rejection rate`
+                      : "Returned or rejected"}
+                  </span>
+                  <ChevronRight className="w-3.5 h-3.5 text-red-400 group-hover:translate-x-0.5 transition-transform" />
                 </p>
-              </div>
+              </Link>
 
-              <div className="bg-white rounded-2xl border border-border p-5 shadow-xs">
+              <Link
+                to="/reviewer/review-queue?tab=my-reviews"
+                className="bg-white hover:bg-amber-50/40 border border-border hover:border-amber-300 rounded-2xl p-5 shadow-xs transition group block"
+              >
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-semibold text-amber-700">Recent Activity</span>
-                  <div className="w-8 h-8 rounded-xl bg-amber-50 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-xl bg-amber-50 flex items-center justify-center group-hover:bg-amber-100 transition-colors">
                     <Clock className="w-4 h-4 text-amber-600" />
                   </div>
                 </div>
                 <p className="text-3xl font-extrabold text-gold">
                   {metrics?.reviews_last_30_days ?? metrics?.last_30_days ?? reviewStats.total}
                 </p>
-                <p className="text-xs text-gray-400 mt-1">Reviews in last 30 days</p>
-              </div>
+                <p className="text-xs text-gray-400 mt-1 flex items-center justify-between">
+                  <span>Reviews in 30 days</span>
+                  <ChevronRight className="w-3.5 h-3.5 text-amber-400 group-hover:translate-x-0.5 transition-transform" />
+                </p>
+              </Link>
             </div>
           </div>
 
@@ -298,13 +356,13 @@ export default function ReviewerDashboardPage() {
                 <Layers className="w-4 h-4 text-gold" /> Pending Workload by Category
               </h3>
               <Link
-                to="/reviewer/review-queue"
+                to="/reviewer/review-queue?tab=datasets"
                 className="text-xs font-semibold text-gold hover:text-gold-dark flex items-center gap-1 transition"
               >
                 View all queues &rarr;
               </Link>
             </div>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Link
                 to="/reviewer/review-queue?tab=datasets"
                 className="bg-white hover:bg-slate-50 border border-border hover:border-red-300 rounded-2xl p-5 transition group shadow-xs"
@@ -335,35 +393,7 @@ export default function ReviewerDashboardPage() {
                 </p>
               </Link>
 
-              <Link
-                to="/reviewer/review-queue?tab=revision-requests"
-                className="bg-white hover:bg-slate-50 border border-border hover:border-blue-300 rounded-2xl p-5 transition group shadow-xs"
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold text-blue-700">Revision Requests</span>
-                  <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
-                </div>
-                <p className="text-3xl font-bold text-blue-600">{pendingCounts.revisionRequests}</p>
-                <p className="text-xs text-gray-500 mt-1 flex items-center justify-between">
-                  <span>Author edit permissions</span>
-                  <ChevronRight className="w-4 h-4 text-gray-400 group-hover:translate-x-1 transition-transform" />
-                </p>
-              </Link>
 
-              <Link
-                to="/reviewer/review-queue?tab=access-requests"
-                className="bg-white hover:bg-slate-50 border border-border hover:border-violet-300 rounded-2xl p-5 transition group shadow-xs"
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold text-violet-700">Access Requests</span>
-                  <span className="w-2.5 h-2.5 rounded-full bg-violet-500" />
-                </div>
-                <p className="text-3xl font-bold text-violet-600">{pendingCounts.accessRequests}</p>
-                <p className="text-xs text-gray-500 mt-1 flex items-center justify-between">
-                  <span>Restricted dataset access</span>
-                  <ChevronRight className="w-4 h-4 text-gray-400 group-hover:translate-x-1 transition-transform" />
-                </p>
-              </Link>
             </div>
           </div>
 
@@ -384,7 +414,7 @@ export default function ReviewerDashboardPage() {
                 </div>
               </div>
               <Link
-                to="/reviewer/review-queue"
+                to="/reviewer/review-queue?tab=datasets"
                 className="inline-flex items-center gap-2 bg-gold hover:bg-gold-light text-navy text-sm font-bold rounded-xl px-5 py-3 transition shrink-0 shadow-sm"
               >
                 Start Evaluating

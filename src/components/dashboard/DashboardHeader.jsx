@@ -109,11 +109,27 @@ export default function DashboardHeader({
 
   useEffect(() => {
     loadBell();
-    window.addEventListener("ordp:notifications-updated", loadBell);
+
+    const handleUpdate = (e) => {
+      const detail = e?.detail;
+      if (detail?.all) {
+        setUnreadCount(0);
+        setBellNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+      } else if (detail?.notificationId) {
+        setUnreadCount((prev) => Math.max(0, prev - 1));
+        setBellNotifications((prev) =>
+          prev.map((n) => (String(n.id) === String(detail.notificationId) ? { ...n, is_read: true } : n))
+        );
+      } else {
+        loadBell();
+      }
+    };
+
+    window.addEventListener("ordp:notifications-updated", handleUpdate);
     const interval = setInterval(loadBell, 30000);
 
     return () => {
-      window.removeEventListener("ordp:notifications-updated", loadBell);
+      window.removeEventListener("ordp:notifications-updated", handleUpdate);
       clearInterval(interval);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -146,24 +162,28 @@ export default function DashboardHeader({
 
   const handleMarkAll = async (e) => {
     e.stopPropagation();
+    setUnreadCount(0);
+    setBellNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
     try {
-      await markAllNotificationsAsRead(user);
-      setUnreadCount(0);
-      setBellNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+      await markAllNotificationsAsRead(user, bellNotifications);
     } catch {}
   };
 
   const handleItemClick = async (notif) => {
     if (!notif.is_read) {
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+      setBellNotifications((prev) =>
+        prev.map((n) => (String(n.id) === String(notif.id) ? { ...n, is_read: true } : n))
+      );
       try {
         await markNotificationAsRead(user, notif.id);
-        setUnreadCount((prev) => Math.max(0, prev - 1));
-        setBellNotifications((prev) =>
-          prev.map((n) => (n.id === notif.id ? { ...n, is_read: true } : n))
-        );
       } catch {}
     }
     setBellOpen(false);
+    if (notif.request_id) {
+      navigate(`/sharing/access-requests/${notif.request_id}/decision`);
+      return;
+    }
     const dsId = getDatasetIdFromNotification(notif);
     if (dsId) {
       navigate(`/datasets/${dsId}`);
@@ -262,16 +282,7 @@ export default function DashboardHeader({
                     </span>
                   )}
                 </div>
-                {unreadCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={handleMarkAll}
-                    className="inline-flex items-center gap-1 text-[11px] font-medium text-navy hover:text-gold-dark cursor-pointer transition"
-                  >
-                    <CheckCheck className="w-3.5 h-3.5" />
-                    Mark all read
-                  </button>
-                )}
+                
               </div>
 
               <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">

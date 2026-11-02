@@ -1,8 +1,34 @@
 
+export function getCanonicalUserId(user) {
+  if (!user) return "user";
+  if (typeof user === "string") return user;
+  return String(user.id || user.user_id || user.pk || user.email || "user");
+}
+
+export function getAllReadTimestamp(userId) {
+  if (typeof localStorage === "undefined") return 0;
+  try {
+    const uid = getCanonicalUserId(userId);
+    const ts = localStorage.getItem(`ordp_all_read_ts_${uid}`);
+    return ts ? parseInt(ts, 10) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function setAllReadTimestamp(userId) {
+  if (typeof localStorage === "undefined") return;
+  try {
+    const uid = getCanonicalUserId(userId);
+    localStorage.setItem(`ordp_all_read_ts_${uid}`, String(Date.now()));
+  } catch {}
+}
+
 export function getReadNotificationIds(userId) {
   if (typeof localStorage === "undefined") return new Set();
   try {
-    const raw = localStorage.getItem(`ordp_read_notifs_${userId || "user"}`);
+    const uid = getCanonicalUserId(userId);
+    const raw = localStorage.getItem(`ordp_read_notifs_${uid}`);
     return new Set(raw ? JSON.parse(raw) : []);
   } catch {
     return new Set();
@@ -12,7 +38,7 @@ export function getReadNotificationIds(userId) {
 export function saveReadNotificationId(userId, notificationId) {
   if (typeof localStorage === "undefined" || !notificationId) return;
   try {
-    const uid = userId || "user";
+    const uid = getCanonicalUserId(userId);
     const current = getReadNotificationIds(uid);
     current.add(String(notificationId));
     localStorage.setItem(`ordp_read_notifs_${uid}`, JSON.stringify([...current]));
@@ -22,7 +48,7 @@ export function saveReadNotificationId(userId, notificationId) {
 export function saveReadNotificationIds(userId, notificationIds) {
   if (typeof localStorage === "undefined" || !Array.isArray(notificationIds)) return;
   try {
-    const uid = userId || "user";
+    const uid = getCanonicalUserId(userId);
     const current = getReadNotificationIds(uid);
     notificationIds.forEach((id) => {
       if (id) current.add(String(id));
@@ -30,6 +56,8 @@ export function saveReadNotificationIds(userId, notificationIds) {
     localStorage.setItem(`ordp_read_notifs_${uid}`, JSON.stringify([...current]));
   } catch {}
 }
+
+
 
 import client from "./client";
 
@@ -177,13 +205,22 @@ export function getDatasetIdFromNotification(n) {
  * Normalize a raw backend notification object into the shape the UI expects.
  * Correctly identifies category decisions (approved, rejected, merged) and attaches action links.
  */
-export function normalizeNotification(item, userId) {
+export function normalizeNotification(item, user) {
   if (!item || typeof item !== "object") return null;
 
   const id = String(item.id ?? item.notification_id ?? item.pk ?? Math.random());
-  const readSet = getReadNotificationIds(userId);
-  const is_read = readSet.has(id) || Boolean(item.is_read ?? item.read ?? item.seen ?? false);
+  const uid = getCanonicalUserId(user);
+  const readSet = getReadNotificationIds(uid);
+  const allReadTs = getAllReadTimestamp(uid);
+
   const created_at = item.created_at || item.timestamp || item.date || new Date().toISOString();
+  const itemDateMs = new Date(created_at).getTime();
+
+  // Marked as read if in persistent read set, or if created before the "Mark all as read" timestamp, or marked by backend
+  const is_read =
+    readSet.has(id) ||
+    (allReadTs > 0 && itemDateMs > 0 && itemDateMs <= allReadTs) ||
+    Boolean(item.is_read ?? item.read ?? item.seen ?? false);
 
   let rawType = String(item.type || item.notification_type || item.category || "info").toLowerCase();
   const textBlob = `${item.title || ""} ${item.subject || ""} ${item.message || ""} ${item.body || ""} ${item.description || ""}`.toLowerCase();

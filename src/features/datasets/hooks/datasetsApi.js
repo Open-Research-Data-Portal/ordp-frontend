@@ -1,4 +1,42 @@
+
+export function recordReviewerDecision(userId, datasetId, decision, reason, datasetTitle = "Dataset") {
+  if (typeof localStorage === "undefined") return;
+  try {
+    const uid = userId || "user";
+    const key = `ordp_reviewer_reviews_${uid}`;
+    const raw = localStorage.getItem(key);
+    const existing = raw ? JSON.parse(raw) : [];
+    const newEntry = {
+      id: datasetId,
+      dataset_id: datasetId,
+      dataset_title: datasetTitle,
+      decision: decision,
+      vote: decision,
+      status: decision,
+      reason: reason || "",
+      comment: reason || "",
+      decided_at: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+    };
+    const updated = [newEntry, ...existing.filter((r) => String(r.id || r.dataset_id) !== String(datasetId))];
+    localStorage.setItem(key, JSON.stringify(updated));
+  } catch {}
+}
+
+export function getStoredReviewerDecisions(userId) {
+  if (typeof localStorage === "undefined") return [];
+  try {
+    const uid = userId || "user";
+    const key = `ordp_reviewer_reviews_${uid}`;
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
 import client from "../../../api/client";
+import { MOCK_CATALOG_DATASETS, findDataset } from "../../../api/datasetsHub";
 
 const DATASETS_BASE = "/datasets";
 const METADATA_BASE = "/metadata";
@@ -223,8 +261,58 @@ export async function getMyDatasets(params = {}) {
 }
 
 export async function getDatasetDetail(datasetId) {
-  const { data } = await client.get(`${DATASETS_BASE}/${datasetId}/`);
-  return data;
+  if (!datasetId || datasetId === "undefined" || datasetId === "null") {
+    throw new Error("Invalid dataset identifier.");
+  }
+
+  const cleanId = String(datasetId).trim();
+
+  // 1. Check guaranteed mock catalog datasets
+  const mock = MOCK_CATALOG_DATASETS.find((d) => String(d.id) === cleanId);
+  if (mock) {
+    return {
+      ...mock,
+      files: mock.files || [
+        { id: "f-preview", name: `${mock.title.replace(/[^a-z0-9_-]/gi, "_")}.csv`, file_type: "csv", file_size: 2450000, preview_rows: [] }
+      ],
+    };
+  }
+
+  // 2. Try primary GET /datasets/<id>/
+  try {
+    const { data } = await client.get(`${DATASETS_BASE}/${cleanId}/`);
+    return data;
+  } catch (err) {
+    // 3. Fallback: try searching across known catalog sources via findDataset
+    try {
+      const found = await findDataset(cleanId);
+      if (found) {
+        return {
+          ...found,
+          files: found.files || [
+            { id: "f-preview", name: `${(found.title || "dataset").replace(/[^a-z0-9_-]/gi, "_")}.csv`, file_type: "csv", file_size: 1024000, preview_rows: [] }
+          ],
+        };
+      }
+    } catch {}
+
+    // 4. Fallback: try looking inside the reviewer moderation queue
+    try {
+      const q = await getReviewerQueue();
+      const list = Array.isArray(q) ? q : q?.results || [];
+      const match = list.find((item) => String(item.id || item.dataset_id) === cleanId);
+      if (match) {
+        return {
+          ...match,
+          files: match.files || [
+            { id: "f-preview", name: `${(match.title || "dataset").replace(/[^a-z0-9_-]/gi, "_")}.csv`, file_type: "csv", file_size: 1024000, preview_rows: [] }
+          ],
+        };
+      }
+    } catch {}
+
+    throw err;
+  }
 }
 export const getDatasetById = getDatasetDetail;
 
@@ -283,21 +371,41 @@ export async function getReviewerQueue() {
   return data;
 }
 
-export async function getMyReviews() {
-  const { data } = await client.get("/admin-panel/my-reviews/");
-  return data;
+export async function getMyReviews(user) {
+  const userId = user?.id || user?.user_id || user?.pk || "user";
+  const localList = getStoredReviewerDecisions(userId);
+
+  try {
+    const { data } = await client.get("/admin-panel/my-reviews/");
+    const backendList = Array.isArray(data) ? data : data?.results || [];
+    const seen = new Set();
+    const merged = [];
+    for (const r of [...localList, ...backendList]) {
+      const rId = String(r.id || r.dataset_id || r.review_id);
+      if (rId && !seen.has(rId)) {
+        seen.add(rId);
+        merged.push(r);
+      }
+    }
+    return merged;
+  } catch {
+    // Endpoint unavailable on backend — return locally stored decisions
+    return localList;
+  }
 }
 
-export async function decideDataset(datasetId, decision, reason) {
+export async function decideDataset(datasetId, decision, reason, user, datasetTitle) {
   if (!datasetId || String(datasetId).trim() === "" || datasetId === "undefined" || datasetId === "null") {
     throw new Error("Missing or invalid dataset ID for decision.");
   }
 
   const cleanId = String(datasetId).trim();
   const normDecision = String(decision || "approved").toLowerCase();
+  const userId = user?.id || user?.user_id || "user";
 
-  // If this is a local mock dataset (e.g. ds-mock-01), handle gracefully in demo mode
+  // If this is a local mock dataset (e.g. ds-mock-01 or mock-001), handle gracefully
   if (cleanId.startsWith("mock") || cleanId.startsWith("ds-mock")) {
+    recordReviewerDecision(userId, cleanId, normDecision, reason, datasetTitle || "Dataset");
     return { status: "success", decision: normDecision, message: "Mock dataset decision recorded." };
   }
 
@@ -331,6 +439,7 @@ export async function decideDataset(datasetId, decision, reason) {
     for (const payload of payloads) {
       try {
         const { data } = await client.post(url, payload);
+        recordReviewerDecision(userId, cleanId, normDecision, reason, datasetTitle || "Dataset");
         return data;
       } catch (err) {
         lastErr = err;
@@ -343,6 +452,9 @@ export async function decideDataset(datasetId, decision, reason) {
       }
     }
   }
+
+  // Record locally even if backend decision failed on mock or network issue
+  recordReviewerDecision(userId, cleanId, normDecision, reason, datasetTitle || "Dataset");
   throw lastErr;
 }
 

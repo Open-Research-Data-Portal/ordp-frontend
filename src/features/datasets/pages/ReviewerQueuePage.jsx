@@ -97,7 +97,7 @@ export default function ReviewerQueuePage() {
           datasetsApi.getContentUpdateQueue(),   // 1
           datasetsApi.getRevisionRequestsQueue(), // 2
           datasetsApi.getAccessRequestsQueue(),   // 3
-          datasetsApi.getMyReviews(),            // 4 — /admin-panel/my-reviews/
+          datasetsApi.getMyReviews(user),        // 4 — /admin-panel/my-reviews/
           datasetsApi.getAdminPendingReviews(),   // 5 fallback
         ]);
         if (!active) return;
@@ -159,7 +159,7 @@ export default function ReviewerQueuePage() {
     }
     load();
     return () => { active = false; };
-  }, [addToast]);
+  }, [addToast, user]);
 
   const pendingCounts = useMemo(() => ({
     datasets: datasetQueue.length,
@@ -396,6 +396,7 @@ export default function ReviewerQueuePage() {
                   onVote={handleVote}
                   onViewComparison={handleOpenComparison}
                   loadingComparison={loadingComparison}
+                  onEmptyAction={() => setTab("datasets")}
                 />
               )}
 
@@ -410,6 +411,7 @@ export default function ReviewerQueuePage() {
                   descKey="reason"
                   actionId={actionId}
                   onVote={handleVote}
+                  onEmptyAction={() => setTab("datasets")}
                 />
               )}
 
@@ -424,6 +426,7 @@ export default function ReviewerQueuePage() {
                   descKey="purpose"
                   actionId={actionId}
                   onVote={handleVote}
+                  onEmptyAction={() => setTab("datasets")}
                 />
               )}
 
@@ -433,6 +436,7 @@ export default function ReviewerQueuePage() {
                   actionId={actionId}
                   onUndoToAccept={handleUndoToAccept}
                   onReturnToQueue={handleReturnToQueue}
+                  onEmptyAction={() => setTab("datasets")}
                 />
               )}
             </>
@@ -618,9 +622,16 @@ function ReviewDatasetsQueueTab({ items, onView }) {
 }
 
 // ── Generic Vote Table ──────────────────────────────────────────────────
-function VoteTable({ type, items, emptyTitle, emptyDesc, idKey, titleKey, descKey, actionId: currentActionId, onVote, onViewComparison, loadingComparison }) {
+function VoteTable({ type, items, emptyTitle, emptyDesc, idKey, titleKey, descKey, actionId: currentActionId, onVote, onViewComparison, loadingComparison, onEmptyAction, actionLabel }) {
   if (items.length === 0) {
-    return <EmptyState title={emptyTitle} description={emptyDesc} />;
+    return (
+      <EmptyState
+        title={emptyTitle}
+        description={emptyDesc}
+        actionLabel={actionLabel || "Go to Datasets Queue"}
+        onAction={onEmptyAction}
+      />
+    );
   }
   return (
     <div className="overflow-x-auto">
@@ -674,9 +685,16 @@ function VoteTable({ type, items, emptyTitle, emptyDesc, idKey, titleKey, descKe
 }
 
 // ── My Reviews tab ──────────────────────────────────────────────────────
-function MyReviewsTab({ reviews, onUndoToAccept, onReturnToQueue, actionId }) {
+function MyReviewsTab({ reviews, onUndoToAccept, onReturnToQueue, actionId, onEmptyAction }) {
   if (reviews.length === 0) {
-    return <EmptyState title="No reviews yet" description="Your approved/rejected decisions will appear here." />;
+    return (
+      <EmptyState
+        title="No reviews yet"
+        description="Your evaluated dataset decisions (approved or rejected) will appear here."
+        actionLabel="Go to Datasets Queue"
+        onAction={onEmptyAction}
+      />
+    );
   }
   return (
     <div className="overflow-x-auto">

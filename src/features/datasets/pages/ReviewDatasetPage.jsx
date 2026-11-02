@@ -214,7 +214,7 @@ export default function ReviewDatasetPage() {
     try {
       const scoreSummary = `[Score: ${passedCriteriaCount}/${totalQuestions} Passed (>=3)]`;
       const combinedReason = reason ? `${reason} ${scoreSummary}` : `${scoreSummary} ${evalNotes.trim()}`;
-      await datasetsApi.decideDataset(datasetId, decision, combinedReason);
+      await datasetsApi.decideDataset(datasetId, decision, combinedReason, user, dataset?.title);
       addToast(
         decision === "approved"
           ? "Dataset approved successfully!"

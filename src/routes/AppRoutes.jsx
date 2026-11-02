@@ -156,9 +156,12 @@ export default function AppRoutes() {
       <Route path="/reviewer-dashboard" element={
         <ProtectedRoute><ReviewerDashboardPage /></ProtectedRoute>
       } />
+      <Route path="/reviewer/dashboard" element={<Navigate to="/reviewer-dashboard" replace />} />
       <Route path="/reviewer/review-queue" element={
         <ProtectedRoute><ReviewerQueuePage /></ProtectedRoute>
       } />
+      <Route path="/reviewer/queue" element={<Navigate to="/reviewer/review-queue" replace />} />
+      <Route path="/reviewer-queue" element={<Navigate to="/reviewer/review-queue" replace />} />
       <Route path="/reviewer/review/:id" element={
         <ProtectedRoute><ReviewDatasetPage /></ProtectedRoute>
       } />

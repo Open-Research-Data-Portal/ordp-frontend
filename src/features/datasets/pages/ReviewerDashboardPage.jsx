@@ -81,7 +81,7 @@ export default function ReviewerDashboardPage() {
           datasetsApi.getContentUpdateQueue(), // 3
           datasetsApi.getRevisionRequestsQueue(), // 4
           datasetsApi.getAccessRequestsQueue(), // 5
-          datasetsApi.getMyReviews(),          // 6 — /admin-panel/my-reviews/
+          datasetsApi.getMyReviews(user),      // 6 — /admin-panel/my-reviews/
           datasetsApi.getAdminPendingReviews(), // 7 fallback
         ]);
         if (!active) return;
@@ -105,6 +105,24 @@ export default function ReviewerDashboardPage() {
         for (const item of [...reviewerQ, ...adminPending]) {
           const id = String(item.id || item.dataset_id);
           if (!seen.has(id)) { seen.add(id); merged.push(item); }
+        }
+
+        // Also check if any datasets in the repository are in pending/submitted/in_review status
+        if (merged.length === 0) {
+          try {
+            const myData = await datasetsApi.getMyDatasets();
+            const myList = Array.isArray(myData) ? myData : (myData?.results || []);
+            for (const item of myList) {
+              const s = String(item.status || "").toLowerCase();
+              const id = String(item.id || item.dataset_id);
+              if (id && (s === "pending" || s === "submitted" || s === "in_review") && !seen.has(id)) {
+                seen.add(id);
+                merged.push(item);
+              }
+            }
+          } catch {
+            // non-fatal
+          }
         }
         const pendingOnly = merged.filter((d) => {
           const id = String(d.id || d.dataset_id);
@@ -130,7 +148,7 @@ export default function ReviewerDashboardPage() {
     }
     load();
     return () => { active = false; };
-  }, [addToast]);
+  }, [addToast, user]);
 
   const loadGuidelines = useCallback(async () => {
     if (guidelines) { setShowGuidelines(true); return; }
@@ -143,26 +161,34 @@ export default function ReviewerDashboardPage() {
     }
   }, [guidelines, addToast]);
 
-  // ── Computed stats ───────────────────────────────────────────────────
-  const pendingCounts = useMemo(() => ({
-    datasets: overview?.assigned_datasets_pending ?? datasetQueue.length,
-    contentUpdates: overview?.content_updates_pending ?? contentUpdates.length,
-    revisionRequests: overview?.revision_requests_awaiting_my_vote ?? revisionRequests.length,
-    accessRequests: overview?.access_requests_awaiting_my_vote ?? accessRequests.length,
-    total:
-      (overview?.assigned_datasets_pending ?? datasetQueue.length)
-      + (overview?.content_updates_pending ?? contentUpdates.length)
-      + (overview?.revision_requests_awaiting_my_vote ?? revisionRequests.length)
-      + (overview?.access_requests_awaiting_my_vote ?? accessRequests.length),
-  }), [overview, datasetQueue, contentUpdates, revisionRequests, accessRequests]);
+  // ── Computed stats: strictly use real data lengths so cards never open blank space ("blackspace")
+  const pendingCounts = useMemo(() => {
+    const datasets = datasetQueue.length;
+    const content = contentUpdates.length;
+    const revisions = revisionRequests.length;
+    const access = accessRequests.length;
+    return {
+      datasets,
+      contentUpdates: content,
+      revisionRequests: revisions,
+      accessRequests: access,
+      total: datasets + content + revisions + access,
+    };
+  }, [datasetQueue, contentUpdates, revisionRequests, accessRequests]);
 
   const reviewStats = useMemo(() => {
-    const approved = metrics?.approved ?? metrics?.total_approved ?? myReviews.filter(r => String(r.decision || r.vote || r.status || "").toLowerCase() === "approved").length;
-    const rejected = metrics?.rejected ?? metrics?.total_rejected ?? myReviews.filter(r => String(r.decision || r.vote || r.status || "").toLowerCase() === "rejected").length;
-    const total = metrics?.total_reviewed ?? myReviews.length;
-    const pending = metrics?.assigned_pending ?? overview?.assigned_datasets_pending ?? pendingCounts.datasets;
+    const approved = myReviews.filter(r => {
+      const s = String(r.decision || r.vote || r.status || "").toLowerCase();
+      return s === "approved" || s === "approve";
+    }).length;
+    const rejected = myReviews.filter(r => {
+      const s = String(r.decision || r.vote || r.status || "").toLowerCase();
+      return s === "rejected" || s === "reject" || s === "changes_requested";
+    }).length;
+    const total = myReviews.length;
+    const pending = datasetQueue.length;
     return { total, approved, rejected, pending };
-  }, [metrics, overview, myReviews, pendingCounts.datasets]);
+  }, [myReviews, datasetQueue]);
 
   // ── 403 Forbidden screen ─────────────────────────────────────────────
   if (forbidden) {
@@ -334,7 +360,7 @@ export default function ReviewerDashboardPage() {
                 <Layers className="w-4 h-4 text-gold" /> Pending Workload by Category
               </h3>
               <Link
-                to="/reviewer/review-queue"
+                to="/reviewer/review-queue?tab=datasets"
                 className="text-xs font-semibold text-gold hover:text-gold-dark flex items-center gap-1 transition"
               >
                 View all queues &rarr;

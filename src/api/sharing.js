@@ -32,10 +32,32 @@ export async function claimShareAccess(token, payload = {}) {
   return data;
 }
 
-export async function decideAccessRequestAsOwner(requestId, decision) {
-  const { data } = await client.post(`/sharing/access-requests/${requestId}/owner-decision/`, {
-    decision,
-  });
+/**
+ * Fetch access request details for owner review.
+ * Backend: GET /api/sharing/access-requests/<request_id>/
+ */
+export async function getAccessRequestDetail(requestId) {
+  const { data } = await client.get(`/sharing/access-requests/${requestId}/`);
+  return data;
+}
+
+export async function decideAccessRequestAsOwner(requestId, payload) {
+  let body = {};
+  if (typeof payload === "string") {
+    body = {
+      decision: payload,
+      vote: payload,
+      status: payload,
+    };
+  } else if (payload && typeof payload === "object") {
+    body = {
+      ...payload,
+      decision: payload.decision || payload.vote || payload.status,
+      vote: payload.vote || payload.decision,
+      status: payload.status || payload.decision,
+    };
+  }
+  const { data } = await client.post(`/sharing/access-requests/${requestId}/owner-decision/`, body);
   return data;
 }
 

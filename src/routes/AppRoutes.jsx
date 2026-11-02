@@ -36,6 +36,7 @@ import BookmarksPage from "../features/datasets/pages/BookmarksPage";
 import NotificationsPage from "../pages/NotificationsPage";
 import ClaimAccessPage from "../pages/ClaimAccessPage.jsx";
 import AcceptInvitationPage from "../pages/AcceptInvitationPage.jsx";
+import OwnerAccessDecisionPage from "../pages/OwnerAccessDecisionPage.jsx";
 import HelpSupportPage from "../pages/HelpSupportPage.jsx";
 
 import { useAuth } from "../context/useAuth";
@@ -119,6 +120,15 @@ export default function AppRoutes() {
       <Route path="/sharing/claim-access/:token" element={<ClaimAccessPage />} />
       <Route path="/invitations/:token" element={<AcceptInvitationPage />} />
       <Route path="/sharing/invitations/:token" element={<AcceptInvitationPage />} />
+
+      {/* Access Requests & Owner Decision */}
+      <Route path="/sharing/access-requests/:id" element={<OwnerAccessDecisionPage />} />
+      <Route path="/sharing/access-requests/:id/decision" element={<OwnerAccessDecisionPage />} />
+      <Route path="/sharing/access-requests/:id/owner-decision" element={<OwnerAccessDecisionPage />} />
+      <Route path="/access-requests/:id" element={<OwnerAccessDecisionPage />} />
+      <Route path="/access-requests/:id/decision" element={<OwnerAccessDecisionPage />} />
+      <Route path="/access-requests/:id/owner-decision" element={<OwnerAccessDecisionPage />} />
+      <Route path="/access-requests/decision/:id" element={<OwnerAccessDecisionPage />} />
 
       {/* Public dataset browsing */}
       <Route path="/datasets" element={<BrowseDatasetsPage />} />

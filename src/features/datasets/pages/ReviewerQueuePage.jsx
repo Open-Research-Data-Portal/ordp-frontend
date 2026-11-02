@@ -586,7 +586,7 @@ function ReviewDatasetsQueueTab({ items, onView }) {
             return (
               <tr key={id} className="hover:bg-slate-50/60 transition-colors">
                 <td className="px-5 py-4">
-                  <p className="font-semibold text-navy">{item.title || "Untitled Dataset"}</p>
+                  <button type="button" onClick={() => onView(item)} className="text-left font-semibold text-navy hover:text-gold hover:underline transition-colors block cursor-pointer">{item.title || "Untitled Dataset"}</button>
                   <p className="text-xs text-gray-400 font-mono mt-0.5">ID: {id}</p>
                 </td>
                 <td className="px-5 py-4 text-gray-600">

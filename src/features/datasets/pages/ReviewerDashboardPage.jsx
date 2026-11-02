@@ -204,12 +204,24 @@ export default function ReviewerDashboardPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2.5 shrink-0">
           <Link
-            to="/reviewer/review-queue"
+            to="/reviewer/review-queue?tab=datasets"
             className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-navy bg-gold hover:bg-gold-light rounded-xl px-4 py-2.5 transition shadow-sm"
           >
             <Layers className="w-4 h-4" />
             Open Review Queue
             <ArrowRight className="w-4 h-4" />
+          </Link>
+          <Link
+            to="/reviewer/archive-requests"
+            className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-white bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl px-4 py-2.5 transition"
+          >
+            <Archive className="w-4 h-4 text-amber-300" />
+            Archive Requests
+            {archiveRequestCount > 0 && (
+              <span className="ml-1 bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                {archiveRequestCount}
+              </span>
+            )}
           </Link>
           <button
             type="button"
@@ -235,59 +247,83 @@ export default function ReviewerDashboardPage() {
               <TrendingUp className="w-4 h-4 text-gold" /> Personal Review Performance
             </h3>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-white rounded-2xl border border-border p-5 shadow-xs">
+              <Link
+                to="/reviewer/review-queue?tab=my-reviews"
+                className="bg-white hover:bg-slate-50 border border-border hover:border-slate-300 rounded-2xl p-5 shadow-xs transition group block"
+              >
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-semibold text-gray-500">Total Reviewed</span>
-                  <div className="w-8 h-8 rounded-xl bg-navy/5 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-xl bg-navy/5 flex items-center justify-center group-hover:bg-navy/10 transition-colors">
                     <Database className="w-4 h-4 text-navy" />
                   </div>
                 </div>
                 <p className="text-3xl font-extrabold text-navy">{reviewStats.total}</p>
-                <p className="text-xs text-gray-400 mt-1">Lifetime completed decisions</p>
-              </div>
+                <p className="text-xs text-gray-400 mt-1 flex items-center justify-between">
+                  <span>Lifetime decisions</span>
+                  <ChevronRight className="w-3.5 h-3.5 text-gray-400 group-hover:translate-x-0.5 transition-transform" />
+                </p>
+              </Link>
 
-              <div className="bg-white rounded-2xl border border-border p-5 shadow-xs">
+              <Link
+                to="/reviewer/review-queue?tab=my-reviews"
+                className="bg-white hover:bg-emerald-50/40 border border-border hover:border-emerald-300 rounded-2xl p-5 shadow-xs transition group block"
+              >
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-semibold text-emerald-700">Approved</span>
-                  <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center group-hover:bg-emerald-100 transition-colors">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                   </div>
                 </div>
                 <p className="text-3xl font-extrabold text-emerald-600">{reviewStats.approved}</p>
-                <p className="text-xs text-emerald-700/70 mt-1">
-                  {reviewStats.total > 0
-                    ? `${Math.round((reviewStats.approved / reviewStats.total) * 100)}% approval rate`
-                    : "Published datasets"}
+                <p className="text-xs text-emerald-700/70 mt-1 flex items-center justify-between">
+                  <span>
+                    {reviewStats.total > 0
+                      ? `${Math.round((reviewStats.approved / reviewStats.total) * 100)}% approval rate`
+                      : "Published datasets"}
+                  </span>
+                  <ChevronRight className="w-3.5 h-3.5 text-emerald-400 group-hover:translate-x-0.5 transition-transform" />
                 </p>
-              </div>
+              </Link>
 
-              <div className="bg-white rounded-2xl border border-border p-5 shadow-xs">
+              <Link
+                to="/reviewer/review-queue?tab=my-reviews"
+                className="bg-white hover:bg-red-50/40 border border-border hover:border-red-300 rounded-2xl p-5 shadow-xs transition group block"
+              >
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-semibold text-red-600">Rejected</span>
-                  <div className="w-8 h-8 rounded-xl bg-red-50 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-xl bg-red-50 flex items-center justify-center group-hover:bg-red-100 transition-colors">
                     <XCircle className="w-4 h-4 text-red-600" />
                   </div>
                 </div>
                 <p className="text-3xl font-extrabold text-red-600">{reviewStats.rejected}</p>
-                <p className="text-xs text-red-600/70 mt-1">
-                  {reviewStats.total > 0
-                    ? `${Math.round((reviewStats.rejected / reviewStats.total) * 100)}% rejection rate`
-                    : "Returned or rejected"}
+                <p className="text-xs text-red-600/70 mt-1 flex items-center justify-between">
+                  <span>
+                    {reviewStats.total > 0
+                      ? `${Math.round((reviewStats.rejected / reviewStats.total) * 100)}% rejection rate`
+                      : "Returned or rejected"}
+                  </span>
+                  <ChevronRight className="w-3.5 h-3.5 text-red-400 group-hover:translate-x-0.5 transition-transform" />
                 </p>
-              </div>
+              </Link>
 
-              <div className="bg-white rounded-2xl border border-border p-5 shadow-xs">
+              <Link
+                to="/reviewer/review-queue?tab=my-reviews"
+                className="bg-white hover:bg-amber-50/40 border border-border hover:border-amber-300 rounded-2xl p-5 shadow-xs transition group block"
+              >
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-semibold text-amber-700">Recent Activity</span>
-                  <div className="w-8 h-8 rounded-xl bg-amber-50 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-xl bg-amber-50 flex items-center justify-center group-hover:bg-amber-100 transition-colors">
                     <Clock className="w-4 h-4 text-amber-600" />
                   </div>
                 </div>
                 <p className="text-3xl font-extrabold text-gold">
                   {metrics?.reviews_last_30_days ?? metrics?.last_30_days ?? reviewStats.total}
                 </p>
-                <p className="text-xs text-gray-400 mt-1">Reviews in last 30 days</p>
-              </div>
+                <p className="text-xs text-gray-400 mt-1 flex items-center justify-between">
+                  <span>Reviews in 30 days</span>
+                  <ChevronRight className="w-3.5 h-3.5 text-amber-400 group-hover:translate-x-0.5 transition-transform" />
+                </p>
+              </Link>
             </div>
           </div>
 
@@ -384,7 +420,7 @@ export default function ReviewerDashboardPage() {
                 </div>
               </div>
               <Link
-                to="/reviewer/review-queue"
+                to="/reviewer/review-queue?tab=datasets"
                 className="inline-flex items-center gap-2 bg-gold hover:bg-gold-light text-navy text-sm font-bold rounded-xl px-5 py-3 transition shrink-0 shadow-sm"
               >
                 Start Evaluating

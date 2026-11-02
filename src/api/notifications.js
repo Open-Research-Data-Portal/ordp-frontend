@@ -1,3 +1,36 @@
+
+export function getReadNotificationIds(userId) {
+  if (typeof localStorage === "undefined") return new Set();
+  try {
+    const raw = localStorage.getItem(`ordp_read_notifs_${userId || "user"}`);
+    return new Set(raw ? JSON.parse(raw) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+export function saveReadNotificationId(userId, notificationId) {
+  if (typeof localStorage === "undefined" || !notificationId) return;
+  try {
+    const uid = userId || "user";
+    const current = getReadNotificationIds(uid);
+    current.add(String(notificationId));
+    localStorage.setItem(`ordp_read_notifs_${uid}`, JSON.stringify([...current]));
+  } catch {}
+}
+
+export function saveReadNotificationIds(userId, notificationIds) {
+  if (typeof localStorage === "undefined" || !Array.isArray(notificationIds)) return;
+  try {
+    const uid = userId || "user";
+    const current = getReadNotificationIds(uid);
+    notificationIds.forEach((id) => {
+      if (id) current.add(String(id));
+    });
+    localStorage.setItem(`ordp_read_notifs_${uid}`, JSON.stringify([...current]));
+  } catch {}
+}
+
 import client from "./client";
 
 const STORAGE_KEY_PREFIX = "ordp_notifications_";
@@ -144,11 +177,12 @@ export function getDatasetIdFromNotification(n) {
  * Normalize a raw backend notification object into the shape the UI expects.
  * Correctly identifies category decisions (approved, rejected, merged) and attaches action links.
  */
-export function normalizeNotification(item) {
+export function normalizeNotification(item, userId) {
   if (!item || typeof item !== "object") return null;
 
   const id = String(item.id ?? item.notification_id ?? item.pk ?? Math.random());
-  const is_read = Boolean(item.is_read ?? item.read ?? item.seen ?? false);
+  const readSet = getReadNotificationIds(userId);
+  const is_read = readSet.has(id) || Boolean(item.is_read ?? item.read ?? item.seen ?? false);
   const created_at = item.created_at || item.timestamp || item.date || new Date().toISOString();
 
   let rawType = String(item.type || item.notification_type || item.category || "info").toLowerCase();
@@ -168,6 +202,18 @@ export function normalizeNotification(item) {
     }
   }
 
+  // Check if notification is an access request awaiting owner decision
+  const isAccessRequest =
+    type.includes("access_request") ||
+    textBlob.includes("requested access") ||
+    textBlob.includes("access request");
+
+  const requestId =
+    item.request_id ||
+    item.requestId ||
+    item.access_request_id ||
+    (isAccessRequest ? (item.target_id || item.object_id || item.data?.request_id || item.data?.id) : null);
+
   // Determine user-friendly action title
   const title = getNotificationActionTitle(item, type, textBlob);
   const message = item.message || item.body || item.description || "";
@@ -175,7 +221,9 @@ export function normalizeNotification(item) {
   // Resolve link_path for navigation
   const datasetId = getDatasetIdFromNotification(item);
   let link_path = item.link_path || item.action_url || item.action_link || item.url || null;
-  if (datasetId) {
+  if (isAccessRequest && requestId) {
+    link_path = `/sharing/access-requests/${requestId}/decision`;
+  } else if (datasetId) {
     link_path = `/datasets/${datasetId}`;
   } else if (!link_path && type.startsWith("category_")) {
     link_path = "/profile";
@@ -190,6 +238,7 @@ export function normalizeNotification(item) {
     is_read,
     created_at,
     link_path,
+    request_id: requestId,
     dataset_id: datasetId,
     category_id: item.category_id || item.category?.id || null,
     decision: item.decision || (type.includes("approv") ? "approve" : type.includes("reject") ? "reject" : null),
@@ -202,16 +251,15 @@ export function normalizeNotification(item) {
  */
 export async function fetchBellNotifications(user) {
   const userId = user?.id || user?.user_id || "user";
+  const readSet = getReadNotificationIds(userId);
   try {
     const res = await client.get("/notifications/bell/");
     const data = res.data;
 
     let rawList = [];
-    let unreadCount = 0;
 
     if (Array.isArray(data)) {
       rawList = data;
-      unreadCount = rawList.filter((n) => !n.is_read && !n.read).length;
     } else if (data && typeof data === "object") {
       rawList = Array.isArray(data.notifications)
         ? data.notifications
@@ -220,26 +268,21 @@ export async function fetchBellNotifications(user) {
         : Array.isArray(data.items)
         ? data.items
         : [];
-
-      if (typeof data.unread_count === "number") {
-        unreadCount = data.unread_count;
-      } else if (typeof data.unread === "number") {
-        unreadCount = data.unread;
-      } else {
-        unreadCount = rawList.filter((n) => !n.is_read && !n.read).length;
-      }
     }
 
-    const notifications = rawList.map(normalizeNotification).filter(Boolean);
+    const notifications = rawList.map((item) => normalizeNotification(item, userId)).filter(Boolean);
     notifications.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+    // Calculate unread count strictly based on normalized items and persistent read status
+    const unreadCount = notifications.filter((n) => !n.is_read).length;
 
     return {
       notifications,
-      unreadCount: typeof unreadCount === "number" ? unreadCount : notifications.filter((n) => !n.is_read).length,
+      unreadCount,
     };
   } catch (err) {
     console.warn("GET /api/notifications/bell/ failed, falling back to local store:", err);
-    const local = getLocalNotifications(userId) || [];
+    const local = (getLocalNotifications(userId) || []).map((item) => normalizeNotification(item, userId)).filter(Boolean);
     return {
       notifications: local,
       unreadCount: local.filter((n) => !n.is_read).length,
@@ -267,11 +310,12 @@ export async function fetchNotificationHistory(user) {
       ? data.items
       : [];
 
-    const backendList = rawList.map(normalizeNotification).filter(Boolean);
+    const backendList = rawList.map((item) => normalizeNotification(item, userId)).filter(Boolean);
 
     // Merge with any offline local notifications
     const localList = getModelNotificationsWithSentinel(userId, backendList.length > 0);
-    const combined = [...backendList, ...(localList || [])];
+    const normalizedLocal = (localList || []).map((item) => normalizeNotification(item, userId)).filter(Boolean);
+    const combined = [...backendList, ...normalizedLocal];
 
     const seen = new Set();
     const deduped = [];
@@ -287,13 +331,12 @@ export async function fetchNotificationHistory(user) {
     return deduped;
   } catch (err) {
     console.warn("GET /api/notifications/history/ failed, trying /notifications/bell/ or local:", err);
-    // Fallback: try bell notifications
     try {
       const { notifications } = await fetchBellNotifications(user);
       if (notifications.length > 0) return notifications;
     } catch {}
 
-    const local = getLocalNotifications(userId) || [];
+    const local = (getLocalNotifications(userId) || []).map((item) => normalizeNotification(item, userId)).filter(Boolean);
     return local;
   }
 }

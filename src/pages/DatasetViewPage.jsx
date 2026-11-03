@@ -248,15 +248,19 @@ function normalizeDataset(raw) {
       columnCount: primaryFile?.columns?.length || MOCK_DATASET.dataExplorer.columnCount, // FIXME: backend doesn't return column count yet
     },
     metadataSections: MOCK_DATASET.metadataSections, // FIXME: no Collaborators/Coverage/DOI-citation endpoint yet
-    activity: {
-      views: raw.view_count ?? 0,
-      viewsDeltaPct: MOCK_DATASET.activity.viewsDeltaPct, // FIXME: no % change endpoint yet
-      downloads: raw.download_count ?? 0,
-      downloadsDeltaPct: MOCK_DATASET.activity.downloadsDeltaPct, // FIXME: no % change endpoint yet
-      topContributors: MOCK_DATASET.activity.topContributors, // FIXME: no contributors-on-detail endpoint wired yet
-    },
-    viewsSeries: MOCK_DATASET.viewsSeries, // FIXME: no per-dataset views time-series endpoint yet
-    downloadsSeries: MOCK_DATASET.downloadsSeries, // FIXME: no per-dataset downloads time-series endpoint yet
+    activity: (() => {
+      const localViews = Number(typeof localStorage !== "undefined" ? localStorage.getItem(`ordp_views_${raw.id}`) || 0 : 0);
+      const localDownloads = Number(typeof localStorage !== "undefined" ? localStorage.getItem(`ordp_downloads_${raw.id}`) || 0 : 0);
+      return {
+        views: (raw.view_count || raw.views || 0) + localViews,
+        viewsDeltaPct: raw.views_delta_pct ?? null,
+        downloads: (raw.download_count || raw.downloads || 0) + localDownloads,
+        downloadsDeltaPct: raw.downloads_delta_pct ?? null,
+        topContributors: [],
+      };
+    })(),
+    viewsSeries: raw.views_series || [],
+    downloadsSeries: raw.downloads_series || [],
     is_archived: raw.is_archived ?? false,
     archived_at: raw.archived_at ?? null,
   };
@@ -880,6 +884,15 @@ export default function DatasetViewPage() {
   };
 
   const handleDownloadReady = (url) => {
+    // Track real download
+    if (dataset?.id && typeof localStorage !== "undefined") {
+      const current = Number(localStorage.getItem(`ordp_downloads_${dataset.id}`) || 0);
+      localStorage.setItem(`ordp_downloads_${dataset.id}`, String(current + 1));
+      setDataset((prev) => prev ? {
+        ...prev,
+        activity: { ...prev.activity, downloads: (prev.activity?.downloads || 0) + 1 }
+      } : prev);
+    }
     setShareModalOpen(false);
     setDownloadError(null);
     if (!url) return;

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Search,
   SlidersHorizontal,
@@ -217,7 +217,15 @@ function CuratedSection({ icon: Icon, title, datasets, navigate, onSeeAll, bookm
 export default function BrowseDatasetsPage() {
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
-  const [query, setQuery] = useState("");
+  const [searchParams] = useSearchParams();
+  const [query, setQuery] = useState(searchParams.get("q") || "");
+
+  useEffect(() => {
+    const q = searchParams.get("q");
+    if (q !== null && q !== query) {
+      setQuery(q);
+    }
+  }, [searchParams]);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [categories, setCategories] = useState([]);
   const [activeCategory, setActiveCategory] = useState(null);

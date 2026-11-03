@@ -595,7 +595,7 @@ function ReviewDatasetsQueueTab({ items, onView }) {
               <tr key={id} className="hover:bg-slate-50/60 transition-colors">
                 <td className="px-5 py-4">
                   <button type="button" onClick={() => onView(item)} className="text-left font-semibold text-navy hover:text-gold hover:underline transition-colors block cursor-pointer">{item.title || "Untitled Dataset"}</button>
-                  <p className="text-xs text-gray-400 font-mono mt-0.5">ID: {id}</p>
+                  
                 </td>
                 <td className="px-5 py-4 text-gray-600">
                   {item.owner?.email || item.owner_name || item.submitter || "—"}
@@ -657,7 +657,7 @@ function VoteTable({ type, items, emptyTitle, emptyDesc, idKey, titleKey, descKe
               <tr key={id} className="border-t border-gray-100 hover:bg-slate-50/50">
                 <td className="px-5 py-4">
                   <p className="font-medium text-navy">{item[titleKey] || item.title || item.dataset?.title || "—"}</p>
-                  <p className="text-xs text-gray-500 font-mono">{id}</p>
+                  
                 </td>
                 <td className="px-5 py-4 text-gray-600 max-w-[200px] truncate">{item[descKey] || item.description || "—"}</td>
                 <td className="px-5 py-4 text-gray-500">{item.requester?.email || item.requested_by || item.user?.email || "—"}</td>
@@ -722,37 +722,16 @@ function MyReviewsTab({ reviews, onUndoToAccept, onReturnToQueue, actionId, onEm
               <tr key={id || Math.random()} className="border-t border-gray-100 hover:bg-slate-50/50">
                 <td className="px-5 py-3">
                   <p className="font-medium text-navy">{review.dataset_title || review.title || "—"}</p>
-                  {id && <p className="text-xs text-gray-400 font-mono">{id}</p>}
+                  
                 </td>
                 <td className="px-5 py-3"><StatusBadge status={review.decision || review.vote || review.status || "—"} /></td>
                 <td className="px-5 py-3 text-gray-500 max-w-[200px] truncate">{review.reason || review.comment || review.feedback || "—"}</td>
                 <td className="px-5 py-3 text-gray-500">{formatDate(review.decided_at || review.created_at || review.reviewed_at)}</td>
                 <td className="px-5 py-3 text-right">
-                  {isRejected && onUndoToAccept ? (
-                    <div className="inline-flex items-center gap-1.5 justify-end">
-                      {onReturnToQueue && (
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => onReturnToQueue(review)}
-                          className="inline-flex items-center gap-1 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 disabled:opacity-50 transition shadow-2xs"
-                          title="Return dataset to pending review queue"
-                        >
-                          <RotateCcw className="w-3.5 h-3.5" />
-                          To Queue
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => onUndoToAccept(review)}
-                        className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg px-2.5 py-1.5 disabled:opacity-50 transition shadow-2xs"
-                        title="Undo accidental rejection and approve this dataset"
-                      >
-                        {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-                        Undo / Accept
-                      </button>
-                    </div>
+                  {isRejected ? (
+                    <span className="inline-flex items-center gap-1 text-xs text-rose-600 font-medium">
+                      <XCircle className="w-3.5 h-3.5" /> Rejected
+                    </span>
                   ) : (
                     <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-medium">
                       <CheckCircle2 className="w-3.5 h-3.5" /> Approved

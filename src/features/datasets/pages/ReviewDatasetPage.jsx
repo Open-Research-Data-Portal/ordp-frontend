@@ -121,7 +121,6 @@ export default function ReviewDatasetPage() {
 
   // Questionnaire responses: { [questionId]: number (1-5) }
   const [ratings, setRatings] = useState({});
-  const [evalNotes, setEvalNotes] = useState("");
 
   // Modals & submission state
   const [submitting, setSubmitting] = useState(false);
@@ -213,7 +212,7 @@ export default function ReviewDatasetPage() {
     setSubmitting(true);
     try {
       const scoreSummary = `[Score: ${passedCriteriaCount}/${totalQuestions} Passed (>=3)]`;
-      const combinedReason = reason ? `${reason} ${scoreSummary}` : `${scoreSummary} ${evalNotes.trim()}`;
+      const combinedReason = reason ? `${reason} ${scoreSummary}` : scoreSummary;
       await datasetsApi.decideDataset(datasetId, decision, combinedReason, user, dataset?.title);
       addToast(
         decision === "approved"
@@ -544,20 +543,6 @@ export default function ReviewDatasetPage() {
                   </div>
                 );
               })}
-            </div>
-
-            {/* Optional notes */}
-            <div className="mt-5 pt-4 border-t border-slate-100">
-              <label className="block text-xs font-semibold text-navy uppercase tracking-wider mb-1.5">
-                Evaluation Notes (Optional)
-              </label>
-              <textarea
-                rows={3}
-                value={evalNotes}
-                onChange={(e) => setEvalNotes(e.target.value)}
-                placeholder="Add confidential feedback or notes for the review record…"
-                className="w-full text-xs rounded-xl border border-slate-200 p-3 resize-none focus:outline-none focus:ring-2 focus:ring-gold"
-              />
             </div>
 
             {/* Score Summary Box */}

@@ -10,23 +10,26 @@ import { fetchAllDatasets } from "./datasetsHub";
  */
 export async function searchDatasets(params = {}) {
   let list = [];
+  const { category_name: categoryName, ...backendParams } = params;
 
   // Primary source — the public dataset directory.
   try {
-    const response = await client.get("/search/datasets/", { params });
+    const response = await client.get("/search/datasets/", { params: backendParams });
     const data = response.data;
     list = Array.isArray(data) ? data : (data?.results || data?.datasets || []);
-    // Backend returned results — use them, but still merge mock data below
-    if (list.length > 0) {
-      return applyLocalFilters(list, params);
-    }
+    // Keep the deployed API authoritative, while applying the category name
+    // locally when the response does not expose a category UUID.
+    return applyLocalFilters(list, {
+      category: backendParams.category,
+      category_name: categoryName,
+    });
   } catch (err) {
     console.warn("searchDatasets primary failed, falling back:", err?.message);
   }
 
   // Fallback: pull from all available sources (always includes mock data)
   list = await fetchAllDatasets();
-  return applyLocalFilters(list, params);
+  return applyLocalFilters(list, { ...params, category_name: categoryName });
 }
 
 /**
@@ -54,9 +57,10 @@ function applyLocalFilters(list, params = {}) {
 
   // Category filter
   if (params.category && params.category !== "All datasets") {
-    const cat = params.category.toLowerCase();
+    const cat = String(params.category_name || params.category).toLowerCase();
     filtered = filtered.filter((d) =>
-      String(d.category || d.subject_name || "").toLowerCase().includes(cat)
+      String(d.category_id || d.metadata?.category_id || "").toLowerCase() === String(params.category).toLowerCase() ||
+      String(d.category || d.subject_name || "").toLowerCase() === cat
     );
   }
 

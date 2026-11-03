@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import {
   Bell,
   CheckCircle2,
+  XCircle,
+  Loader2,
   Clock,
   ExternalLink,
   Trash2,
@@ -23,6 +25,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import DashboardShell from "../components/dashboard/DashboardShell";
+import { decideAccessRequestAsOwner } from "../api/sharing";
 import { useAuth } from "../context/useAuth";
 import { useToast } from "../context/ToastContext";
 import {
@@ -351,25 +354,81 @@ export default function NotificationsPage() {
                               </button>
                             </div>
 
-                            {n.request_id ? (
-                              <button
-                                type="button"
-                                onClick={() => handleActionClick(n)}
-                                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-navy hover:bg-navy-light text-white text-xs font-semibold shadow-xs hover:shadow transition cursor-pointer"
-                              >
-                                Review Request
-                                <ArrowRight className="w-3.5 h-3.5 text-gold" />
-                              </button>
-                            ) : getDatasetIdFromNotification(n) ? (
-                              <button
-                                type="button"
-                                onClick={() => handleActionClick(n)}
-                                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-navy hover:bg-navy-light text-white text-xs font-semibold shadow-xs hover:shadow transition cursor-pointer"
-                              >
-                                View Dataset
-                                <ArrowRight className="w-3.5 h-3.5 text-gold" />
-                              </button>
-                            ) : null}
+                            {(() => {
+                              const isAccessReq = Boolean(
+                                n.request_id ||
+                                n.type?.includes("access_request") ||
+                                n.type?.includes("restricted") ||
+                                n.message?.toLowerCase().includes("access request") ||
+                                n.title?.toLowerCase().includes("access request") ||
+                                n.title?.toLowerCase().includes("access requested")
+                              );
+
+                              if (isAccessReq) {
+                                if (n.access_decision) {
+                                  return (
+                                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-lg ${
+                                      n.access_decision === "approved"
+                                        ? "text-emerald-700 bg-emerald-50 border border-emerald-200"
+                                        : "text-red-700 bg-red-50 border border-red-200"
+                                    }`}>
+                                      {n.access_decision === "approved" ? "Access Granted (Sent to Reviewers)" : "Access Rejected"}
+                                    </span>
+                                  );
+                                }
+                                return (
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <button
+                                      type="button"
+                                      disabled={actionBusyId === (n.request_id || n.id)}
+                                      onClick={() => handleAccessDecision(n, "approved")}
+                                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-xs hover:shadow transition cursor-pointer disabled:opacity-50"
+                                    >
+                                      {actionBusyId === (n.request_id || n.id) ? (
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                      ) : (
+                                        <CheckCircle2 className="w-3.5 h-3.5" />
+                                      )}
+                                      Grant Access
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={actionBusyId === (n.request_id || n.id)}
+                                      onClick={() => handleAccessDecision(n, "rejected")}
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-semibold shadow-xs hover:shadow transition cursor-pointer disabled:opacity-50"
+                                    >
+                                      <XCircle className="w-3.5 h-3.5" />
+                                      Reject
+                                    </button>
+                                    {n.request_id && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleActionClick(n)}
+                                        className="text-xs font-semibold text-slate-500 hover:text-navy px-2 py-1 transition cursor-pointer"
+                                      >
+                                        Details &rarr;
+                                      </button>
+                                    )}
+                                  </div>
+                                );
+                              }
+
+                              const datasetId = getDatasetIdFromNotification(n);
+                              if (datasetId) {
+                                return (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleActionClick(n)}
+                                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-navy hover:bg-navy-light text-white text-xs font-semibold shadow-xs hover:shadow transition cursor-pointer"
+                                  >
+                                    View Dataset
+                                    <ArrowRight className="w-3.5 h-3.5 text-gold" />
+                                  </button>
+                                );
+                              }
+
+                              return null;
+                            })()}
                           </div>
                         </div>
                       )}

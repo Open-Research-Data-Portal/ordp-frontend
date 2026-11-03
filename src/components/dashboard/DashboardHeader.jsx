@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import {
   Search,
   Bell,
@@ -84,6 +84,7 @@ export default function DashboardHeader({
   const bellRef = useRef(null);
   const profileRef = useRef(null);
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, logout } = useAuth();
 
   useEffect(() => {
@@ -237,18 +238,26 @@ export default function DashboardHeader({
         )}
       </div>
 
-      <form onSubmit={handleSearch} className="flex-1 min-w-0 max-w-none mx-2 sm:mx-4 lg:mx-6">
-        <div className="relative">
-          <Search className="w-4 h-4 text-gray-400 absolute left-4 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search datasets, researchers, keywords…"
-            className="w-full bg-gray-50 border border-border rounded-xl pl-11 pr-4 py-2.5 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gold/30 focus:border-gold focus:bg-white transition-colors"
-          />
-        </div>
-      </form>
+      {/* Top Search Bar: only on researcher dashboard / public pages, hidden on admin & reviewer */}
+      {location.pathname.startsWith("/admin") ||
+      location.pathname.startsWith("/reviewer") ||
+      activeRole === "admin" ||
+      activeRole === "reviewer" ? (
+        <div className="flex-1 min-w-0 mx-2 sm:mx-4 lg:mx-6" />
+      ) : (
+        <form onSubmit={handleSearch} className="flex-1 min-w-0 max-w-none mx-2 sm:mx-4 lg:mx-6">
+          <div className="relative">
+            <Search className="w-4 h-4 text-gray-400 absolute left-4 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search datasets, researchers, keywords…"
+              className="w-full bg-gray-50 border border-border rounded-xl pl-11 pr-4 py-2.5 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gold/30 focus:border-gold focus:bg-white transition-colors"
+            />
+          </div>
+        </form>
+      )}
 
       <div className="flex items-center gap-2 shrink-0">
         {/* Notification Bell with Dropdown */}

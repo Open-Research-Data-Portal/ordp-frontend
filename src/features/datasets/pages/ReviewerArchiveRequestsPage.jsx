@@ -199,29 +199,7 @@ export default function ReviewerArchiveRequestsPage() {
                               <span className="text-xs font-semibold text-gray-400">
                                 Resolved ({request.status})
                               </span>
-                              {request.status === "rejected" && (
-                                <button
-                                  type="button"
-                                  disabled={busy}
-                                  onClick={() => handleResolve(request, "approved")}
-                                  className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg px-2.5 py-2 transition"
-                                  title="Undo rejection and accept this archive request"
-                                >
-                                  {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
-                                  Undo / Accept
-                                </button>
-                              )}
-                              {request.status === "approved" && (
-                                <button
-                                  type="button"
-                                  disabled={busy}
-                                  onClick={() => handleResolve(request, "pending")}
-                                  className="inline-flex items-center gap-1 text-xs font-semibold text-gray-600 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg px-2.5 py-2 transition"
-                                  title="Undo approval and revert to pending"
-                                >
-                                  <RotateCcw className="w-3.5 h-3.5" /> Revert
-                                </button>
-                              )}
+
                             </>
                           )}
                         </div>

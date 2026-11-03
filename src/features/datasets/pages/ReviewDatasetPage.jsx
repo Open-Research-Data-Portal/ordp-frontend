@@ -327,23 +327,7 @@ export default function ReviewDatasetPage() {
           <ArrowLeft className="w-4 h-4" />
           Back to Review Queue
         </Link>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setShowThumbModal(true)}
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 transition shadow-xs"
-          >
-            🖼️ Suggest Thumbnail
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowDeleteModal(true)}
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-red-600 bg-white hover:bg-red-50 border border-red-200 rounded-xl px-3 py-2 transition shadow-xs"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            Flag for Deletion
-          </button>
-        </div>
+        
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -352,7 +336,7 @@ export default function ReviewDatasetPage() {
           {/* Header Card */}
           <div className="bg-white rounded-2xl border border-border p-6 shadow-xs">
             <div className="flex items-start justify-between gap-3 mb-3">
-              <span className="text-xs font-mono text-gray-400">ID: {dataset.id}</span>
+              
               <StatusBadge status={String(dataset.status || "pending").toLowerCase()} />
             </div>
             <h1 className="text-2xl font-serif font-bold text-navy mb-3 leading-snug">
@@ -399,17 +383,7 @@ export default function ReviewDatasetPage() {
               </div>
             )}
 
-            <div className="mt-4 pt-3 border-t border-slate-100">
-              <Link
-                to={`/datasets/${dataset.id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-gold hover:text-gold-dark transition"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                Open public preview page in new tab &rarr;
-              </Link>
-            </div>
+            
           </div>
 
           {/* Files & Data Integrity Inspection */}
@@ -772,147 +746,6 @@ export default function ReviewDatasetPage() {
         </div>
       )}
 
-      {/* Suggest Thumbnail Modal */}
-      {showThumbModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in"
-          onClick={() => {
-            setShowThumbModal(false);
-            setThumbnailUrl("");
-            setThumbnailFile(null);
-          }}
-        >
-          <div
-            className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 animate-scale-up"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between pb-3 border-b border-border mb-4">
-              <h3 className="text-base font-bold text-navy">Suggest Dataset Thumbnail</h3>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowThumbModal(false);
-                  setThumbnailUrl("");
-                  setThumbnailFile(null);
-                }}
-                className="text-gray-400 hover:text-navy"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <form onSubmit={handleSuggestThumbnail} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-1.5">
-                  Upload Image File
-                </label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => setThumbnailFile(e.target.files?.[0] || null)}
-                  className="w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-gold/20 file:text-gold-dark hover:file:bg-gold/30 cursor-pointer"
-                />
-              </div>
-              <div className="relative flex py-1 items-center">
-                <div className="flex-grow border-t border-gray-200"></div>
-                <span className="shrink-0 mx-3 text-xs uppercase text-gray-400 font-semibold">Or enter URL</span>
-                <div className="flex-grow border-t border-gray-200"></div>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-1.5">
-                  Image URL
-                </label>
-                <input
-                  type="text"
-                  placeholder="https://example.com/cover.png"
-                  value={thumbnailUrl}
-                  onChange={(e) => setThumbnailUrl(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 text-xs p-3 focus:outline-none focus:ring-2 focus:ring-gold"
-                />
-              </div>
-              <div className="flex items-center justify-end gap-2.5 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowThumbModal(false)}
-                  className="px-3 py-2 text-xs font-semibold text-gray-500 hover:text-navy"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submittingThumb}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-navy bg-gold hover:bg-gold-light rounded-xl transition disabled:opacity-50"
-                >
-                  {submittingThumb ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-                  Submit Suggestion
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Flag For Deletion Modal */}
-      {showDeleteModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-fade-in"
-          onClick={() => {
-            setShowDeleteModal(false);
-            setDeleteReason("");
-          }}
-        >
-          <div
-            className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 animate-scale-up"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between pb-3 border-b border-border mb-4">
-              <h3 className="text-base font-bold text-red-900 flex items-center gap-2">
-                <Trash2 className="w-5 h-5 text-red-600" />
-                Flag Dataset For Removal
-              </h3>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowDeleteModal(false);
-                  setDeleteReason("");
-                }}
-                className="text-gray-400 hover:text-navy"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <p className="text-xs text-gray-600 mb-3 leading-relaxed">
-              Please specify why this dataset should be deleted from the repository (e.g. copyright infringement, privacy violation, or ethics breach).
-            </p>
-            <form onSubmit={handleRequestDeletion}>
-              <textarea
-                required
-                rows={4}
-                value={deleteReason}
-                onChange={(e) => setDeleteReason(e.target.value)}
-                placeholder="Describe reason for deletion request..."
-                className="w-full rounded-xl border border-slate-200 text-xs p-3 resize-none focus:outline-none focus:ring-2 focus:ring-red-500 mb-4"
-              />
-              <div className="flex items-center justify-end gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setShowDeleteModal(false)}
-                  className="px-3 py-2 text-xs font-semibold text-gray-500 hover:text-navy"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submittingDelete || !deleteReason.trim()}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-red-600 hover:bg-red-700 rounded-xl transition disabled:opacity-50"
-                >
-                  {submittingDelete ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-                  Submit Deletion Flag
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </DashboardShell>
+      </DashboardShell>
   );
 }

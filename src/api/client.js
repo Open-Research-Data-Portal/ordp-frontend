@@ -8,40 +8,6 @@ const client = axios.create({
   withCredentials: true,
 });
 
-const GET_CACHE_TTL = 60 * 1000;
-const getCache = new Map();
-const getInFlight = new Map();
-
-function cacheKey(url, config = {}) {
-  return JSON.stringify([
-    url,
-    config.params || {},
-    getAccessToken() || "anonymous",
-  ]);
-}
-
-export function getCached(url, config = {}, ttl = GET_CACHE_TTL) {
-  const key = cacheKey(url, config);
-  const cached = getCache.get(key);
-  if (cached && Date.now() - cached.timestamp < ttl) {
-    return Promise.resolve(cached.data);
-  }
-  if (getInFlight.has(key)) return getInFlight.get(key);
-
-  const request = client.get(url, config)
-    .then((response) => {
-      getCache.set(key, { timestamp: Date.now(), data: response.data });
-      return response.data;
-    })
-    .finally(() => getInFlight.delete(key));
-  getInFlight.set(key, request);
-  return request;
-}
-
-export function clearGetCache() {
-  getCache.clear();
-}
-
 // ── Request interceptor ──────────────────────────────────────────────────────
 // Attach the current in-memory access token to every outgoing request.
 // This means callers never have to manage the Authorization header themselves.

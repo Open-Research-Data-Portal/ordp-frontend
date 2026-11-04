@@ -1,4 +1,4 @@
-import client, { getCached } from "./client";
+import client from "./client";
 import { fetchAllDatasets } from "./datasetsHub";
 
 /**
@@ -14,11 +14,15 @@ export async function searchDatasets(params = {}) {
 
   // Primary source — the public dataset directory.
   try {
-    const data = await getCached("/search/datasets/", { params: backendParams });
+    const response = await client.get("/search/datasets/", { params: backendParams });
+    const data = response.data;
     list = Array.isArray(data) ? data : (data?.results || data?.datasets || []);
     // Keep the deployed API authoritative, while applying the category name
     // locally when the response does not expose a category UUID.
-    return applyLocalFilters(list, { ...params, category_name: categoryName });
+    return applyLocalFilters(list, {
+      category: backendParams.category,
+      category_name: categoryName,
+    });
   } catch (err) {
     console.warn("searchDatasets primary failed, falling back:", err?.message);
   }
@@ -109,10 +113,7 @@ function applyLocalFilters(list, params = {}) {
 
   // Sorting
   if (params.order_by === "popular") {
-    const engagement = (dataset) =>
-      Number(dataset.views ?? dataset.view_count ?? 0) +
-      Number(dataset.downloads ?? dataset.download_count ?? 0);
-    filtered.sort((a, b) => engagement(b) - engagement(a));
+    filtered.sort((a, b) => (b.views || b.view_count || 0) - (a.views || a.view_count || 0));
   } else if (params.order_by === "newest") {
     filtered.sort(
       (a, b) =>
@@ -149,50 +150,4 @@ export async function getDiscoverFeed() {
     console.warn("getDiscoverFeed failed, falling back:", err?.message);
   }
   return searchDatasets({ order_by: "popular" });
-}
-
-export async function getInterestBasedRecommendations(user) {
-  const rawInterests = [
-    ...(Array.isArray(user?.interests) ? user.interests : []),
-    ...(Array.isArray(user?.profile?.interests) ? user.profile.interests : []),
-    ...(Array.isArray(user?.research_interests) ? user.research_interests : []),
-    ...(Array.isArray(user?.profile?.research_interests) ? user.profile.research_interests : []),
-  ];
-  const interests = rawInterests
-    .map((interest) => typeof interest === "object"
-      ? [interest.name, interest.title, interest.label, interest.slug]
-      : [interest])
-    .flat()
-    .filter(Boolean)
-    .map((interest) => String(interest).toLowerCase().trim())
-    .filter(Boolean);
-
-  if (interests.length === 0) return [];
-
-  const datasets = await searchDatasets();
-  const scored = datasets
-    .map((dataset) => {
-      const searchableText = [
-        dataset.title,
-        dataset.description,
-        dataset.category,
-        dataset.subject_name,
-        dataset.metadata?.category_name,
-        dataset.metadata?.description,
-        ...(Array.isArray(dataset.tags) ? dataset.tags : []),
-      ].filter(Boolean).join(" ").toLowerCase();
-      const score = interests.reduce((total, interest) =>
-        searchableText.includes(interest) ? total + 1 : total, 0);
-      return { dataset, score };
-    })
-    .filter(({ score }) => score > 0)
-    .sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-      const engagement = (item) =>
-        Number(item.views ?? item.view_count ?? 0) +
-        Number(item.downloads ?? item.download_count ?? 0);
-      return engagement(b.dataset) - engagement(a.dataset);
-    });
-
-  return scored.map(({ dataset }) => dataset);
 }

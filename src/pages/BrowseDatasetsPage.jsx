@@ -194,11 +194,9 @@ function CuratedSection({ icon: Icon, title, datasets, navigate, onSeeAll, bookm
           <Icon className="w-4 h-4 text-navy" />
           <h2 className="text-base font-serif font-bold text-navy">{title}</h2>
         </div>
-        {onSeeAll && (
-          <button type="button" onClick={onSeeAll} className="text-sm font-semibold text-[#2C5AAE] hover:underline transition-colors">
-            See All
-          </button>
-        )}
+        <button type="button" onClick={onSeeAll} className="text-sm font-semibold text-[#2C5AAE] hover:underline transition-colors">
+          See All
+        </button>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
         {datasets.map((d, i) => (
@@ -873,9 +871,10 @@ export default function BrowseDatasetsPage() {
         <>
           <CuratedSection
             icon={TrendingUp}
-            title="Recent Datasets"
+            title="Trending Datasets"
             datasets={trendingDatasets}
             navigate={navigate}
+            onSeeAll={() => navigate("/datasets?sort=newest")}
             bookmarkedIds={bookmarkedIds}
             onToggleBookmark={toggleBookmark}
           />
@@ -884,6 +883,7 @@ export default function BrowseDatasetsPage() {
             title="Popular Datasets"
             datasets={popularDatasets}
             navigate={navigate}
+            onSeeAll={() => navigate("/datasets?sort=popular")}
             bookmarkedIds={bookmarkedIds}
             onToggleBookmark={toggleBookmark}
           />
@@ -892,7 +892,7 @@ export default function BrowseDatasetsPage() {
             title="Discover More"
             datasets={discoverDatasets}
             navigate={navigate}
-            onSeeAll={() => navigate("/datasets/discover-more")}
+            onSeeAll={() => navigate("/datasets")}
             bookmarkedIds={bookmarkedIds}
             onToggleBookmark={toggleBookmark}
           />

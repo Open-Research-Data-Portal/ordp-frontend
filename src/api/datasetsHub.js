@@ -1,4 +1,4 @@
-import client, { getCached } from "./client";
+import client from "./client";
 
 /**
  * Resilient dataset fetching.
@@ -185,11 +185,11 @@ function normalizeList(data) {
 }
 
 const SOURCES = [
-  { label: "search", run: () => getCached("/search/datasets/", { params: {} }).then((data) => ({ data })) },
-  { label: "dashboard-feed", run: () => getCached("/datasets/dashboard/feed/").then((data) => ({ data })) },
-  { label: "discover", run: () => getCached("/search/discover/").then((data) => ({ data })) },
-  { label: "mine", run: () => getCached("/datasets/mine/").then((data) => ({ data })) },
-  { label: "admin-queue", run: () => getCached("/admin-panel/queue/").then((data) => ({ data })) },
+  { label: "search", run: () => client.get("/search/datasets/", { params: {} }) },
+  { label: "dashboard-feed", run: () => client.get("/datasets/dashboard/feed/") },
+  { label: "discover", run: () => client.get("/search/discover/") },
+  { label: "mine", run: () => client.get("/datasets/mine/") },
+  { label: "admin-queue", run: () => client.get("/admin-panel/queue/") },
 ];
 
 /**

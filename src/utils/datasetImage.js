@@ -1,15 +1,20 @@
 export function getDatasetImage(dataset) {
   if (!dataset) return null;
   const raw =
-    dataset.image ??
     dataset.thumbnail_url ??
     dataset.thumbnailUrl ??
-    dataset.thumbnail_key ??
     dataset.thumbnail ??
+    dataset.image ??
+    dataset.thumbnail_key ??
+    dataset.thumbnailKey ??
     null;
 
-  if (typeof raw === "string" && raw.trim().length > 0) {
-    let trimmed = raw.trim();
+  const imageValue = raw && typeof raw === "object"
+    ? raw.url ?? raw.href ?? raw.src ?? raw.thumbnail_url ?? null
+    : raw;
+
+  if (typeof imageValue === "string" && imageValue.trim().length > 0) {
+    let trimmed = imageValue.trim();
     // If the URL accidentally contains a double URL or S3 bucket URL prefixing an external URL, clean it up!
     if (trimmed.includes("backblazeb2.com") && trimmed.includes("https://")) {
       const idx = trimmed.indexOf("https://", 8);
@@ -36,4 +41,3 @@ export function getDatasetImage(dataset) {
   const seed = dataset.id || dataset.title || "ordp-dataset";
   return `https://picsum.photos/seed/${encodeURIComponent(seed)}/600/400`;
 }
-

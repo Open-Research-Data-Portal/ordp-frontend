@@ -37,6 +37,7 @@ export function getStoredReviewerDecisions(userId) {
 
 import client, { getCached } from "../../../api/client";
 import { MOCK_CATALOG_DATASETS, findDataset } from "../../../api/datasetsHub";
+import { hydrateDatasetThumbnails } from "../../../api/search";
 
 const DATASETS_BASE = "/datasets";
 const METADATA_BASE = "/metadata";
@@ -256,7 +257,10 @@ export async function submitDataset(datasetId, termsAccepted) {
 }
 
 export async function getMyDatasets(params = {}) {
-  return getCached(`${DATASETS_BASE}/mine/`, { params });
+  const data = await getCached(`${DATASETS_BASE}/mine/`, { params });
+  return Array.isArray(data) || Array.isArray(data?.results)
+    ? (Array.isArray(data) ? hydrateDatasetThumbnails(data) : { ...data, results: await hydrateDatasetThumbnails(data.results) })
+    : data;
 }
 
 export async function getDatasetDetail(datasetId) {
@@ -283,12 +287,14 @@ export async function getDatasetDetail(datasetId) {
     if (cached) {
       const parsed = JSON.parse(cached);
       if (parsed && (parsed.id || parsed.title)) {
-        return {
+        const hydrated = {
           ...parsed,
           files: parsed.files && parsed.files.length > 0 ? parsed.files : [
             { id: "f-preview", name: `${(parsed.title || "dataset").replace(/[^a-z0-9_-]/gi, "_")}.csv`, file_type: "csv", file_size: 1024000, preview_rows: [] }
           ],
         };
+        const [dataset] = await hydrateDatasetThumbnails([hydrated]);
+        return dataset;
       }
     }
   } catch {}
@@ -296,7 +302,8 @@ export async function getDatasetDetail(datasetId) {
   // 3. Try primary GET /datasets/<id>/
   try {
     const { data } = await client.get(`${DATASETS_BASE}/${cleanId}/`);
-    return data;
+    const [dataset] = await hydrateDatasetThumbnails([data]);
+    return dataset;
   } catch (err) {
     // 4. Fallback: try searching across known catalog sources via findDataset
     try {
@@ -400,7 +407,8 @@ export async function getDashboardRecentActivity() {
 }
 
 export async function getDashboardFeed() {
-  return getCached(`${DATASETS_BASE}/dashboard/feed/`);
+  const data = await getCached(`${DATASETS_BASE}/dashboard/feed/`);
+  return hydrateDatasetThumbnails(Array.isArray(data) ? data : data?.results || []);
 }
 
 export async function getDashboardMyContributions() {
@@ -974,7 +982,8 @@ export async function getAdminArchivedDatasets() {
  * Fetch all datasets.
  */
 export async function getDatasets(params) {
-  return getCached(`${DATASETS_BASE}/`, { params });
+  const data = await getCached(`${DATASETS_BASE}/`, { params });
+  return Array.isArray(data) || Array.isArray(data?.results)
+    ? (Array.isArray(data) ? hydrateDatasetThumbnails(data) : { ...data, results: await hydrateDatasetThumbnails(data.results) })
+    : data;
 }
-
-

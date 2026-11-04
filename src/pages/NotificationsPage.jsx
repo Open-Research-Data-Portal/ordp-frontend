@@ -289,7 +289,16 @@ export default function NotificationsPage() {
 
                           <button
                             type="button"
-                            onClick={() => setExpandedNotifId(isExpanded ? null : n.id)}
+                            onClick={() => {
+                              const isAccessRequest =
+                                String(n.type || n.notification_type || "").includes("access_request") ||
+                                Boolean(n.request_id);
+                              if (isAccessRequest) {
+                                handleActionClick(n);
+                              } else {
+                                setExpandedNotifId(isExpanded ? null : n.id);
+                              }
+                            }}
                             className={`inline-flex items-center gap-1 border rounded-lg px-2.5 py-1 text-xs font-semibold transition cursor-pointer ${
                               isExpanded
                                 ? "bg-gold text-white border-gold shadow-xs"

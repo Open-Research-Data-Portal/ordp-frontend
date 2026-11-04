@@ -90,15 +90,12 @@ export default function OwnerAccessDecisionPage() {
     setActionError("");
 
     try {
-      const payload = {
-        decision,
-        vote: decision,
-        status: decision,
+      const backendDecision = decision === "approved" ? "approve" : "reject";
+      await decideAccessRequestAsOwner(reqId, {
+        decision: backendDecision,
         ...(comment.trim() ? { comment: comment.trim() } : {}),
-      };
-
-      await decideAccessRequestAsOwner(reqId, payload);
-      setDecisionResult(decision);
+      });
+      setDecisionResult(backendDecision);
     } catch (err) {
       console.error("Owner decision failed:", err);
       setActionError(
@@ -397,4 +394,3 @@ export default function OwnerAccessDecisionPage() {
     </DashboardAwareLayout>
   );
 }
-

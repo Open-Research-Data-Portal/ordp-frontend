@@ -31,6 +31,7 @@ import AdminSettingsPage from "../features/datasets/pages/AdminSettingsPage.jsx"
 import ReviewDatasetPage from "../features/datasets/pages/ReviewDatasetPage.jsx";
 import DatasetDetailPage from "../features/datasets/pages/Datasetdetailpage.jsx";
 import BrowseDatasetsPage from "../pages/BrowseDatasetsPage.jsx";
+import DiscoverDatasetsPage from "../pages/DiscoverDatasetsPage.jsx";
 import DatasetViewPage from "../pages/DatasetViewPage";
 import BookmarksPage from "../features/datasets/pages/BookmarksPage";
 import NotificationsPage from "../pages/NotificationsPage";
@@ -132,6 +133,7 @@ export default function AppRoutes() {
 
       {/* Public dataset browsing */}
       <Route path="/datasets" element={<BrowseDatasetsPage />} />
+      <Route path="/datasets/discover-more" element={<DiscoverDatasetsPage />} />
       <Route path="/datasets/:id" element={
         <ProtectedRoute><DatasetViewPage /></ProtectedRoute>
       } />

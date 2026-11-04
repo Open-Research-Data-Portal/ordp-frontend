@@ -35,7 +35,7 @@ export function getStoredReviewerDecisions(userId) {
   }
 }
 
-import client from "../../../api/client";
+import client, { getCached } from "../../../api/client";
 import { MOCK_CATALOG_DATASETS, findDataset } from "../../../api/datasetsHub";
 
 const DATASETS_BASE = "/datasets";
@@ -256,8 +256,7 @@ export async function submitDataset(datasetId, termsAccepted) {
 }
 
 export async function getMyDatasets(params = {}) {
-  const { data } = await client.get(`${DATASETS_BASE}/mine/`, { params });
-  return data;
+  return getCached(`${DATASETS_BASE}/mine/`, { params });
 }
 
 export async function getDatasetDetail(datasetId) {
@@ -393,18 +392,15 @@ export async function deleteDataset(datasetId) {
 }
 
 export async function getDashboardStats() {
-  const { data } = await client.get(`${DATASETS_BASE}/dashboard/stats/`);
-  return data;
+  return getCached(`${DATASETS_BASE}/dashboard/stats/`);
 }
 
 export async function getDashboardRecentActivity() {
-  const { data } = await client.get(`${DATASETS_BASE}/dashboard/recent-activity/`);
-  return data;
+  return getCached(`${DATASETS_BASE}/dashboard/recent-activity/`);
 }
 
 export async function getDashboardFeed() {
-  const { data } = await client.get(`${DATASETS_BASE}/dashboard/feed/`);
-  return data;
+  return getCached(`${DATASETS_BASE}/dashboard/feed/`);
 }
 
 export async function getDashboardMyContributions() {
@@ -767,8 +763,7 @@ export async function getBookmarks() {
 }
 
 export async function getMyBookmarks() {
-  const { data } = await client.get(`${DATASETS_BASE}/bookmarks/`);
-  return data;
+  return getCached(`${DATASETS_BASE}/bookmarks/`);
 }
 
 export async function getMySuggestions() {
@@ -979,9 +974,7 @@ export async function getAdminArchivedDatasets() {
  * Fetch all datasets.
  */
 export async function getDatasets(params) {
-  const { data } = await client.get(`${DATASETS_BASE}/`, { params });
-  return data;
+  return getCached(`${DATASETS_BASE}/`, { params });
 }
-
 
 

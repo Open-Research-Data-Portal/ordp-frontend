@@ -1,4 +1,4 @@
-import client from "./client";
+import client, { getCached } from "./client";
 import { fetchAllDatasets } from "./datasetsHub";
 
 /**
@@ -14,15 +14,11 @@ export async function searchDatasets(params = {}) {
 
   // Primary source — the public dataset directory.
   try {
-    const response = await client.get("/search/datasets/", { params: backendParams });
-    const data = response.data;
+    const data = await getCached("/search/datasets/", { params: backendParams });
     list = Array.isArray(data) ? data : (data?.results || data?.datasets || []);
     // Keep the deployed API authoritative, while applying the category name
     // locally when the response does not expose a category UUID.
-    return applyLocalFilters(list, {
-      category: backendParams.category,
-      category_name: categoryName,
-    });
+    return applyLocalFilters(list, { ...params, category_name: categoryName });
   } catch (err) {
     console.warn("searchDatasets primary failed, falling back:", err?.message);
   }
@@ -150,4 +146,52 @@ export async function getDiscoverFeed() {
     console.warn("getDiscoverFeed failed, falling back:", err?.message);
   }
   return searchDatasets({ order_by: "popular" });
+}
+
+export async function getInterestBasedRecommendations(user) {
+  const rawInterests = [
+    ...(Array.isArray(user?.interests) ? user.interests : []),
+    ...(Array.isArray(user?.profile?.interests) ? user.profile.interests : []),
+    ...(Array.isArray(user?.research_interests) ? user.research_interests : []),
+    ...(Array.isArray(user?.profile?.research_interests) ? user.profile.research_interests : []),
+  ];
+  const interests = rawInterests
+    .map((interest) => typeof interest === "object"
+      ? [interest.name, interest.title, interest.label, interest.slug]
+      : [interest])
+    .flat()
+    .filter(Boolean)
+    .map((interest) => String(interest).toLowerCase().trim())
+    .filter(Boolean);
+
+  if (interests.length === 0) return [];
+
+  const datasets = await searchDatasets();
+  const scored = datasets
+    .map((dataset) => {
+      const searchableText = [
+        dataset.title,
+        dataset.description,
+        dataset.category,
+        dataset.subject_name,
+        dataset.metadata?.category_name,
+        dataset.metadata?.description,
+        ...(Array.isArray(dataset.tags) ? dataset.tags : []),
+      ].filter(Boolean).join(" ").toLowerCase();
+      const score = interests.reduce(
+        (total, interest) => total + (searchableText.includes(interest) ? 1 : 0),
+        0
+      );
+      return { dataset, score };
+    })
+    .filter(({ score }) => score > 0)
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      const engagement = (item) =>
+        Number(item.views ?? item.view_count ?? 0) +
+        Number(item.downloads ?? item.download_count ?? 0);
+      return engagement(b.dataset) - engagement(a.dataset);
+    });
+
+  return scored.map(({ dataset }) => dataset);
 }

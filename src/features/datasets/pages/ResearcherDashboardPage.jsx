@@ -17,7 +17,7 @@ import { ProfileSavedNotice } from "../../../components/dashboard/dashboardUi";
 import { useAuth } from "../../../context/useAuth";
 import { getDisplayName, isProfileComplete as checkProfileComplete } from "../../../utils/userRoles";
 import * as datasetsApi from "../hooks/datasetsApi";
-import { getDiscoverFeed, searchDatasets } from "../../../api/search";
+import { getDiscoverFeed, getInterestBasedRecommendations, searchDatasets } from "../../../api/search";
 import { getDatasetImage } from "../../../utils/datasetImage";
 
 function normalizeList(data) {
@@ -62,6 +62,14 @@ function activityBadgeClass(action) {
 
 function formatAction(action) {
   return String(action || "activity").replace(/_/g, " ").toUpperCase();
+}
+
+function DashboardError({ title }) {
+  return (
+    <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-semibold text-red-900">
+      {title}
+    </div>
+  );
 }
 
 export default function ResearcherDashboardPage() {
@@ -121,11 +129,12 @@ export default function ResearcherDashboardPage() {
       setDatasetsError(null);
       setActivityError(null);
 
-      const [statsResult, datasetsResult, pendingResult, feedResult, bookmarksResult, activityResult, recentResult] = await Promise.allSettled([
+      const [statsResult, datasetsResult, pendingResult, feedResult, interestResult, bookmarksResult, activityResult, recentResult] = await Promise.allSettled([
         datasetsApi.getDashboardStats(),
         datasetsApi.getMyDatasets(),
         datasetsApi.getMyDatasets({ status: "pending" }),
         datasetsApi.getDashboardFeed(),
+        getInterestBasedRecommendations(user),
         datasetsApi.getMyBookmarks?.() ?? Promise.resolve([]),
         datasetsApi.getDashboardRecentActivity(),
         searchDatasets({ order_by: "newest" }),
@@ -151,8 +160,15 @@ export default function ResearcherDashboardPage() {
         setPendingDatasets(pendingList.length);
       }
 
-      if (feedResult.status === "fulfilled") {
-        const rawFeed = normalizeList(feedResult.value);
+      if (feedResult.status === "fulfilled" || interestResult.status === "fulfilled") {
+        const personalized = interestResult.status === "fulfilled"
+          ? normalizeList(interestResult.value)
+          : [];
+        const rawFeed = personalized.length > 0
+          ? personalized
+          : feedResult.status === "fulfilled"
+            ? normalizeList(feedResult.value)
+            : [];
         // Rank recommendations by high views and downloads (engagement)
         const sortedFeed = [...rawFeed].sort((a, b) => {
           const aViews = Number(a.view_count ?? a.views ?? 0);
@@ -292,9 +308,7 @@ export default function ResearcherDashboardPage() {
       </div>
 
       {statsError && (
-        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {statsError}
-        </div>
+        <DashboardError title="You have no dashboard stats" />
       )}
       {datasetsError && (
         <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -636,7 +650,7 @@ export default function ResearcherDashboardPage() {
           {loadingActivity ? (
             <p className="px-5 py-6 text-sm text-gray-500">Loading recent activity...</p>
           ) : activityError ? (
-            <p className="px-5 py-6 text-sm text-red-600">{activityError}</p>
+            <p className="px-5 py-6 text-sm font-semibold text-red-900">You have no recent activity</p>
           ) : recentActivity.length === 0 ? (
             <p className="px-5 py-6 text-sm text-gray-500">No recent activity yet.</p>
           ) : (

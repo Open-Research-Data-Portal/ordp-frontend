@@ -26,7 +26,8 @@ export function formatApiError(err, fallback = "An unexpected error occurred.") 
   // 2. Extract message from data if object or array
   let raw = null;
   if (data && typeof data === "object") {
-    raw = data.detail || data.message || data.error;
+    const nestedError = data.error && typeof data.error === "object" ? data.error : null;
+    raw = nestedError?.detail || nestedError?.message || data.detail || data.message || data.error;
     if (!raw && Array.isArray(data.non_field_errors)) {
       raw = data.non_field_errors.join(", ");
     }

@@ -17,7 +17,7 @@ import { ProfileSavedNotice } from "../../../components/dashboard/dashboardUi";
 import { useAuth } from "../../../context/useAuth";
 import { getDisplayName, isProfileComplete as checkProfileComplete } from "../../../utils/userRoles";
 import * as datasetsApi from "../hooks/datasetsApi";
-import { getDiscoverFeed, searchDatasets } from "../../../api/search";
+import { getDiscoverFeed, getInterestBasedRecommendations, searchDatasets } from "../../../api/search";
 import { getDatasetImage } from "../../../utils/datasetImage";
 
 function normalizeList(data) {
@@ -62,6 +62,25 @@ function activityBadgeClass(action) {
 
 function formatAction(action) {
   return String(action || "activity").replace(/_/g, " ").toUpperCase();
+}
+
+function DashboardError({ title, message, actionLabel, onAction }) {
+  return (
+    <div className="mb-6 flex items-start gap-3 rounded-2xl border border-red-200 bg-gradient-to-r from-red-50 to-white px-5 py-4 shadow-sm">
+      <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600">
+        <X className="h-4 w-4" />
+      </div>
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-red-900">{title}</p>
+        {message && <p className="mt-1 text-xs leading-relaxed text-red-700">{message}</p>}
+        {actionLabel && (
+          <button type="button" onClick={onAction} className="mt-3 text-xs font-bold text-red-800 underline underline-offset-2 hover:text-red-950">
+            {actionLabel}
+          </button>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default function ResearcherDashboardPage() {
@@ -121,11 +140,12 @@ export default function ResearcherDashboardPage() {
       setDatasetsError(null);
       setActivityError(null);
 
-      const [statsResult, datasetsResult, pendingResult, feedResult, bookmarksResult, activityResult, recentResult] = await Promise.allSettled([
+      const [statsResult, datasetsResult, pendingResult, feedResult, interestResult, bookmarksResult, activityResult, recentResult] = await Promise.allSettled([
         datasetsApi.getDashboardStats(),
         datasetsApi.getMyDatasets(),
         datasetsApi.getMyDatasets({ status: "pending" }),
         datasetsApi.getDashboardFeed(),
+        getInterestBasedRecommendations(user),
         datasetsApi.getMyBookmarks?.() ?? Promise.resolve([]),
         datasetsApi.getDashboardRecentActivity(),
         searchDatasets({ order_by: "newest" }),
@@ -151,8 +171,15 @@ export default function ResearcherDashboardPage() {
         setPendingDatasets(pendingList.length);
       }
 
-      if (feedResult.status === "fulfilled") {
-        const rawFeed = normalizeList(feedResult.value);
+      if (feedResult.status === "fulfilled" || interestResult.status === "fulfilled") {
+        const personalized = interestResult.status === "fulfilled"
+          ? normalizeList(interestResult.value)
+          : [];
+        const rawFeed = personalized.length > 0
+          ? personalized
+          : feedResult.status === "fulfilled"
+            ? normalizeList(feedResult.value)
+            : [];
         // Rank recommendations by high views and downloads (engagement)
         const sortedFeed = [...rawFeed].sort((a, b) => {
           const aViews = Number(a.view_count ?? a.views ?? 0);
@@ -292,14 +319,17 @@ export default function ResearcherDashboardPage() {
       </div>
 
       {statsError && (
-        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {statsError}
-        </div>
+        <DashboardError
+          title="You have no dashboard stats"
+        />
       )}
       {datasetsError && (
-        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {datasetsError}
-        </div>
+        <DashboardError
+          title="Your datasets could not be loaded"
+          message="We could not retrieve your dataset list. Please try again or browse the public directory while we reconnect."
+          actionLabel="Browse datasets"
+          onAction={() => navigate("/datasets")}
+        />
       )}
 
       {/* ── Recent Datasets (uploaded in the last 30 days) ── */}
@@ -636,7 +666,14 @@ export default function ResearcherDashboardPage() {
           {loadingActivity ? (
             <p className="px-5 py-6 text-sm text-gray-500">Loading recent activity...</p>
           ) : activityError ? (
-            <p className="px-5 py-6 text-sm text-red-600">{activityError}</p>
+            <div className="flex items-start gap-3 bg-gradient-to-r from-red-50 to-white px-5 py-6">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600">
+                <X className="h-4 w-4" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-red-900">You have no recent activity</p>
+              </div>
+            </div>
           ) : recentActivity.length === 0 ? (
             <p className="px-5 py-6 text-sm text-gray-500">No recent activity yet.</p>
           ) : (

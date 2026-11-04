@@ -133,11 +133,12 @@ export default function LoginPage() {
         navigate(getDashboardPath(signedIn), { replace: true });
       }
     } catch (err) {
-      setApiError(
+      const normalizedError =
         err instanceof authApi.AuthApiError
           ? err
-          : new authApi.AuthApiError({ code: "UNKNOWN_ERROR", message: "Something went wrong. Please try again." })
-      );
+          : new authApi.AuthApiError({ code: "UNKNOWN_ERROR", message: "Something went wrong. Please try again." });
+
+      setApiError(normalizedError);
     } finally {
       setSubmitting(false);
     }

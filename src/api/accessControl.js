@@ -1,0 +1,30 @@
+import client from "./client";
+
+const base = "/access-control";
+const data = async (promise) => (await promise).data;
+
+export const getCatalog = () => data(client.get(`${base}/catalog/`));
+export const getMyPermissions = () => data(client.get(`${base}/me/`));
+export const getOverview = () => data(client.get(`${base}/overview/`));
+export const getUsers = (params = {}) => data(client.get(`${base}/users/`, { params }));
+export const getUser = (id) => data(client.get(`${base}/users/${id}/`));
+export const grantUser = (id, payload) => data(client.post(`${base}/users/${id}/grants/`, payload));
+export const revokeUserGrant = (id) => data(client.delete(`${base}/user-grants/${id}/`));
+export const getGroups = () => data(client.get(`${base}/groups/`));
+export const getGroup = (id) => data(client.get(`${base}/groups/${id}/`));
+export const createGroup = (payload) => data(client.post(`${base}/groups/`, payload));
+export const updateGroup = (id, payload) => data(client.patch(`${base}/groups/${id}/`, payload));
+export const archiveGroup = (id) => data(client.delete(`${base}/groups/${id}/`));
+export const addMember = (groupId, userId) => data(client.post(`${base}/groups/${groupId}/members/${userId}/`));
+export const removeMember = (groupId, userId) => data(client.delete(`${base}/groups/${groupId}/members/${userId}/`));
+export const grantGroup = (id, payload) => data(client.post(`${base}/groups/${id}/grants/`, payload));
+export const revokeGroupGrant = (id) => data(client.delete(`${base}/group-grants/${id}/`));
+export const getRequests = (params = {}) => data(client.get(`${base}/requests/`, { params }));
+export const getRequest = (id) => data(client.get(`${base}/requests/${id}/`));
+export const createRequest = (payload) => data(client.post(`${base}/requests/`, payload));
+export const cancelRequest = (id) => data(client.delete(`${base}/requests/${id}/`));
+export const reviewRequest = (id, payload) => data(client.post(`${base}/requests/${id}/review/`, payload));
+export const getResourceAccess = (type, id) => data(client.get(`${base}/resources/${type}/${id}/`));
+export const saveResourceMatrix = (type, id, edits) => data(client.post(`${base}/resources/${type}/${id}/matrix/`, { edits }));
+export const getAudit = () => data(client.get(`${base}/audit/`));
+export const getDiscoverableDatasets = () => data(client.get(`${base}/resources/`));

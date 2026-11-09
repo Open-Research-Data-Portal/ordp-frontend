@@ -45,8 +45,8 @@ export default function DashboardShell({ title, subtitle, children }) {
           isCollapsed={isCollapsed}
           onToggleCollapse={toggleCollapse}
         />
-        <main className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-6">
-          {children}
+        <main className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-6 sm:px-6 lg:px-8">
+          <div className="flex-1">{children}</div>
           <DashboardFooter />
         </main>
       </div>

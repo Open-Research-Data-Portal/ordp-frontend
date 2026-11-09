@@ -35,6 +35,7 @@ const ROLE_CONFIG = {
       { label: "Archived", icon: Archive, to: "/archived-datasets" },
       { label: "Bookmarks", icon: Bookmark, to: "/bookmarks" },
       { label: "Notifications", icon: Bell, to: "/notifications" },
+      { label: "Audit Log", icon: ScrollText, to: "/audit-log" },
       { label: "Access", icon: Shield, to: "/access-management" },
       { label: "Settings", icon: Settings, to: "/profile" },
     ],
@@ -49,6 +50,7 @@ const ROLE_CONFIG = {
       { label: "Other Datasets", icon: Database, to: "/datasets" },
       { label: "Bookmarks", icon: Bookmark, to: "/bookmarks" },
       { label: "Notifications", icon: Bell, to: "/notifications" },
+      { label: "Audit Log", icon: ScrollText, to: "/audit-log" },
       { label: "Access", icon: Shield, to: "/access-management" },
       { label: "Settings", icon: Settings, to: "/profile" },
     ],
@@ -62,6 +64,7 @@ const ROLE_CONFIG = {
       { label: "Review Datasets", icon: ClipboardCheck, to: "/reviewer/review-queue" },
       { label: "Archive Requests", icon: Archive, to: "/reviewer/archive-requests" },
       { label: "Notifications", icon: Bell, to: "/notifications" },
+      { label: "Audit Log", icon: ScrollText, to: "/audit-log" },
       { label: "Access", icon: Shield, to: "/access-management" },
       { label: "Settings", icon: Settings, to: "/profile" },
     ],
@@ -157,12 +160,14 @@ export default function DashboardSidebar({
     { label: "Group requests", tab: "Group Requests", show: true },
     { label: "Dataset permissions", tab: "Resources & Permissions", show: allowed.has("user.view") },
     { label: "Permission catalog", tab: "Permission Catalog", show: true },
-    { label: "Access history", tab: "Audit History", show: allowed.has("audit.view") },
   ].filter((section) => section.show).map((section) => ({
     ...section, to: `/access-management?tab=${encodeURIComponent(section.tab)}`,
   }));
   const dashboardPath = getDashboardPath(user);
   const { pathname, search } = location;
+  const [accessExpanded, setAccessExpanded] = useState(null);
+  const onAccessPage = pathname.startsWith("/access-management");
+  const accessOpen = accessExpanded ?? onAccessPage;
 
   const [internalCollapsed, setInternalCollapsed] = useState(() => {
     return localStorage.getItem("sidebar_collapsed") === "true";
@@ -191,6 +196,16 @@ export default function DashboardSidebar({
       setInternalMobileOpen(false);
     }
   }, [controlledOnCloseMobile]);
+
+  const handleAccessClick = (event, mobile = false) => {
+    if (onAccessPage) {
+      event.preventDefault();
+      setAccessExpanded((current) => !(current ?? true));
+    } else {
+      setAccessExpanded(true);
+      if (mobile) handleCloseMobile();
+    }
+  };
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -240,11 +255,13 @@ export default function DashboardSidebar({
         {/* Navigation Items */}
         <nav className="flex-1 px-3 py-3 space-y-1 overflow-y-auto min-h-0 custom-scrollbar">
           {navItems.map(({ label, icon: Icon, to }) => {
-            const active = isNavActive(to, pathname, search);
+            const active = to === "/access-management" ? onAccessPage : isNavActive(to, pathname, search);
             return (
               <div key={to}>
               <Link
                 to={to}
+                onClick={to === "/access-management" ? handleAccessClick : undefined}
+                aria-expanded={to === "/access-management" ? accessOpen : undefined}
                 title={collapsed ? label : undefined}
                 className={[
                   "flex items-center gap-3 py-2.5 rounded-lg text-sm font-medium transition group relative",
@@ -257,7 +274,7 @@ export default function DashboardSidebar({
                 <Icon className="w-5 h-5 shrink-0" />
                 {!collapsed && <span className="truncate">{label}</span>}
               </Link>
-              {to === "/access-management" && !collapsed && pathname.startsWith("/access-management") && (
+              {to === "/access-management" && !collapsed && accessOpen && onAccessPage && (
                 <div className="ml-7 space-y-0.5 border-l border-white/15 pl-2" aria-label="Access sections">
                   {accessSections.map((section) => <Link key={section.to} to={section.to}
                     className={`block rounded-md px-3 py-1.5 text-xs ${isNavActive(section.to, pathname, search) ? "bg-white/10 font-semibold text-white" : "text-slate-400 hover:bg-white/5 hover:text-white"}`}>
@@ -329,12 +346,13 @@ export default function DashboardSidebar({
             {/* Mobile Navigation */}
             <nav className="flex-1 px-3 py-3 space-y-1 overflow-y-auto min-h-0">
               {navItems.map(({ label, icon: Icon, to }) => {
-                const active = isNavActive(to, pathname, search);
+                const active = to === "/access-management" ? onAccessPage : isNavActive(to, pathname, search);
                 return (
                   <div key={to}>
                   <Link
                     to={to}
-                    onClick={handleCloseMobile}
+                    onClick={to === "/access-management" ? (event) => handleAccessClick(event, true) : handleCloseMobile}
+                    aria-expanded={to === "/access-management" ? accessOpen : undefined}
                     className={[
                       "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition",
                       active
@@ -345,7 +363,7 @@ export default function DashboardSidebar({
                     <Icon className="w-5 h-5 shrink-0" />
                     <span>{label}</span>
                   </Link>
-                  {to === "/access-management" && pathname.startsWith("/access-management") && (
+                  {to === "/access-management" && accessOpen && onAccessPage && (
                     <div className="ml-7 space-y-0.5 border-l border-white/15 pl-2" aria-label="Access sections">
                       {accessSections.map((section) => <Link key={section.to} to={section.to} onClick={handleCloseMobile}
                         className={`block rounded-md px-3 py-2 text-xs ${isNavActive(section.to, pathname, search) ? "bg-white/10 font-semibold text-white" : "text-slate-400 hover:bg-white/5 hover:text-white"}`}>

@@ -21,6 +21,7 @@ import DatasetListPage from "../features/datasets/pages/DatasetListPage.jsx";
 import ResearcherDashboardPage from "../features/datasets/pages/ResearcherDashboardPage.jsx";
 import AdminDashboardPage from "../features/datasets/pages/AdminDashboardPage.jsx";
 import AdminAuditLogPage from "../features/datasets/pages/AdminAuditLogPage.jsx";
+import UserAuditLogPage from "../pages/UserAuditLogPage.jsx";
 import AdminDeletionRequestsPage from "../features/datasets/pages/AdminDeletionRequestsPage.jsx";
 import ReviewerDashboardPage from "../features/datasets/pages/ReviewerDashboardPage.jsx";
 import ReviewerQueuePage from "../features/datasets/pages/ReviewerQueuePage.jsx";
@@ -185,6 +186,7 @@ export default function AppRoutes() {
         <ProtectedRoute><AdminDashboardPage /></ProtectedRoute>
       } />
       <Route path="/access-management" element={<ProtectedRoute><AccessManagementPage /></ProtectedRoute>} />
+      <Route path="/audit-log" element={<ProtectedRoute><UserAuditLogPage /></ProtectedRoute>} />
       <Route path="/access-management/requests/:requestId" element={<ProtectedRoute><AccessManagementPage /></ProtectedRoute>} />
       <Route path="/shared-with-me" element={<ProtectedRoute><SharedAccessPage /></ProtectedRoute>} />
       {/* Dedicated admin sub-pages. These MUST stay registered — previously

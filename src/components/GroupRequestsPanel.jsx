@@ -7,7 +7,7 @@ const primary = "rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-wh
 const secondary = "rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-800";
 const describeError = (error) => accessError(error, "This request could not be completed.");
 
-export default function GroupRequestsPanel({ requests, catalog, datasets, canReview, user, onChanged, openRequestId }) {
+export default function GroupRequestsPanel({ requests, catalog, datasets, canReview, user, onChanged, openRequestId, allowSelfRequests = true }) {
   const [groups, setGroups] = useState([]);
   const [canRequestGroupPermission, setCanRequestGroupPermission] = useState(false);
   const [selected, setSelected] = useState(null);
@@ -131,7 +131,7 @@ export default function GroupRequestsPanel({ requests, catalog, datasets, canRev
           </button>
         ) : <p className="py-3 text-sm text-slate-500">No group requests in this view.</p>}
       </section>
-      <section className="rounded-xl border border-slate-200 bg-white p-5">
+      {allowSelfRequests && <section className="rounded-xl border border-slate-200 bg-white p-5">
         <h2 className="mb-3 font-semibold text-slate-900">Request group access</h2>
         <form onSubmit={sendRequest} className="space-y-3">
           <label className="block text-sm font-medium">Request type
@@ -175,7 +175,7 @@ export default function GroupRequestsPanel({ requests, catalog, datasets, canRev
           </label>
           <button type="submit" className={primary} disabled={busy || !groupId || (kind === "group_permission" && !permissionCodes.length)}>Send request</button>
         </form>
-      </section>
+      </section>}
     </div>
     <div>
       {error && <p role="alert" className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}

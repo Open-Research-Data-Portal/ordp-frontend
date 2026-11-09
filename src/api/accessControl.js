@@ -35,4 +35,5 @@ export const reviewRequest = (id, payload) => data(client.post(`${base}/requests
 export const getResourceAccess = (type, id) => data(client.get(`${base}/resources/${type}/${id}/`));
 export const saveResourceMatrix = (type, id, edits) => data(client.post(`${base}/resources/${type}/${id}/matrix/`, { edits }));
 export const getAudit = () => data(client.get(`${base}/audit/`));
+export const getUserManagementAudit = () => data(client.get(`${base}/audit/user-management/`));
 export const getDiscoverableDatasets = () => data(client.get(`${base}/resources/`));

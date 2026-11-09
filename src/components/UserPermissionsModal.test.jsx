@@ -20,9 +20,13 @@ describe("UserPermissionsModal", () => {
       busy={false} onClose={vi.fn()} onGrant={onGrant} onRevoke={vi.fn()} />);
     fireEvent.change(screen.getByLabelText("Where can they act?"), { target: { value: "dataset" } });
     fireEvent.change(screen.getByLabelText("Dataset"), { target: { value: "dataset-1" } });
+    expect(screen.getByRole("region", { name: "View and download" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Edit and delete" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Review" })).toBeTruthy();
     fireEvent.click(screen.getByRole("switch", { name: "View dataset for ada@example.com" }));
     fireEvent.click(screen.getByRole("switch", { name: "Edit dataset for ada@example.com" }));
-    expect(screen.queryByRole("switch", { name: "Approve dataset for ada@example.com" })).toBeNull();
+    expect(screen.getByRole("switch", { name: "Approve dataset for ada@example.com" }).disabled).toBe(true);
+    expect(screen.getByText("Coming later")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Grant 2 permissions" }));
     await waitFor(() => expect(onGrant).toHaveBeenCalledWith([
       { permission: "dataset.view", resource_type: "dataset", resource_id: "dataset-1", expires_at: null, reason: "" },

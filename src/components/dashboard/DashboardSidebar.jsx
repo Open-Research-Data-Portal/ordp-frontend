@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutGrid,
@@ -149,19 +149,18 @@ export default function DashboardSidebar({
     navItems.splice(accessIndex < 0 ? navItems.length : accessIndex, 0,
       { label: "Shared with me", icon: FolderKanban, to: "/shared-with-me" });
   }
-  const accessIndex = navItems.findIndex((item) => item.to === "/access-management");
-  const grantedNav = [
-    ["user.view", "Users", Users, "/access-management?tab=Users"],
-    ["audit.view", "Access history", ScrollText, "/access-management?tab=Audit%20History"],
-    ["access_request.review", "Access requests", ClipboardCheck, "/access-management?tab=Access%20Requests"],
-  ];
-  if (["group.create", "group.edit", "group.delete", "group.member.manage", "group.permission.manage"].some((code) => allowed.has(code))) {
-    grantedNav.push(["group.access", "Groups", Users, "/access-management?tab=Groups"]);
-  }
-  const existingPaths = new Set(navItems.map((item) => item.to));
-  const extras = grantedNav.filter(([code, , , to]) => (allowed.has(code) || code === "group.access") && !existingPaths.has(to))
-    .map(([, label, icon, to]) => ({ label, icon, to }));
-  navItems.splice(accessIndex < 0 ? navItems.length : accessIndex, 0, ...extras);
+  const accessSections = [
+    { label: "Overview", tab: "Overview", show: allowed.has("user.view") },
+    { label: "Users", tab: "Users", show: allowed.has("user.view") && roleKey !== "admin" },
+    { label: "Groups", tab: "Groups", show: allowed.has("user.view") },
+    { label: "Access requests", tab: "Access Requests", show: true },
+    { label: "Group requests", tab: "Group Requests", show: true },
+    { label: "Dataset permissions", tab: "Resources & Permissions", show: allowed.has("user.view") },
+    { label: "Permission catalog", tab: "Permission Catalog", show: true },
+    { label: "Access history", tab: "Audit History", show: allowed.has("audit.view") },
+  ].filter((section) => section.show).map((section) => ({
+    ...section, to: `/access-management?tab=${encodeURIComponent(section.tab)}`,
+  }));
   const dashboardPath = getDashboardPath(user);
   const { pathname, search } = location;
 
@@ -185,13 +184,13 @@ export default function DashboardSidebar({
     }
   };
 
-  const handleCloseMobile = () => {
+  const handleCloseMobile = useCallback(() => {
     if (controlledOnCloseMobile) {
       controlledOnCloseMobile();
     } else {
       setInternalMobileOpen(false);
     }
-  };
+  }, [controlledOnCloseMobile]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -201,7 +200,7 @@ export default function DashboardSidebar({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [mobileOpen]);
+  }, [mobileOpen, handleCloseMobile]);
 
   async function handleSignOut() {
     await logout();
@@ -243,8 +242,8 @@ export default function DashboardSidebar({
           {navItems.map(({ label, icon: Icon, to }) => {
             const active = isNavActive(to, pathname, search);
             return (
+              <div key={to}>
               <Link
-                key={to}
                 to={to}
                 title={collapsed ? label : undefined}
                 className={[
@@ -258,6 +257,15 @@ export default function DashboardSidebar({
                 <Icon className="w-5 h-5 shrink-0" />
                 {!collapsed && <span className="truncate">{label}</span>}
               </Link>
+              {to === "/access-management" && !collapsed && pathname.startsWith("/access-management") && (
+                <div className="ml-7 space-y-0.5 border-l border-white/15 pl-2" aria-label="Access sections">
+                  {accessSections.map((section) => <Link key={section.to} to={section.to}
+                    className={`block rounded-md px-3 py-1.5 text-xs ${isNavActive(section.to, pathname, search) ? "bg-white/10 font-semibold text-white" : "text-slate-400 hover:bg-white/5 hover:text-white"}`}>
+                    {section.label}
+                  </Link>)}
+                </div>
+              )}
+              </div>
             );
           })}
         </nav>
@@ -323,8 +331,8 @@ export default function DashboardSidebar({
               {navItems.map(({ label, icon: Icon, to }) => {
                 const active = isNavActive(to, pathname, search);
                 return (
+                  <div key={to}>
                   <Link
-                    key={to}
                     to={to}
                     onClick={handleCloseMobile}
                     className={[
@@ -337,6 +345,15 @@ export default function DashboardSidebar({
                     <Icon className="w-5 h-5 shrink-0" />
                     <span>{label}</span>
                   </Link>
+                  {to === "/access-management" && pathname.startsWith("/access-management") && (
+                    <div className="ml-7 space-y-0.5 border-l border-white/15 pl-2" aria-label="Access sections">
+                      {accessSections.map((section) => <Link key={section.to} to={section.to} onClick={handleCloseMobile}
+                        className={`block rounded-md px-3 py-2 text-xs ${isNavActive(section.to, pathname, search) ? "bg-white/10 font-semibold text-white" : "text-slate-400 hover:bg-white/5 hover:text-white"}`}>
+                        {section.label}
+                      </Link>)}
+                    </div>
+                  )}
+                  </div>
                 );
               })}
             </nav>

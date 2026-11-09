@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ShieldCheck, X } from "lucide-react";
+import { groupPermissions } from "../utils/permissionCategories";
 
 const field = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-amber-600 focus:outline-none";
 
@@ -21,7 +22,7 @@ export default function UserPermissionsModal({ user, catalog, datasets, busy, er
   const current = new Set((user.effective || []).filter((grant) =>
     grant.resource_type === scope && String(grant.resource_id || "") === String(scopeId || "")
   ).map((grant) => grant.code));
-  const choices = catalog.filter((permission) => permission.resource_type === scope && permission.enforced);
+  const groupedChoices = groupPermissions(catalog, scope);
   const submit = (event) => {
     event.preventDefault();
     if (!selected.length || (scope === "dataset" && !datasetId)) return;
@@ -58,8 +59,10 @@ export default function UserPermissionsModal({ user, catalog, datasets, busy, er
         <fieldset>
           <legend className="text-sm font-semibold text-slate-900">Permissions to grant</legend>
           <p className="mt-1 text-xs text-slate-500">Turn on permissions, then save. Turn off a direct permission to revoke it. Group permissions are managed in Groups.</p>
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
-            {choices.map((permission) => {
+          <div className="mt-4 space-y-5">
+            {groupedChoices.map((group) => <section key={group.title} aria-label={group.title}>
+              <h3 className="mb-2 text-sm font-semibold text-slate-900">{group.title}</h3>
+              <div className="grid gap-2 sm:grid-cols-2">{group.permissions.map((permission) => {
               const grant = (user.effective || []).find((row) => row.code === permission.code
                 && row.resource_type === scope && String(row.resource_id || "") === String(scopeId || ""));
               const direct = grant?.sources.find((source) => source.type === "direct");
@@ -67,16 +70,18 @@ export default function UserPermissionsModal({ user, catalog, datasets, busy, er
               const enabled = current.has(permission.code) || selected.includes(permission.code);
               return <div key={permission.code} className={`flex items-center justify-between gap-3 rounded-lg border p-3 text-sm ${enabled ? "border-emerald-200 bg-emerald-50" : "border-slate-200"}`}>
                 <span><span className="font-medium text-slate-900">{permission.name}</span>{inherited && <span className="ml-2 text-xs font-semibold text-emerald-700">From group</span>}
+                  {!permission.enforced && <span className="ml-2 text-xs font-semibold text-amber-700">Coming later</span>}
                   {permission.description && <span className="block text-xs text-slate-500">{permission.description}</span>}</span>
                 <button type="button" role="switch" aria-label={`${permission.name} for ${user.email}`} aria-checked={enabled}
-                  disabled={busy || inherited || (scope === "dataset" && !datasetId)}
+                  disabled={busy || inherited || !permission.enforced || (scope === "dataset" && !datasetId)}
                   onClick={() => direct ? onRevoke(direct.id) : setSelected((value) => value.includes(permission.code)
                     ? value.filter((code) => code !== permission.code) : [...value, permission.code])}
                   className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${enabled ? "bg-emerald-600" : "bg-slate-300"}`}>
                   <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${enabled ? "left-5" : "left-0.5"}`} />
                 </button>
               </div>;
-            })}
+              })}</div>
+            </section>)}
           </div>
         </fieldset>
         <div className="grid gap-3 sm:grid-cols-2">

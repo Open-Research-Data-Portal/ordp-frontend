@@ -156,8 +156,8 @@ export default function DashboardSidebar({
     { label: "Overview", tab: "Overview", show: allowed.has("user.view") },
     { label: "Users", tab: "Users", show: allowed.has("user.view") && roleKey !== "admin" },
     { label: "Groups", tab: "Groups", show: allowed.has("user.view") },
-    { label: "Access requests", tab: "Access Requests", show: true },
-    { label: "Group requests", tab: "Group Requests", show: true },
+    { label: roleKey === "admin" ? "Access requests to review" : "Access requests", tab: "Access Requests", show: true },
+    { label: roleKey === "admin" ? "Group requests to review" : "Group requests", tab: "Group Requests", show: true },
     { label: "Dataset permissions", tab: "Resources & Permissions", show: allowed.has("user.view") },
     { label: "Permission catalog", tab: "Permission Catalog", show: true },
   ].filter((section) => section.show).map((section) => ({

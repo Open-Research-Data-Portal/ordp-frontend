@@ -21,13 +21,13 @@ describe("Access sidebar", () => {
       <DashboardSidebar isCollapsed={false} />
     </MemoryRouter>);
     const accessLink = screen.getByRole("link", { name: "Access" });
-    expect(screen.getByText("Group requests")).toBeTruthy();
+    expect(screen.getByText("Group requests to review")).toBeTruthy();
     expect(accessLink.getAttribute("aria-expanded")).toBe("true");
     fireEvent.click(accessLink);
-    expect(screen.queryByText("Group requests")).toBeNull();
+    expect(screen.queryByText("Group requests to review")).toBeNull();
     expect(accessLink.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(accessLink);
-    expect(screen.getByText("Group requests")).toBeTruthy();
+    expect(screen.getByText("Group requests to review")).toBeTruthy();
     expect(accessLink.getAttribute("aria-expanded")).toBe("true");
   });
 });

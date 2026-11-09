@@ -117,7 +117,7 @@ export default function GroupRequestsPanel({ requests, catalog, datasets, canRev
     <div className="space-y-6">
       <section className="rounded-xl border border-slate-200 bg-white p-5">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="font-semibold text-slate-900">Group requests</h2>
+          <h2 className="font-semibold text-slate-900">{allowSelfRequests ? "Group requests" : "Group requests to review"}</h2>
           <select aria-label="Group request status" className={field} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
             {["pending", "approved", "partially_approved", "rejected", "cancelled", "expired", "all"].map((status) =>
               <option key={status} value={status}>{status.replaceAll("_", " ")}</option>)}

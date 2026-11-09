@@ -6,7 +6,6 @@ import {
   Settings,
   HelpCircle,
   LogOut,
-  ShieldCheck,
   ClipboardCheck,
   Users,
   Database,
@@ -21,8 +20,9 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "../../context/useAuth";
-import { getDashboardPath, isAdmin, isResearcher, getActiveRole } from "../../utils/userRoles";
+import { getDashboardPath, isResearcher, getActiveRole } from "../../utils/userRoles";
 import logo from "../../assets/aastulogo.png";
+import { getMyPermissions, getMyResources } from "../../api/accessControl";
 
 const ROLE_CONFIG = {
   user: {
@@ -110,6 +110,29 @@ export default function DashboardSidebar({
   const navigate = useNavigate();
   const { logout, user } = useAuth();
   const [, setRoleTick] = useState(0);
+  const [sharedResources, setSharedResources] = useState([]);
+  const [permissionCodes, setPermissionCodes] = useState([]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    let active = true;
+    const refreshAccess = () => {
+      Promise.allSettled([getMyResources(), getMyPermissions()]).then(([resources, permissions]) => {
+        if (!active) return;
+        setSharedResources(resources.status === "fulfilled" && Array.isArray(resources.value) ? resources.value : []);
+        setPermissionCodes(permissions.status === "fulfilled"
+          ? permissions.value.effective.map((entry) => entry.code) : []);
+      });
+    };
+    refreshAccess();
+    window.addEventListener("focus", refreshAccess);
+    window.addEventListener("ordp:permissions-changed", refreshAccess);
+    return () => {
+      active = false;
+      window.removeEventListener("focus", refreshAccess);
+      window.removeEventListener("ordp:permissions-changed", refreshAccess);
+    };
+  }, [user?.id]);
 
   useEffect(() => {
     const handleRoleChanged = () => setRoleTick((t) => t + 1);
@@ -119,6 +142,26 @@ export default function DashboardSidebar({
 
   const roleKey = getRoleKey(user);
   const config = ROLE_CONFIG[roleKey];
+  const navItems = [...config.nav];
+  const allowed = new Set(permissionCodes);
+  if (sharedResources.length) {
+    const accessIndex = navItems.findIndex((item) => item.to === "/access-management");
+    navItems.splice(accessIndex < 0 ? navItems.length : accessIndex, 0,
+      { label: "Shared with me", icon: FolderKanban, to: "/shared-with-me" });
+  }
+  const accessIndex = navItems.findIndex((item) => item.to === "/access-management");
+  const grantedNav = [
+    ["user.view", "Users", Users, "/access-management?tab=Users"],
+    ["audit.view", "Access history", ScrollText, "/access-management?tab=Audit%20History"],
+    ["access_request.review", "Access requests", ClipboardCheck, "/access-management?tab=Access%20Requests"],
+  ];
+  if (["group.create", "group.edit", "group.delete", "group.member.manage", "group.permission.manage"].some((code) => allowed.has(code))) {
+    grantedNav.push(["group.access", "Groups", Users, "/access-management?tab=Groups"]);
+  }
+  const existingPaths = new Set(navItems.map((item) => item.to));
+  const extras = grantedNav.filter(([code, , , to]) => (allowed.has(code) || code === "group.access") && !existingPaths.has(to))
+    .map(([, label, icon, to]) => ({ label, icon, to }));
+  navItems.splice(accessIndex < 0 ? navItems.length : accessIndex, 0, ...extras);
   const dashboardPath = getDashboardPath(user);
   const { pathname, search } = location;
 
@@ -197,7 +240,7 @@ export default function DashboardSidebar({
 
         {/* Navigation Items */}
         <nav className="flex-1 px-3 py-3 space-y-1 overflow-y-auto min-h-0 custom-scrollbar">
-          {config.nav.map(({ label, icon: Icon, to }) => {
+          {navItems.map(({ label, icon: Icon, to }) => {
             const active = isNavActive(to, pathname, search);
             return (
               <Link
@@ -277,7 +320,7 @@ export default function DashboardSidebar({
 
             {/* Mobile Navigation */}
             <nav className="flex-1 px-3 py-3 space-y-1 overflow-y-auto min-h-0">
-              {config.nav.map(({ label, icon: Icon, to }) => {
+              {navItems.map(({ label, icon: Icon, to }) => {
                 const active = isNavActive(to, pathname, search);
                 return (
                   <Link

@@ -40,6 +40,7 @@ import AcceptInvitationPage from "../pages/AcceptInvitationPage.jsx";
 import OwnerAccessDecisionPage from "../pages/OwnerAccessDecisionPage.jsx";
 import HelpSupportPage from "../pages/HelpSupportPage.jsx";
 import AccessManagementPage from "../pages/AccessManagementPage.jsx";
+import SharedAccessPage from "../pages/SharedAccessPage.jsx";
 
 import { useAuth } from "../context/useAuth";
 import { isProfileComplete } from "../utils/userRoles";
@@ -185,6 +186,7 @@ export default function AppRoutes() {
       } />
       <Route path="/access-management" element={<ProtectedRoute><AccessManagementPage /></ProtectedRoute>} />
       <Route path="/access-management/requests/:requestId" element={<ProtectedRoute><AccessManagementPage /></ProtectedRoute>} />
+      <Route path="/shared-with-me" element={<ProtectedRoute><SharedAccessPage /></ProtectedRoute>} />
       {/* Dedicated admin sub-pages. These MUST stay registered — previously
           /admin/audit-log was linked from the sidebar but had no route, so it
           fell through to the catch-all and kicked admins back to /login. */}

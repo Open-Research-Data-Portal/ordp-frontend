@@ -10,7 +10,7 @@ describe("PermissionMatrix", () => {
       resource={{ resource: { id: "dataset-1" }, users: [{ id: "direct-1", user_id: 1, permission: "dataset.view" }], groups: [{ id: "group-grant-1", group_id: "group-1", permission: "dataset.view" }] }}
       users={[{ id: 1, name: "User A", groups: [{ group_id: "group-1" }] }]}
       groups={[{ id: "group-1", name: "Group A" }]}
-      catalog={[{ code: "dataset.view", name: "View dataset", resource_type: "dataset" }]}
+      catalog={[{ code: "dataset.view", name: "View dataset", resource_type: "dataset", enforced: true }]}
       onSave={onSave}
       onDirtyChange={vi.fn()}
     />);

@@ -327,6 +327,9 @@ export default function AdminDashboardPage() {
       setNewUserFullName("");
       setNewUserRole("public");
       setShowCreateForm(false);
+      if (res?.user_id || res?.id) {
+        navigate(`/access-management?tab=Users&user=${res.user_id || res.id}`);
+      }
     } catch (err) {
       const detail =
         err?.response?.data?.detail ||
@@ -679,7 +682,7 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
               <p className="mt-2 text-xs text-slate-500">
-                Tip: If this email already has an account, the selected role will be added to it. If it is a new email, an account will be created and an activation link sent.
+                If this email already has an account, the selected role will be added. After saving, you can choose this user’s permissions in the access panel.
               </p>
               <div className="mt-3 flex items-center justify-end gap-2">
                 <button
@@ -694,7 +697,7 @@ export default function AdminDashboardPage() {
                   disabled={creatingUser}
                   className="bg-navy hover:bg-navy-light text-white text-sm font-semibold rounded-lg px-4 py-2 disabled:opacity-50 transition-colors"
                 >
-                  {creatingUser ? "Processing…" : "Assign / Create User"}
+                  {creatingUser ? "Processing…" : "Create user & choose access"}
                 </button>
               </div>
             </form>
@@ -740,6 +743,11 @@ export default function AdminDashboardPage() {
                             <div className="min-w-0">
                               <p className="font-medium text-navy truncate">{u.full_name || u.name || "—"}</p>
                               <p className="text-xs text-gray-500 truncate">{u.email}</p>
+                              <button type="button" onClick={() => navigate(`/access-management?tab=Users&user=${uid}`)}
+                                className="mt-1 inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-900 hover:bg-amber-100"
+                                aria-label={`Manage access for ${u.email}`}>
+                                <Shield className="h-3 w-3" /> Manage access
+                              </button>
                             </div>
                           </div>
                         </td>

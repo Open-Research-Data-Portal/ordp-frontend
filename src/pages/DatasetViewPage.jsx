@@ -467,7 +467,9 @@ function ShareAccessModal({ dataset, mode = "download", isOwner = false, onClose
             onDownloadReady(directUrl);
             return;
           }
-        } catch {}
+        } catch {
+          // Show the access-request error below if the direct URL is unavailable.
+        }
       }
       setError(
         err.response?.data?.detail ||
@@ -735,7 +737,7 @@ export default function DatasetViewPage() {
 
   const [dataset, setDataset] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState("");
   const [expandedSections, setExpandedSections] = useState(() => new Set());
   const [detailViewOpen, setDetailViewOpen] = useState(true);
 
@@ -751,13 +753,19 @@ export default function DatasetViewPage() {
 
     async function fetchDataset() {
       setLoading(true);
-      setError(false);
+      setError("");
       try {
         const raw = await getDatasetById(id);
         if (isMounted) setDataset(normalizeDataset(raw));
       } catch (err) {
         console.error("Failed to load dataset:", err);
-        if (isMounted) setError(true);
+        if (isMounted) setError(
+          err?.response?.status === 403
+            ? "Access denied. You don't have permission to view this dataset."
+            : err?.response?.status === 404
+              ? "This dataset is unavailable or you don't have access to it."
+              : "Couldn't load this dataset right now. Please try again shortly."
+        );
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -784,9 +792,7 @@ export default function DatasetViewPage() {
       <DashboardAwareLayout>
         <div className="w-full py-16 text-center flex-1">
           <p className="text-sm text-gray-500">
-            {error
-              ? "Couldn't load this dataset right now. Please try again shortly."
-              : "This dataset couldn't be found."}
+            {error || "This dataset couldn't be found."}
           </p>
           <div className="mt-4 flex items-center justify-center gap-3">
             <button
@@ -872,7 +878,7 @@ export default function DatasetViewPage() {
     } catch (err) {
       console.error("Failed to get download URL:", err);
       if (err.response?.status === 403) {
-        setDownloadError("You don't have access to this dataset.");
+        setDownloadError("Access denied. You don't have permission to download this dataset.");
       } else if (err.response?.status === 404) {
         setDownloadError("This dataset has no published file yet.");
       } else {

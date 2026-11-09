@@ -4,7 +4,7 @@ const keyFor = (type, id, code) => `${type}:${id}:${code}`;
 
 export default function PermissionMatrix({ resource, users, groups, catalog, onSave, onDirtyChange, disabled }) {
   const [changes, setChanges] = useState({});
-  const actions = useMemo(() => catalog.filter((item) => item.resource_type === "dataset"), [catalog]);
+  const actions = useMemo(() => catalog.filter((item) => item.resource_type === "dataset" && item.enforced), [catalog]);
   const dirty = Object.keys(changes).length > 0;
 
   useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);

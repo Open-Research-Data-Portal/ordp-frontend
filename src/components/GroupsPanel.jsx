@@ -17,6 +17,7 @@ export default function GroupsPanel({ users, groups, catalog, datasets, onGroups
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [memberSearch, setMemberSearch] = useState("");
+  const [memberOptions, setMemberOptions] = useState(users);
   const [selectedMembers, setSelectedMembers] = useState([]);
   const [permission, setPermission] = useState("");
   const [scope, setScope] = useState("dataset");
@@ -33,11 +34,21 @@ export default function GroupsPanel({ users, groups, catalog, datasets, onGroups
     ).catch(() => setAccess(new Set()));
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    const timer = window.setTimeout(() => {
+      api.getUsers({ q: memberSearch.trim() })
+        .then((rows) => { if (active) setMemberOptions(Array.isArray(rows) ? rows : []); })
+        .catch((requestError) => { if (active) setError(errorMessage(requestError)); });
+    }, 250);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [memberSearch]);
+
   const can = (code) => access.has(code);
-  const availableMembers = useMemo(() => users.filter((user) =>
+  const availableMembers = useMemo(() => memberOptions.filter((user) =>
     !detail?.members.some((member) => member.user_id === user.id)
     && `${user.name} ${user.email}`.toLowerCase().includes(memberSearch.toLowerCase())
-  ), [users, detail, memberSearch]);
+  ), [memberOptions, detail, memberSearch]);
   const scopePermissions = catalog.filter((item) => item.resource_type === scope && item.enforced);
 
   const loadGroup = async (id) => {
@@ -149,7 +160,7 @@ export default function GroupsPanel({ users, groups, catalog, datasets, onGroups
                   onChange={(event) => setSelectedMembers((current) => event.target.checked ? [...current, user.id] : current.filter((id) => id !== user.id))} />
                   {user.name} <span className="text-slate-500">{user.email}</span>
                 </label>)}</div>
-              <button type="button" className={button} disabled={!selectedMembers.length || busy} onClick={addMembers}>Add selected members</button>
+              <button type="button" className={button} disabled={!selectedMembers.length || busy} onClick={addMembers}>Add selected members ({selectedMembers.length})</button>
             </>}
           </div>}
           {tab === "Permissions" && <div className="mt-4 space-y-3">

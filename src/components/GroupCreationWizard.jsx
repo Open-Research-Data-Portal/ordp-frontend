@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import * as api from "../api/accessControl";
 
 const field = "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-amber-600 focus:outline-none";
@@ -11,6 +11,7 @@ export default function GroupCreationWizard({ users, catalog, datasets, onCreate
   const [description, setDescription] = useState("");
   const [memberIds, setMemberIds] = useState([]);
   const [memberSearch, setMemberSearch] = useState("");
+  const [memberOptions, setMemberOptions] = useState(users);
   const [resourceType, setResourceType] = useState("dataset");
   const [resourceId, setResourceId] = useState("");
   const [codes, setCodes] = useState([]);
@@ -20,9 +21,19 @@ export default function GroupCreationWizard({ users, catalog, datasets, onCreate
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
-  const visibleUsers = useMemo(() => users.filter((user) =>
+  useEffect(() => {
+    let active = true;
+    const timer = window.setTimeout(() => {
+      api.getUsers({ q: memberSearch.trim() })
+        .then((rows) => { if (active) setMemberOptions(Array.isArray(rows) ? rows : []); })
+        .catch(() => { if (active) setError("Could not search users."); });
+    }, 250);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [memberSearch]);
+
+  const visibleUsers = useMemo(() => memberOptions.filter((user) =>
     `${user.name} ${user.email}`.toLowerCase().includes(memberSearch.toLowerCase())
-  ), [users, memberSearch]);
+  ), [memberOptions, memberSearch]);
   const permissions = catalog.filter((permission) => permission.resource_type === resourceType && permission.enforced);
 
   const next = () => {
@@ -106,6 +117,7 @@ export default function GroupCreationWizard({ users, catalog, datasets, onCreate
             {user.name} <span className="text-slate-500">{user.email}</span>
           </label>)}
         </div>
+        <p className="text-xs text-slate-600">{memberIds.length} member{memberIds.length === 1 ? "" : "s"} selected</p>
       </>}
       {step === 2 && <>
         <label className="block text-sm font-medium">Resource type

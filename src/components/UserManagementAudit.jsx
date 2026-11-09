@@ -14,8 +14,8 @@ export default function UserManagementAudit() {
   }, []);
 
   return <section className="rounded-xl border border-border bg-white p-6 shadow-sm">
-    <h2 className="text-lg font-bold text-navy">User management activity</h2>
-    <p className="mt-1 text-sm text-gray-600">Account, role, group, and permission changes.</p>
+    <h2 className="text-lg font-bold text-navy">Access and user activity</h2>
+    <p className="mt-1 text-sm text-gray-600">Account, role, group, permission, and request decisions.</p>
     {error && <p role="alert" className="mt-4 text-sm text-red-700">{error}</p>}
     {!error && !events.length && <p className="mt-4 text-sm text-gray-600">No activity to show.</p>}
     <div className="mt-4 divide-y divide-gray-100">

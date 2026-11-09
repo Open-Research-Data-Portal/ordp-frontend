@@ -12,7 +12,7 @@ import { getEffectiveRoles } from "../utils/userRoles";
 import * as api from "../api/accessControl";
 import { accessError } from "../utils/accessError";
 
-const tabs = ["Overview", "Users", "Groups", "Access Requests", "Group Requests", "Resources & Permissions", "Permission Catalog"];
+const tabs = ["Users", "Groups", "Access Requests", "Group Requests", "Resources & Permissions", "Permission Catalog"];
 const input = "w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-amber-600 focus:outline-none";
 const primary = "inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50";
 const secondary = "inline-flex items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:opacity-50";
@@ -35,13 +35,12 @@ export default function AccessManagementPage() {
   const [searchParams] = useSearchParams();
   const targetUserId = searchParams.get("user");
   const navigate = useNavigate();
-  const [tab, setTab] = useState(() => searchParams.get("tab") || (adminAccount ? "Overview" : "Access Requests"));
+  const [tab, setTab] = useState(() => tabs.includes(searchParams.get("tab")) ? searchParams.get("tab") : "Access Requests");
   const requestedTab = searchParams.get("tab");
   const [manager, setManager] = useState(false);
   const [backendUnavailable, setBackendUnavailable] = useState(false);
   const [canReview, setCanReview] = useState(false);
   const [catalog, setCatalog] = useState([]);
-  const [overview, setOverview] = useState(null);
   const [requests, setRequests] = useState([]);
   const [users, setUsers] = useState([]);
   const [groups, setGroups] = useState([]);
@@ -67,7 +66,7 @@ export default function AccessManagementPage() {
     if (catalogResult.status === "fulfilled") setCatalog(list(catalogResult.value));
     if (requestsResult.status === "fulfilled") setRequests(list(requestsResult.value));
     if (datasetsResult.status === "fulfilled") setDatasets(list(datasetsResult.value));
-    if (overviewResult.status === "fulfilled") { setOverview(overviewResult.value); setManager(true); setBackendUnavailable(false); }
+    if (overviewResult.status === "fulfilled") { setManager(true); setBackendUnavailable(false); }
     else {
       setManager(false);
       setBackendUnavailable(overviewResult.reason?.response?.status === 404);
@@ -169,7 +168,6 @@ export default function AccessManagementPage() {
       <Notice text={error} error /><Notice text={notice} />
       {tab === "Users" && !manager && <div className="rounded-xl border border-amber-200 bg-white p-6"><h2 className="text-lg font-semibold text-slate-900">User access management</h2><p className="mt-2 text-sm text-slate-600">{backendUnavailable ? "Permission management is not available on this backend yet. Deploy the backend access-control changes first." : "Access denied. You don't have permission to manage user permissions. Ask a permission manager to grant access to your account."}</p></div>}
       {tab === "Group Requests" && <GroupRequestsPanel requests={requests} catalog={catalog} datasets={datasets} canReview={canReview} user={user} onChanged={refresh} openRequestId={requestId} allowSelfRequests={!adminAccount} />}
-      {tab === "Overview" && manager && <div className="space-y-5"><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{[["Users", overview?.total_users], ["Active users", overview?.active_users], ["Groups", overview?.total_groups], ["Pending requests", overview?.pending_requests], ["Direct grants", overview?.active_direct_grants], ["Group grants", overview?.active_group_grants]].map(([label, value]) => <div key={label} className="border-b border-slate-200 py-3"><div className="text-xs text-slate-500">{label}</div><div className="text-2xl font-semibold text-slate-900">{value ?? "-"}</div></div>)}</div></div>}
       {tab === "Users" && manager && adminAccount && <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><h2 className="text-xl font-semibold text-slate-900">User permissions</h2><p className="mt-2 text-sm text-slate-600">Open Admin Users to find an account and manage its permissions beside the user's email.</p><button type="button" className={`${primary} mt-4`} onClick={() => navigate("/admin-dashboard?tab=users")}>Open Admin Users</button></section>}
       {tab === "Users" && manager && !adminAccount && <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
         <div className="flex flex-wrap items-end justify-between gap-4">

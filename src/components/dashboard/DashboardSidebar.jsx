@@ -153,7 +153,6 @@ export default function DashboardSidebar({
       { label: "Shared with me", icon: FolderKanban, to: "/shared-with-me" });
   }
   const accessSections = [
-    { label: "Overview", tab: "Overview", show: allowed.has("user.view") },
     { label: "Users", tab: "Users", show: allowed.has("user.view") && roleKey !== "admin" },
     { label: "Groups", tab: "Groups", show: allowed.has("user.view") },
     { label: roleKey === "admin" ? "Access requests to review" : "Access requests", tab: "Access Requests", show: true },

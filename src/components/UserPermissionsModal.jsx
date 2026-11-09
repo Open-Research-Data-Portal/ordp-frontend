@@ -25,6 +25,8 @@ export default function UserPermissionsModal({ user, catalog, datasets, busy, er
   const submit = (event) => {
     event.preventDefault();
     if (!selected.length || (scope === "dataset" && !datasetId)) return;
+    if (selected.some((code) => /delete|permission|manage/.test(code))
+      && !window.confirm("This grants powerful access to this user. Continue?")) return;
     const grants = selected.map((permission) => ({
       permission, resource_type: scope, resource_id: scopeId,
       expires_at: expiresAt || null, reason,

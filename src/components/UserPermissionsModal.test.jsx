@@ -44,4 +44,19 @@ describe("UserPermissionsModal", () => {
     expect(toggle.disabled).toBe(true);
     expect(onRevoke).not.toHaveBeenCalled();
   });
+
+  it("requires confirmation before granting delete access", () => {
+    const onGrant = vi.fn();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    render(<UserPermissionsModal user={{ id: 7, name: "Ada", email: "ada@example.com", effective: [] }}
+      catalog={catalog} datasets={[{ id: "dataset-1", title: "Research data" }]}
+      busy={false} onClose={vi.fn()} onGrant={onGrant} onRevoke={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText("Where can they act?"), { target: { value: "dataset" } });
+    fireEvent.change(screen.getByLabelText("Dataset"), { target: { value: "dataset-1" } });
+    fireEvent.click(screen.getByRole("switch", { name: "Delete dataset for ada@example.com" }));
+    fireEvent.click(screen.getByRole("button", { name: "Grant 1 permission" }));
+    expect(confirm).toHaveBeenCalled();
+    expect(onGrant).not.toHaveBeenCalled();
+    confirm.mockRestore();
+  });
 });

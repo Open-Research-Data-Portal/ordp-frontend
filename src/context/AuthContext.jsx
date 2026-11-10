@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import * as authApi from "../features/accounts/api/authApi";
 import client from "../api/client";
+import { getMyPermissions } from "../api/accessControl";
 import AuthContext from "./AuthContextInstance";
 import {
   mergeAuthUser,
@@ -15,6 +16,24 @@ import {
 } from "../api/tokenStore";
 
 const AUTH_FLAGS_KEY = "ordp:auth-flags";
+const ACCESS_ME_KEY = "ordp:access-control-me";
+
+function persistAccessMe(me) {
+  try {
+    if (me) sessionStorage.setItem(ACCESS_ME_KEY, JSON.stringify(me));
+    else sessionStorage.removeItem(ACCESS_ME_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+function readAccessMe() {
+  try {
+    return JSON.parse(sessionStorage.getItem(ACCESS_ME_KEY) || "null");
+  } catch {
+    return null;
+  }
+}
 
 function persistAuthFlags(user) {
   try {
@@ -49,6 +68,7 @@ function readAuthFlags() {
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [accessToken, setAccessToken] = useState(null);
+  const [accessControlMe, setAccessControlMe] = useState(() => readAccessMe());
   const [loading, setLoading] = useState(() =>
     // Start in loading state only when we have a stored refresh token that
     // we'll try to silently exchange on mount.
@@ -56,6 +76,19 @@ export function AuthProvider({ children }) {
       sessionStorage.getItem(REFRESH_KEY) || localStorage.getItem(REFRESH_KEY)
     )
   );
+
+  const refreshAccessControlMe = useCallback(async () => {
+    try {
+      const me = await getMyPermissions();
+      setAccessControlMe(me);
+      persistAccessMe(me);
+      return me;
+    } catch {
+      setAccessControlMe(null);
+      persistAccessMe(null);
+      return null;
+    }
+  }, []);
 
   // Keep axios default header in sync whenever the in-memory access token changes.
   useEffect(() => {
@@ -75,6 +108,8 @@ export function AuthProvider({ children }) {
       delete client.defaults.headers.common.Authorization;
       setAccessToken(null);
       setUser(null);
+      setAccessControlMe(null);
+      persistAccessMe(null);
     }
     window.addEventListener("ordp:session-expired", handleSessionExpired);
     return () =>
@@ -98,9 +133,17 @@ export function AuthProvider({ children }) {
         return Promise.allSettled([
           authApi.getProfile(),
           authApi.getCompleteProfile(),
-        ]).then(([profileRes, completeRes]) => {
+          getMyPermissions(),
+        ]).then(([profileRes, completeRes, meRes]) => {
           const profile = profileRes.status === "fulfilled" ? profileRes.value : {};
           const complete = completeRes.status === "fulfilled" ? completeRes.value : {};
+          if (meRes.status === "fulfilled") {
+            setAccessControlMe(meRes.value);
+            persistAccessMe(meRes.value);
+          } else {
+            setAccessControlMe(null);
+            persistAccessMe(null);
+          }
           return mergeAuthUser(
             { ...readAuthFlags(), ...claimsFromAccessToken(access) },
             { ...profile, ...complete }
@@ -115,6 +158,8 @@ export function AuthProvider({ children }) {
         // Stored refresh token is invalid or revoked — wipe everything.
         clearTokens();
         delete client.defaults.headers.common.Authorization;
+        setAccessControlMe(null);
+        persistAccessMe(null);
       })
       .finally(() => setLoading(false));
   }, []);
@@ -160,6 +205,14 @@ export function AuthProvider({ children }) {
     );
     persistAuthFlags(merged);
     setUser(merged);
+    try {
+      const me = await getMyPermissions();
+      setAccessControlMe(me);
+      persistAccessMe(me);
+    } catch {
+      setAccessControlMe(null);
+      persistAccessMe(null);
+    }
 
     return { ...data, profile: merged, user: merged };
   }, []);
@@ -205,6 +258,14 @@ export function AuthProvider({ children }) {
       );
       persistAuthFlags(merged);
       setUser(merged);
+      try {
+        const me = await getMyPermissions();
+        setAccessControlMe(me);
+        persistAccessMe(me);
+      } catch {
+        setAccessControlMe(null);
+        persistAccessMe(null);
+      }
       return merged;
     },
     []
@@ -219,6 +280,8 @@ export function AuthProvider({ children }) {
       delete client.defaults.headers.common.Authorization;
       setAccessToken(null);
       setUser(null);
+      setAccessControlMe(null);
+      persistAccessMe(null);
       invalidateProfilePictureCache();
       try {
         localStorage.removeItem("ordp:profile_picture");
@@ -236,10 +299,13 @@ export function AuthProvider({ children }) {
     delete client.defaults.headers.common.Authorization;
     setAccessToken(null);
     setUser(null);
+    setAccessControlMe(null);
+    persistAccessMe(null);
     invalidateProfilePictureCache();
     try {
       localStorage.removeItem("ordp:profile_picture");
       sessionStorage.removeItem(AUTH_FLAGS_KEY);
+      sessionStorage.removeItem(ACCESS_ME_KEY);
       localStorage.removeItem("ordp:profile_completed");
       sessionStorage.removeItem("ordp:profile_completed");
     } catch {}
@@ -250,6 +316,8 @@ export function AuthProvider({ children }) {
       user,
       setUser,
       accessToken,
+      accessControlMe,
+      refreshAccessControlMe,
       isAuthenticated: Boolean(accessToken),
       loading,
       login,
@@ -258,7 +326,18 @@ export function AuthProvider({ children }) {
       updateProfile,
       establishSession,
     }),
-    [user, accessToken, loading, login, logout, clearLocalAuth, updateProfile, establishSession]
+    [
+      user,
+      accessToken,
+      accessControlMe,
+      refreshAccessControlMe,
+      loading,
+      login,
+      logout,
+      clearLocalAuth,
+      updateProfile,
+      establishSession,
+    ]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

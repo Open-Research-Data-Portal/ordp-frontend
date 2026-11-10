@@ -44,7 +44,7 @@ import AccessManagementPage from "../pages/AccessManagementPage.jsx";
 import SharedAccessPage from "../pages/SharedAccessPage.jsx";
 
 import { useAuth } from "../context/useAuth";
-import { isProfileComplete } from "../utils/userRoles";
+import { getDashboardPath, isAdmin, isProfileComplete } from "../utils/userRoles";
 import DashboardGuard from "./DashboardGuard.jsx";
 
 function ProtectedRoute({ children }) {
@@ -62,6 +62,17 @@ function ProtectedRoute({ children }) {
     return <Navigate to="/login" replace />;
   }
 
+  return children;
+}
+
+function AdminRoute({ children }) {
+  const { user, isAuthenticated, loading } = useAuth();
+
+  if (loading) {
+    return <div className="min-h-screen flex items-center justify-center bg-[#F5F5F3] text-sm text-slate-500">Loadingâ€¦</div>;
+  }
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (!isAdmin(user)) return <Navigate to={getDashboardPath(user)} replace />;
   return children;
 }
 
@@ -180,10 +191,10 @@ export default function AppRoutes() {
         <ProtectedRoute><UserArchivedDatasetsPage /></ProtectedRoute>
       } />
       <Route path="/admin/archived-datasets" element={
-        <ProtectedRoute><AdminArchivedDatasetsPage /></ProtectedRoute>
+        <AdminRoute><AdminArchivedDatasetsPage /></AdminRoute>
       } />
       <Route path="/admin-dashboard" element={
-        <ProtectedRoute><AdminDashboardPage /></ProtectedRoute>
+        <AdminRoute><AdminDashboardPage /></AdminRoute>
       } />
       <Route path="/access-management" element={<ProtectedRoute><AccessManagementPage /></ProtectedRoute>} />
       <Route path="/audit-log" element={<ProtectedRoute><UserAuditLogPage /></ProtectedRoute>} />
@@ -193,13 +204,13 @@ export default function AppRoutes() {
           /admin/audit-log was linked from the sidebar but had no route, so it
           fell through to the catch-all and kicked admins back to /login. */}
       <Route path="/admin/audit-log" element={
-        <ProtectedRoute><AdminAuditLogPage /></ProtectedRoute>
+        <AdminRoute><AdminAuditLogPage /></AdminRoute>
       } />
       <Route path="/admin/deletion-requests" element={
-        <ProtectedRoute><AdminDeletionRequestsPage /></ProtectedRoute>
+        <AdminRoute><AdminDeletionRequestsPage /></AdminRoute>
       } />
       <Route path="/admin/settings" element={
-        <ProtectedRoute><AdminSettingsPage /></ProtectedRoute>
+        <AdminRoute><AdminSettingsPage /></AdminRoute>
       } />
       <Route path="/profile" element={
         <ProtectedRoute><ProfilePage /></ProtectedRoute>

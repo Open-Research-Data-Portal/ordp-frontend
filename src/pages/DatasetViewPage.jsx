@@ -23,12 +23,15 @@ import {
 } from "recharts";
 import { getDatasetById } from "../api/datasets";
 import { getDownloadUrl, requestShareAccess, shareDatasetWith } from "../api/sharing";
+import { createRequest, getCatalog } from "../api/accessControl";
 import * as datasetsApi from "../features/datasets/hooks/datasetsApi";
 import DashboardAwareLayout from "../layouts/DashboardAwareLayout";
 import { getDatasetImage } from "../utils/datasetImage";
 import { useAuth } from "../context/useAuth";
 import { getDashboardPath } from "../utils/userRoles";
 import TabularPreview from "../components/ui/TabularPreview";
+
+const DEFAULT_REQUEST_PERMISSIONS = ["dataset.view", "dataset.download"];
 
 // ---------------------------------------------------------------------
 // DatasetViewPage — the PUBLIC read-only view a researcher lands on when
@@ -380,11 +383,14 @@ function ShareAccessModal({ dataset, mode = "download", isOwner = false, onClose
   const [purpose, setPurpose] = useState("");
   const [justification, setJustification] = useState("");
   const [durationDays, setDurationDays] = useState(30);
+  const [selectedPermissions, setSelectedPermissions] = useState(DEFAULT_REQUEST_PERMISSIONS);
+  const [permissionOptions, setPermissionOptions] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [submitted, setSubmitted] = useState(false);
   const isRestricted = dataset?.visibility === "restricted";
   const isShareMode = mode === "share";
+  const useV2Request = isRestricted && !isShareMode;
 
   // Safeguard: Owner should never submit request for their own dataset.
   // Backend allows direct download, so handle immediately.
@@ -403,9 +409,47 @@ function ShareAccessModal({ dataset, mode = "download", isOwner = false, onClose
     }
   }, [isOwner, isShareMode, dataset?.id, onDownloadReady]);
 
+  useEffect(() => {
+    if (!useV2Request) return;
+    let active = true;
+    getCatalog()
+      .then((rows) => {
+        if (!active) return;
+        const opts = (Array.isArray(rows) ? rows : []).filter(
+          (r) =>
+            r.resource_type === "dataset" &&
+            r.enforced !== false &&
+            ["dataset.view", "dataset.download", "dataset.edit", "dataset.metadata.edit"].includes(r.code)
+        );
+        setPermissionOptions(opts.length ? opts : DEFAULT_REQUEST_PERMISSIONS.map((code) => ({ code, name: code })));
+      })
+      .catch(() => {
+        if (active) {
+          setPermissionOptions(DEFAULT_REQUEST_PERMISSIONS.map((code) => ({ code, name: code })));
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [useV2Request]);
+
+  const togglePermission = (code) => {
+    setSelectedPermissions((prev) =>
+      prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]
+    );
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!purpose.trim()) return;
+    if (useV2Request && justification.trim().length < 10) {
+      setError("Please provide a justification of at least 10 characters.");
+      return;
+    }
+    if (useV2Request && selectedPermissions.length === 0) {
+      setError("Select at least one permission.");
+      return;
+    }
 
     // Safeguard: If owner in download mode, download directly
     if (isOwner && !isShareMode) {
@@ -424,6 +468,19 @@ function ShareAccessModal({ dataset, mode = "download", isOwner = false, onClose
     setSubmitting(true);
     setError(null);
     try {
+      if (useV2Request) {
+        const text = [purpose.trim(), justification.trim()].filter(Boolean).join("\n\n");
+        await createRequest({
+          kind: "permission",
+          resource_type: "dataset",
+          resource_id: dataset.id,
+          permissions: selectedPermissions,
+          justification: text.length >= 10 ? text : `${text}\n\nRequested via dataset page.`,
+        });
+        setSubmitted(true);
+        return;
+      }
+
       const payload = {
         purpose: purpose.trim(),
         reason: purpose.trim(),
@@ -467,9 +524,7 @@ function ShareAccessModal({ dataset, mode = "download", isOwner = false, onClose
             onDownloadReady(directUrl);
             return;
           }
-        } catch {
-          // Show the access-request error below if the direct URL is unavailable.
-        }
+        } catch {}
       }
       setError(
         err.response?.data?.detail ||
@@ -568,7 +623,27 @@ function ShareAccessModal({ dataset, mode = "download", isOwner = false, onClose
               </div>
             )}
 
-            {(isShareMode || isRestricted) && (
+            {useV2Request && (
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-2">
+                  Permissions requested <span className="text-red-500">*</span>
+                </label>
+                <div className="space-y-2">
+                  {permissionOptions.map((opt) => (
+                    <label key={opt.code} className="flex items-center gap-2 text-sm text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={selectedPermissions.includes(opt.code)}
+                        onChange={() => togglePermission(opt.code)}
+                      />
+                      <span>{opt.name || opt.code}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {(isShareMode || (isRestricted && !useV2Request)) && (
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">
                   Requested duration (days)

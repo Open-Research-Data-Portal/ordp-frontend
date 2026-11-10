@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import * as api from "../api/accessControl";
 import GroupCreationWizard from "./GroupCreationWizard";
+import { useConfirm } from "../context/ConfirmContext";
 import { accessError } from "../utils/accessError";
 
 const field = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-amber-600 focus:outline-none";
@@ -9,6 +10,7 @@ const tabs = ["Members", "Permissions", "Resources", "Activity"];
 const errorMessage = (error) => accessError(error, "Could not complete this change.");
 
 export default function GroupsPanel({ users, groups, catalog, datasets = [], projects = [], collections = [], onGroupsChanged }) {
+  const { confirm } = useConfirm();
   const [selectedId, setSelectedId] = useState("");
   const [detail, setDetail] = useState(null);
   const [tab, setTab] = useState("Members");
@@ -124,8 +126,13 @@ export default function GroupsPanel({ users, groups, catalog, datasets = [], pro
         <section className="rounded-xl border border-slate-200 bg-white p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div><h2 className="text-lg font-semibold text-slate-900">{detail.group.name}</h2><p className="text-sm text-slate-600">{detail.group.description}</p></div>
-            {can("group.delete") && <button type="button" className={button} disabled={busy} onClick={() => {
-              if (!window.confirm("Archive this group? Members will lose inherited access.")) return;
+            {can("group.delete") && <button type="button" className={button} disabled={busy} onClick={async () => {
+              if (!(await confirm({
+                title: "Archive group",
+                message: "Archive this group? Members will lose inherited access.",
+                confirmLabel: "Archive",
+                variant: "danger",
+              }))) return;
               run(async () => {
                 await api.archiveGroup(selectedId);
                 setSelectedId("");
@@ -147,8 +154,13 @@ export default function GroupsPanel({ users, groups, catalog, datasets = [], pro
           {tab === "Members" && <div className="mt-4 space-y-3">
             {detail.members.map((member) => <div key={member.user_id} className="flex items-center justify-between gap-2 border-b border-slate-100 py-2 text-sm">
               <span>{member.user__email}</span>
-              {can("group.member.manage") && <button type="button" className={button} disabled={busy} onClick={() => {
-                if (!window.confirm("Remove this member and their inherited group access?")) return;
+              {can("group.member.manage") && <button type="button" className={button} disabled={busy} onClick={async () => {
+                if (!(await confirm({
+                  title: "Remove member",
+                  message: "Remove this member and their inherited group access?",
+                  confirmLabel: "Remove",
+                  variant: "danger",
+                }))) return;
                 run(() => api.removeMember(selectedId, member.user_id), "Member removed.");
               }}>Remove</button>}
             </div>)}
@@ -166,8 +178,13 @@ export default function GroupsPanel({ users, groups, catalog, datasets = [], pro
           {tab === "Permissions" && <div className="mt-4 space-y-3">
             {detail.grants.map((grant) => <div key={grant.id} className="flex items-center justify-between gap-2 border-b border-slate-100 py-2 text-sm">
               <span>{grant.permission} · {grant.resource_type}{grant.resource_id ? ` · ${grant.resource_id}` : ""}{grant.expires_at ? ` · Expires ${new Date(grant.expires_at).toLocaleDateString()}` : ""}</span>
-              {can("group.permission.manage") && <button type="button" className={button} disabled={busy} onClick={() => {
-                if (!window.confirm("Revoke this group permission?")) return;
+              {can("group.permission.manage") && <button type="button" className={button} disabled={busy} onClick={async () => {
+                if (!(await confirm({
+                  title: "Revoke permission",
+                  message: "Revoke this group permission?",
+                  confirmLabel: "Revoke",
+                  variant: "danger",
+                }))) return;
                 run(() => api.revokeGroupGrant(grant.id), "Permission revoked.");
               }}>Revoke</button>}
             </div>)}

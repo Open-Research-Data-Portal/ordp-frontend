@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { ConfirmProvider } from "../context/ConfirmContext";
 import UserPermissionsModal from "./UserPermissionsModal";
 
 const catalog = [
@@ -11,12 +12,16 @@ const catalog = [
   { code: "dataset.approve", name: "Approve dataset", resource_type: "platform", enforced: true },
 ];
 
+function renderModal(ui) {
+  return render(<ConfirmProvider>{ui}</ConfirmProvider>);
+}
+
 afterEach(cleanup);
 
 describe("UserPermissionsModal", () => {
   it("grants only selected endpoint-backed permissions to the chosen dataset", async () => {
     const onGrant = vi.fn().mockResolvedValue(true);
-    render(
+    renderModal(
       <UserPermissionsModal
         user={{ id: 7, name: "Ada", email: "ada@example.com", effective: [], direct: [] }}
         catalog={catalog}
@@ -43,7 +48,7 @@ describe("UserPermissionsModal", () => {
   });
 
   it("shows direct, inherited, and effective sections", () => {
-    render(
+    renderModal(
       <UserPermissionsModal
         user={{
           id: 7,
@@ -88,10 +93,9 @@ describe("UserPermissionsModal", () => {
     expect(screen.getByText(/Group: Team/)).toBeTruthy();
   });
 
-  it("requires confirmation before granting delete access", () => {
+  it("requires confirmation before granting delete access", async () => {
     const onGrant = vi.fn();
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
-    render(
+    renderModal(
       <UserPermissionsModal
         user={{ id: 7, name: "Ada", email: "ada@example.com", effective: [], direct: [] }}
         catalog={catalog}
@@ -106,8 +110,9 @@ describe("UserPermissionsModal", () => {
     fireEvent.change(screen.getByLabelText("Resource"), { target: { value: "dataset-1" } });
     fireEvent.click(screen.getByLabelText(/Delete dataset/i));
     fireEvent.click(screen.getByRole("button", { name: "Grant 1 permission" }));
-    expect(confirm).toHaveBeenCalled();
+    expect(await screen.findByRole("alertdialog")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
     expect(onGrant).not.toHaveBeenCalled();
-    confirm.mockRestore();
   });
 });

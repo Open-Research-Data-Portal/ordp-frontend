@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import * as api from "../api/accessControl";
+import { useConfirm } from "../context/ConfirmContext";
 
 const field = "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-amber-600 focus:outline-none";
 const action = "rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium disabled:opacity-50";
 const stepNames = ["Group information", "Add members", "Select resource", "Assign permissions", "Review"];
 
 export default function GroupCreationWizard({ users, catalog, datasets = [], projects = [], collections = [], onCreated }) {
+  const { confirm } = useConfirm();
   const [step, setStep] = useState(0);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -36,13 +38,15 @@ export default function GroupCreationWizard({ users, catalog, datasets = [], pro
   ), [memberOptions, memberSearch]);
   const permissions = catalog.filter((permission) => permission.resource_type === resourceType && permission.enforced);
 
+  const needsResource = codes.length > 0 && resourceType !== "platform" && !resourceId;
+
   const next = () => {
     if (step === 0 && !name.trim()) {
       setError("Enter a group name.");
       return;
     }
-    if (step === 2 && codes.length && resourceType !== "platform" && !resourceId) {
-      setError("Select a resource for these permissions.");
+    if (step === 3 && needsResource) {
+      setError("Select a resource for these permissions, or clear the selected permissions.");
       return;
     }
     setError("");
@@ -50,8 +54,17 @@ export default function GroupCreationWizard({ users, catalog, datasets = [], pro
   };
 
   const create = async () => {
+    if (needsResource) {
+      setError("Select a resource for these permissions, or clear the selected permissions.");
+      return;
+    }
     if (codes.some((code) => /delete|permission|manage/.test(code))
-      && !window.confirm("This group will receive high-impact permissions. Continue?")) return;
+      && !(await confirm({
+        title: "High-impact permissions",
+        message: "This group will receive high-impact permissions. Continue?",
+        confirmLabel: "Continue",
+        variant: "warning",
+      }))) return;
     setBusy(true);
     setError("");
     setNotice("");
@@ -131,10 +144,13 @@ export default function GroupCreationWizard({ users, catalog, datasets = [], pro
         </label>
         {resourceType === "dataset" && <label className="block text-sm font-medium">Dataset
           <select className={field} value={resourceId} onChange={(event) => setResourceId(event.target.value)}>
-            <option value="">Select a dataset (optional for an empty group)</option>
+            <option value="">No dataset yet (skip if you are not granting permissions)</option>
             {datasets.map((dataset) => <option key={dataset.id} value={dataset.id}>{dataset.title}</option>)}
           </select>
         </label>}
+        {!datasets.length && resourceType === "dataset" && (
+          <p className="text-xs text-slate-500">No datasets available to attach. You can still create the group without permissions.</p>
+        )}
         {resourceType === "project" && <label className="block text-sm font-medium">Project
           <select className={field} value={resourceId} onChange={(event) => setResourceId(event.target.value)}>
             <option value="">Select a project</option>
@@ -178,22 +194,27 @@ export default function GroupCreationWizard({ users, catalog, datasets = [], pro
           resourceType === "platform"
             ? "Platform"
             : resourceType === "dataset"
-              ? (datasets.find((dataset) => dataset.id === resourceId)?.title || "No dataset selected")
+              ? (datasets.find((dataset) => String(dataset.id) === String(resourceId))?.title || "No dataset selected")
               : resourceType === "project"
-                ? (projects.find((project) => project.id === resourceId)?.name || "No project selected")
+                ? (projects.find((project) => String(project.id) === String(resourceId))?.name || "No project selected")
                 : resourceType === "collection"
-                  ? (collections.find((collection) => collection.id === resourceId)?.name || "No collection selected")
+                  ? (collections.find((collection) => String(collection.id) === String(resourceId))?.name || "No collection selected")
                   : (resourceId || "No file selected")
         ) : "None"}</p>
         <p><strong>Permissions:</strong> {codes.length ? codes.join(", ") : "None yet"}</p>
         {expiresAt && <p><strong>Expiry:</strong> {new Date(expiresAt).toLocaleString()}</p>}
+        {needsResource && (
+          <p role="alert" className="rounded-lg bg-amber-50 p-3 text-amber-900">
+            Go back and select a {resourceType.replaceAll("_", " ")}, or clear the permissions, before creating this group.
+          </p>
+        )}
       </div>}
     </div>
     <div className="mt-5 flex justify-between gap-3">
       <button type="button" className={action} disabled={step === 0 || busy} onClick={() => setStep((current) => current - 1)}>Back</button>
       {step < 4
         ? <button type="button" className={action} onClick={next}>Continue</button>
-        : <button type="button" className={action} disabled={busy || (codes.length > 0 && resourceType !== "platform" && !resourceId)} onClick={create}>Create group</button>}
+        : <button type="button" className={action} disabled={busy} onClick={create}>Create group</button>}
     </div>
   </section>;
 }

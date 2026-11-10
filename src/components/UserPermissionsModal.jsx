@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ShieldCheck, X } from "lucide-react";
+import { useConfirm } from "../context/ConfirmContext";
 import { groupPermissions } from "../utils/permissionCategories";
 import { formatDateTime, isHighImpact } from "../utils/accessManagement";
 
@@ -39,6 +40,7 @@ export default function UserPermissionsModal({
   onGrant,
   onRevoke,
 }) {
+  const { confirm } = useConfirm();
   const [scope, setScope] = useState("platform");
   const [resourceId, setResourceId] = useState("");
   const [selected, setSelected] = useState([]);
@@ -71,11 +73,16 @@ export default function UserPermissionsModal({
         ? collections.map((c) => ({ id: c.id, label: c.name }))
         : [];
 
-  const submit = (event) => {
+  const submit = async (event) => {
     event.preventDefault();
     if (!selected.length || (needsResourceId && !resourceId)) return;
     if (selected.some((code) => isHighImpact(code))
-      && !window.confirm("This grants powerful access to this user. Continue?")) return;
+      && !(await confirm({
+        title: "Powerful access",
+        message: "This grants powerful access to this user. Continue?",
+        confirmLabel: "Continue",
+        variant: "warning",
+      }))) return;
     const grants = selected.map((permission) => ({
       permission,
       resource_type: scope,

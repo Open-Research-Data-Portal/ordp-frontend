@@ -29,6 +29,7 @@ import StatCard from "../../../components/dashboard/StatCard";
 import { SectionHeader, StatusBadge, ProfileSavedNotice, EmptyState } from "../../../components/dashboard/dashboardUi";
 import * as datasetsApi from "../hooks/datasetsApi";
 import { fetchAllDatasets } from "../../../api/datasetsHub";
+import { useConfirm } from "../../../context/ConfirmContext.jsx";
 import { useToast } from "../../../context/ToastContext.jsx";
 import { useAuth } from "../../../context/useAuth";
 import { getEffectiveRoles } from "../../../utils/userRoles";
@@ -121,6 +122,7 @@ export default function AdminDashboardPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { addToast } = useToast();
+  const { confirm } = useConfirm();
   const tab = searchParams.get("tab") || "overview";
 
   const [cards, setCards] = useState(null);
@@ -195,7 +197,12 @@ export default function AdminDashboardPage() {
   }
 
   async function revokeUserAccess(grantId) {
-    if (!window.confirm("Revoke this direct permission?")) return;
+    if (!(await confirm({
+      title: "Revoke permission",
+      message: "Revoke this direct permission?",
+      confirmLabel: "Revoke",
+      variant: "danger",
+    }))) return;
     setAccessBusy(true);
     setAccessErrorText("");
     try {
@@ -467,7 +474,12 @@ export default function AdminDashboardPage() {
       return;
     }
 
-    if (!window.confirm(`Revoke the "${formatRoleLabel(roleToRevoke)}" role from ${targetUser.full_name || targetUser.email}?`)) {
+    if (!(await confirm({
+      title: "Revoke role",
+      message: `Revoke the "${formatRoleLabel(roleToRevoke)}" role from ${targetUser.full_name || targetUser.email}?`,
+      confirmLabel: "Revoke role",
+      variant: "danger",
+    }))) {
       return;
     }
 

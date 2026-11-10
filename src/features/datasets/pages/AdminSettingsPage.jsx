@@ -30,6 +30,7 @@ import {
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import { EmptyState } from "../../../components/dashboard/dashboardUi";
 import client from "../../../api/client";
+import { useConfirm } from "../../../context/ConfirmContext.jsx";
 import { useToast } from "../../../context/ToastContext.jsx";
 import * as datasetsApi from "../hooks/datasetsApi";
 
@@ -213,6 +214,7 @@ function CollapsibleSection({ title, icon: Icon, badge, children, defaultOpen = 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function AdminSettingsPage() {
   const { addToast } = useToast();
+  const { confirm } = useConfirm();
 
   // Weights
   const [weights, setWeights] = useState(() =>
@@ -292,7 +294,12 @@ export default function AdminSettingsPage() {
 
   async function handlePermanentInactiveDelete(user) {
     const id = user.id || user.user_id;
-    if (!id || !window.confirm(`Permanently delete inactive account for ${user.email}?`)) return;
+    if (!id || !(await confirm({
+      title: "Delete inactive account",
+      message: `Permanently delete inactive account for ${user.email}?`,
+      confirmLabel: "Delete permanently",
+      variant: "danger",
+    }))) return;
     setLoadingInactive(true);
     try {
       await datasetsApi.permanentlyDeleteInactiveUser(id);
@@ -311,7 +318,12 @@ export default function AdminSettingsPage() {
       addToast("Please select a previous admin and provide a new admin email.", "error");
       return;
     }
-    if (!window.confirm(`Confirm admin succession? This will grant full admin privileges to ${successionEmail} and deactivate the previous admin account.`)) return;
+    if (!(await confirm({
+      title: "Confirm admin succession",
+      message: `This will grant full admin privileges to ${successionEmail} and deactivate the previous admin account.`,
+      confirmLabel: "Confirm succession",
+      variant: "danger",
+    }))) return;
     setSuccessionLoading(true);
     try {
       await datasetsApi.runAdminSuccession({
@@ -334,7 +346,12 @@ export default function AdminSettingsPage() {
   }
 
   async function handleRunDraftExpiration() {
-    if (!window.confirm(`Delete inactive drafts older than ${draftDays} days now?`)) return;
+    if (!(await confirm({
+      title: "Delete expired drafts",
+      message: `Delete inactive drafts older than ${draftDays} days now?`,
+      confirmLabel: "Delete drafts",
+      variant: "danger",
+    }))) return;
     setExpiringDrafts(true);
     try {
       const result = await datasetsApi.runDraftExpiration({ days: draftDays });

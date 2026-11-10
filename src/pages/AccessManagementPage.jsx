@@ -10,6 +10,7 @@ import UserPermissionsModal from "../components/UserPermissionsModal";
 import PermissionCatalog from "../components/PermissionCatalog";
 import UserManagementAudit from "../components/UserManagementAudit";
 import { useAuth } from "../context/useAuth";
+import { useConfirm } from "../context/ConfirmContext";
 import { getEffectiveRoles } from "../utils/userRoles";
 import * as api from "../api/accessControl";
 import { accessError } from "../utils/accessError";
@@ -59,6 +60,7 @@ function Notice({ text, error }) {
 
 export default function AccessManagementPage() {
   const { user, accessControlMe } = useAuth();
+  const { confirm } = useConfirm();
   const adminAccount = Boolean(user?.is_superuser || user?.is_staff || getEffectiveRoles(user).includes("admin"));
   const { requestId } = useParams();
   const [searchParams] = useSearchParams();
@@ -242,8 +244,13 @@ export default function AccessManagementPage() {
     }
   };
 
-  const revokeSelected = (grantId) => {
-    if (!window.confirm("Revoke this direct permission?")) return;
+  const revokeSelected = async (grantId) => {
+    if (!(await confirm({
+      title: "Revoke permission",
+      message: "Revoke this direct permission?",
+      confirmLabel: "Revoke",
+      variant: "danger",
+    }))) return;
     perform(async () => {
       await api.revokeUserGrant(grantId);
       setSelectedUser(await api.getUser(selectedUser.id));
@@ -698,14 +705,18 @@ export default function AccessManagementPage() {
                       selectedRequest.status === "pending" && selectedRequest.requester === user?.id ? (
                         <button
                           className={secondary}
-                          onClick={() => {
-                            if (window.confirm("Cancel this request?")) {
-                              perform(async () => {
-                                await api.cancelRequest(selectedRequest.id);
-                                setSelectedRequest(null);
-                                navigate("/access-management");
-                              }, "Request cancelled.");
-                            }
+                          onClick={async () => {
+                            if (!(await confirm({
+                              title: "Cancel request",
+                              message: "Cancel this request?",
+                              confirmLabel: "Cancel request",
+                              variant: "warning",
+                            }))) return;
+                            perform(async () => {
+                              await api.cancelRequest(selectedRequest.id);
+                              setSelectedRequest(null);
+                              navigate("/access-management");
+                            }, "Request cancelled.");
                           }}
                         >
                           Cancel request
@@ -830,11 +841,16 @@ export default function AccessManagementPage() {
                           type="button"
                           className={primary}
                           disabled={busy || selectedRequest.requester === user?.id}
-                          onClick={() => {
+                          onClick={async () => {
                             const approved = Object.entries(decisions)
                               .filter(([, v]) => v.decision === "approved")
                               .map(([k]) => k);
-                            if (approved.some((k) => isHighImpact(k)) && !window.confirm("This grants a high-impact permission. Continue?")) {
+                            if (approved.some((k) => isHighImpact(k)) && !(await confirm({
+                              title: "High-impact permission",
+                              message: "This grants a high-impact permission. Continue?",
+                              confirmLabel: "Continue",
+                              variant: "warning",
+                            }))) {
                               return;
                             }
                             perform(async () => {
@@ -869,8 +885,13 @@ export default function AccessManagementPage() {
                 aria-label="Select resource"
                 className={input}
                 value={resource?.resource?.id || ""}
-                onChange={(e) => {
-                  if (resourceDirty && !window.confirm("Discard unsaved permission changes?")) return;
+                onChange={async (e) => {
+                  if (resourceDirty && !(await confirm({
+                    title: "Discard changes",
+                    message: "Discard unsaved permission changes?",
+                    confirmLabel: "Discard",
+                    variant: "warning",
+                  }))) return;
                   perform(async () => {
                     setResource(e.target.value ? await api.getResourceAccess("dataset", e.target.value) : null);
                   }, "");

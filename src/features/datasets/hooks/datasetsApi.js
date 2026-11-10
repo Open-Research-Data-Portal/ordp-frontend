@@ -539,6 +539,11 @@ export async function getAccessRequestsQueue() {
   return data;
 }
 
+export async function voteOnAccessRequest(requestId, vote) {
+  const { data } = await client.post(`/sharing/access-requests/${requestId}/vote/`, { vote });
+  return data;
+}
+
 export async function getReviewerGuidelines() {
   const { data } = await client.get("/admin-panel/dashboard/reviewer/guidelines/");
   return data;

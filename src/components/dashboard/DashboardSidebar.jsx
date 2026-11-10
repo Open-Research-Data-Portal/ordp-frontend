@@ -18,11 +18,13 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
+  KeyRound,
 } from "lucide-react";
 import { useAuth } from "../../context/useAuth";
 import { getDashboardPath, isResearcher, getActiveRole } from "../../utils/userRoles";
 import logo from "../../assets/aastulogo.png";
-import { getMyPermissions, getMyResources } from "../../api/accessControl";
+import { getMyResources } from "../../api/accessControl";
+import { canAccessManagement } from "../../utils/accessManagement";
 
 const ROLE_CONFIG = {
   user: {
@@ -108,21 +110,23 @@ export default function DashboardSidebar({
 }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { logout, user } = useAuth();
+  const { logout, user, accessControlMe, refreshAccessControlMe } = useAuth();
   const [, setRoleTick] = useState(0);
   const [sharedResources, setSharedResources] = useState([]);
-  const [permissionCodes, setPermissionCodes] = useState([]);
 
   useEffect(() => {
     if (!user?.id) return;
     let active = true;
     const refreshAccess = () => {
-      Promise.allSettled([getMyResources(), getMyPermissions()]).then(([resources, permissions]) => {
-        if (!active) return;
-        setSharedResources(resources.status === "fulfilled" && Array.isArray(resources.value) ? resources.value : []);
-        setPermissionCodes(permissions.status === "fulfilled"
-          ? permissions.value.effective.map((entry) => entry.code) : []);
-      });
+      getMyResources()
+        .then((resources) => {
+          if (!active) return;
+          setSharedResources(Array.isArray(resources) ? resources : []);
+        })
+        .catch(() => {
+          if (active) setSharedResources([]);
+        });
+      refreshAccessControlMe?.();
     };
     refreshAccess();
     window.addEventListener("focus", refreshAccess);
@@ -132,7 +136,7 @@ export default function DashboardSidebar({
       window.removeEventListener("focus", refreshAccess);
       window.removeEventListener("ordp:permissions-changed", refreshAccess);
     };
-  }, [user?.id]);
+  }, [user?.id, refreshAccessControlMe]);
 
   useEffect(() => {
     const handleRoleChanged = () => setRoleTick((t) => t + 1);
@@ -142,20 +146,38 @@ export default function DashboardSidebar({
 
   const roleKey = getRoleKey(user);
   const config = ROLE_CONFIG[roleKey];
-  const navItems = [...config.nav];
-  const allowed = new Set(permissionCodes);
+  const showAccessManagement = canAccessManagement(accessControlMe);
+  const navItems = config.nav.filter((item) =>
+    item.to === "/access-management" ? showAccessManagement : true
+  );
+  const myAccessIndex = navItems.findIndex((item) => item.to === "/access-management" || item.to === "/profile");
+  navItems.splice(
+    myAccessIndex < 0 ? navItems.length : myAccessIndex,
+    0,
+    { label: "My Access", icon: KeyRound, to: "/my-access" }
+  );
   if (sharedResources.length) {
-    const accessIndex = navItems.findIndex((item) => item.to === "/access-management");
+    const accessIndex = navItems.findIndex((item) => item.to === "/access-management" || item.to === "/my-access");
     navItems.splice(accessIndex < 0 ? navItems.length : accessIndex, 0,
       { label: "Shared with me", icon: FolderKanban, to: "/shared-with-me" });
   }
   const accessSections = [
-    { label: "Users", tab: "Users", show: allowed.has("user.view") && roleKey !== "admin" },
-    { label: "Groups", tab: "Groups", show: allowed.has("user.view") },
-    { label: roleKey === "admin" ? "Access requests to review" : "Access requests", tab: "Access Requests", show: true },
-    { label: roleKey === "admin" ? "Group requests to review" : "Group requests", tab: "Group Requests", show: true },
-    { label: "Dataset permissions", tab: "Resources & Permissions", show: allowed.has("user.view") },
-    { label: "Permission catalog", tab: "Permission Catalog", show: true },
+    { label: "Overview", tab: "Overview", show: Boolean(accessControlMe?.can_view_users) },
+    { label: "Users", tab: "Users", show: Boolean(accessControlMe?.can_view_users) },
+    { label: "Groups", tab: "Groups", show: Boolean(accessControlMe?.can_view_users) },
+    {
+      label: roleKey === "admin" ? "Access requests to review" : "Access requests",
+      tab: "Access Requests",
+      show: Boolean(accessControlMe?.can_review_requests) || true,
+    },
+    {
+      label: roleKey === "admin" ? "Group requests to review" : "Group requests",
+      tab: "Group Requests",
+      show: Boolean(accessControlMe?.can_review_requests) || true,
+    },
+    { label: "Dataset permissions", tab: "Resources & Permissions", show: Boolean(accessControlMe?.can_view_users) },
+    { label: "Permission catalog", tab: "Permission Catalog", show: showAccessManagement },
+    { label: "Audit History", tab: "Audit History", show: Boolean(accessControlMe?.can_view_audit) },
   ].filter((section) => section.show).map((section) => ({
     ...section, to: `/access-management?tab=${encodeURIComponent(section.tab)}`,
   }));

@@ -8,7 +8,7 @@ const button = "rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium
 const tabs = ["Members", "Permissions", "Resources", "Activity"];
 const errorMessage = (error) => accessError(error, "Could not complete this change.");
 
-export default function GroupsPanel({ users, groups, catalog, datasets, onGroupsChanged }) {
+export default function GroupsPanel({ users, groups, catalog, datasets = [], projects = [], collections = [], onGroupsChanged }) {
   const [selectedId, setSelectedId] = useState("");
   const [detail, setDetail] = useState(null);
   const [tab, setTab] = useState("Members");
@@ -115,7 +115,7 @@ export default function GroupsPanel({ users, groups, catalog, datasets, onGroups
           </button>
         ) : <p className="mt-3 text-sm text-slate-500">No groups yet.</p>}
       </section>
-      {can("group.create") && <GroupCreationWizard users={users} catalog={catalog} datasets={datasets} onCreated={onGroupsChanged} />}
+      {can("group.create") && <GroupCreationWizard users={users} catalog={catalog} datasets={datasets} projects={projects} collections={collections} onCreated={onGroupsChanged} />}
     </div>
     <div>
       {error && <p role="alert" className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
@@ -174,9 +174,18 @@ export default function GroupsPanel({ users, groups, catalog, datasets, onGroups
             {!detail.grants.length && <p className="text-sm text-slate-500">No active permissions.</p>}
             {can("group.permission.manage") && <form onSubmit={grant} className="space-y-2 rounded-lg border border-slate-200 p-3">
               <h3 className="text-sm font-semibold">Add permission</h3>
-              <select className={field} value={scope} onChange={(event) => { setScope(event.target.value); setPermission(""); setResourceId(""); }}><option value="dataset">Dataset</option><option value="platform">Platform</option></select>
+              <select className={field} value={scope} onChange={(event) => { setScope(event.target.value); setPermission(""); setResourceId(""); }}>
+                <option value="dataset">Dataset</option>
+                <option value="platform">Platform</option>
+                <option value="project">Project</option>
+                <option value="collection">Collection</option>
+                <option value="dataset_file">Dataset file</option>
+              </select>
               {scope === "dataset" && <select required className={field} value={resourceId} onChange={(event) => setResourceId(event.target.value)}><option value="">Select dataset</option>{datasets.map((dataset) => <option key={dataset.id} value={dataset.id}>{dataset.title}</option>)}</select>}
-              <select required className={field} value={permission} onChange={(event) => setPermission(event.target.value)}><option value="">Select permission</option>{scopePermissions.map((item) => <option key={item.code} value={item.code}>{item.name}</option>)}</select>
+              {scope === "project" && <select required className={field} value={resourceId} onChange={(event) => setResourceId(event.target.value)}><option value="">Select project</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select>}
+              {scope === "collection" && <select required className={field} value={resourceId} onChange={(event) => setResourceId(event.target.value)}><option value="">Select collection</option>{collections.map((collection) => <option key={collection.id} value={collection.id}>{collection.name}</option>)}</select>}
+              {scope === "dataset_file" && <input required className={field} value={resourceId} onChange={(event) => setResourceId(event.target.value)} placeholder="Dataset file UUID" />}
+              <select required className={field} value={permission} onChange={(event) => setPermission(event.target.value)}><option value="">Select permission</option>{scopePermissions.map((item) => <option key={item.code} value={item.code}>{item.name}</option>)}</select>}
               <input type="datetime-local" aria-label="Expiry" className={field} value={expiresAt} onChange={(event) => setExpiresAt(event.target.value)} />
               <input aria-label="Reason" placeholder="Reason (optional)" className={field} value={reason} onChange={(event) => setReason(event.target.value)} />
               <button type="submit" className={button} disabled={busy || !permission}>Grant permission</button>

@@ -7,7 +7,8 @@ const catalog = [
   { code: "dataset.view", name: "View dataset", resource_type: "dataset", enforced: true },
   { code: "dataset.edit", name: "Edit dataset", resource_type: "dataset", enforced: true },
   { code: "dataset.delete", name: "Delete dataset", resource_type: "dataset", enforced: true },
-  { code: "dataset.approve", name: "Approve dataset", resource_type: "dataset", enforced: false },
+  { code: "dataset.download", name: "Download dataset", resource_type: "dataset", enforced: true },
+  { code: "dataset.approve", name: "Approve dataset", resource_type: "platform", enforced: true },
 ];
 
 afterEach(cleanup);
@@ -15,49 +16,95 @@ afterEach(cleanup);
 describe("UserPermissionsModal", () => {
   it("grants only selected endpoint-backed permissions to the chosen dataset", async () => {
     const onGrant = vi.fn().mockResolvedValue(true);
-    render(<UserPermissionsModal user={{ id: 7, name: "Ada", email: "ada@example.com", effective: [] }}
-      catalog={catalog} datasets={[{ id: "dataset-1", title: "Research data" }]}
-      busy={false} onClose={vi.fn()} onGrant={onGrant} onRevoke={vi.fn()} />);
+    render(
+      <UserPermissionsModal
+        user={{ id: 7, name: "Ada", email: "ada@example.com", effective: [], direct: [] }}
+        catalog={catalog}
+        datasets={[{ id: "dataset-1", title: "Research data" }]}
+        busy={false}
+        onClose={vi.fn()}
+        onGrant={onGrant}
+        onRevoke={vi.fn()}
+      />
+    );
     fireEvent.change(screen.getByLabelText("Where can they act?"), { target: { value: "dataset" } });
-    fireEvent.change(screen.getByLabelText("Dataset"), { target: { value: "dataset-1" } });
-    expect(screen.getByRole("region", { name: "View and download" })).toBeTruthy();
-    expect(screen.getByRole("region", { name: "Edit and delete" })).toBeTruthy();
-    expect(screen.getByRole("region", { name: "Review" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("switch", { name: "View dataset for ada@example.com" }));
-    fireEvent.click(screen.getByRole("switch", { name: "Edit dataset for ada@example.com" }));
-    expect(screen.getByRole("switch", { name: "Approve dataset for ada@example.com" }).disabled).toBe(true);
-    expect(screen.getByText("Coming later")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Resource"), { target: { value: "dataset-1" } });
+    expect(screen.getByText("View and download")).toBeTruthy();
+    expect(screen.getByText("Edit and delete")).toBeTruthy();
+    fireEvent.click(screen.getByLabelText(/View dataset/i));
+    fireEvent.click(screen.getByLabelText(/Edit dataset/i));
     fireEvent.click(screen.getByRole("button", { name: "Grant 2 permissions" }));
-    await waitFor(() => expect(onGrant).toHaveBeenCalledWith([
-      { permission: "dataset.view", resource_type: "dataset", resource_id: "dataset-1", expires_at: null, reason: "" },
-      { permission: "dataset.edit", resource_type: "dataset", resource_id: "dataset-1", expires_at: null, reason: "" },
-    ]));
+    await waitFor(() =>
+      expect(onGrant).toHaveBeenCalledWith([
+        { permission: "dataset.view", resource_type: "dataset", resource_id: "dataset-1", expires_at: null, reason: "" },
+        { permission: "dataset.edit", resource_type: "dataset", resource_id: "dataset-1", expires_at: null, reason: "" },
+      ])
+    );
   });
 
-  it("shows group access but does not let a direct switch remove it", () => {
-    const onRevoke = vi.fn();
-    render(<UserPermissionsModal user={{ id: 7, name: "Ada", email: "ada@example.com", effective: [{
-      code: "dataset.delete", name: "Delete dataset", resource_type: "dataset", resource_id: "dataset-1",
-      sources: [{ type: "group", id: "grant-1", group_name: "Team" }],
-    }] }} catalog={catalog} datasets={[{ id: "dataset-1", title: "Research data" }]}
-      busy={false} onClose={vi.fn()} onGrant={vi.fn()} onRevoke={onRevoke} />);
-    fireEvent.change(screen.getByLabelText("Where can they act?"), { target: { value: "dataset" } });
-    fireEvent.change(screen.getByLabelText("Dataset"), { target: { value: "dataset-1" } });
-    const toggle = screen.getByRole("switch", { name: "Delete dataset for ada@example.com" });
-    expect(toggle.getAttribute("aria-checked")).toBe("true");
-    expect(toggle.disabled).toBe(true);
-    expect(onRevoke).not.toHaveBeenCalled();
+  it("shows direct, inherited, and effective sections", () => {
+    render(
+      <UserPermissionsModal
+        user={{
+          id: 7,
+          name: "Ada",
+          email: "ada@example.com",
+          direct: [
+            {
+              id: "g-direct",
+              permission: "dataset.view",
+              resource_type: "dataset",
+              resource_id: "dataset-1",
+            },
+          ],
+          effective: [
+            {
+              code: "dataset.view",
+              name: "View dataset",
+              resource_type: "dataset",
+              resource_id: "dataset-1",
+              sources: [{ type: "direct", id: "g-direct" }],
+            },
+            {
+              code: "dataset.delete",
+              name: "Delete dataset",
+              resource_type: "dataset",
+              resource_id: "dataset-1",
+              sources: [{ type: "group", id: "grant-1", group_name: "Team" }],
+            },
+          ],
+        }}
+        catalog={catalog}
+        datasets={[{ id: "dataset-1", title: "Research data" }]}
+        busy={false}
+        onClose={vi.fn()}
+        onGrant={vi.fn()}
+        onRevoke={vi.fn()}
+      />
+    );
+    expect(screen.getByText("Direct permissions")).toBeTruthy();
+    expect(screen.getByText("Inherited permissions")).toBeTruthy();
+    expect(screen.getByText("Effective permissions")).toBeTruthy();
+    expect(screen.getByText(/Group: Team/)).toBeTruthy();
   });
 
   it("requires confirmation before granting delete access", () => {
     const onGrant = vi.fn();
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
-    render(<UserPermissionsModal user={{ id: 7, name: "Ada", email: "ada@example.com", effective: [] }}
-      catalog={catalog} datasets={[{ id: "dataset-1", title: "Research data" }]}
-      busy={false} onClose={vi.fn()} onGrant={onGrant} onRevoke={vi.fn()} />);
+    render(
+      <UserPermissionsModal
+        user={{ id: 7, name: "Ada", email: "ada@example.com", effective: [], direct: [] }}
+        catalog={catalog}
+        datasets={[{ id: "dataset-1", title: "Research data" }]}
+        busy={false}
+        onClose={vi.fn()}
+        onGrant={onGrant}
+        onRevoke={vi.fn()}
+      />
+    );
     fireEvent.change(screen.getByLabelText("Where can they act?"), { target: { value: "dataset" } });
-    fireEvent.change(screen.getByLabelText("Dataset"), { target: { value: "dataset-1" } });
-    fireEvent.click(screen.getByRole("switch", { name: "Delete dataset for ada@example.com" }));
+    fireEvent.change(screen.getByLabelText("Resource"), { target: { value: "dataset-1" } });
+    fireEvent.click(screen.getByLabelText(/Delete dataset/i));
     fireEvent.click(screen.getByRole("button", { name: "Grant 1 permission" }));
     expect(confirm).toHaveBeenCalled();
     expect(onGrant).not.toHaveBeenCalled();

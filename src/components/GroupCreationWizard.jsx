@@ -5,7 +5,7 @@ const field = "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus
 const action = "rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium disabled:opacity-50";
 const stepNames = ["Group information", "Add members", "Select resource", "Assign permissions", "Review"];
 
-export default function GroupCreationWizard({ users, catalog, datasets, onCreated }) {
+export default function GroupCreationWizard({ users, catalog, datasets = [], projects = [], collections = [], onCreated }) {
   const [step, setStep] = useState(0);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -41,8 +41,8 @@ export default function GroupCreationWizard({ users, catalog, datasets, onCreate
       setError("Enter a group name.");
       return;
     }
-    if (step === 2 && codes.length && resourceType === "dataset" && !resourceId) {
-      setError("Select a dataset for these permissions.");
+    if (step === 2 && codes.length && resourceType !== "platform" && !resourceId) {
+      setError("Select a resource for these permissions.");
       return;
     }
     setError("");
@@ -124,6 +124,9 @@ export default function GroupCreationWizard({ users, catalog, datasets, onCreate
           <select className={field} value={resourceType} onChange={(event) => { setResourceType(event.target.value); setResourceId(""); setCodes([]); }}>
             <option value="dataset">Dataset</option>
             <option value="platform">Platform</option>
+            <option value="project">Project</option>
+            <option value="collection">Collection</option>
+            <option value="dataset_file">Dataset file</option>
           </select>
         </label>
         {resourceType === "dataset" && <label className="block text-sm font-medium">Dataset
@@ -131,6 +134,21 @@ export default function GroupCreationWizard({ users, catalog, datasets, onCreate
             <option value="">Select a dataset (optional for an empty group)</option>
             {datasets.map((dataset) => <option key={dataset.id} value={dataset.id}>{dataset.title}</option>)}
           </select>
+        </label>}
+        {resourceType === "project" && <label className="block text-sm font-medium">Project
+          <select className={field} value={resourceId} onChange={(event) => setResourceId(event.target.value)}>
+            <option value="">Select a project</option>
+            {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+          </select>
+        </label>}
+        {resourceType === "collection" && <label className="block text-sm font-medium">Collection
+          <select className={field} value={resourceId} onChange={(event) => setResourceId(event.target.value)}>
+            <option value="">Select a collection</option>
+            {collections.map((collection) => <option key={collection.id} value={collection.id}>{collection.name}</option>)}
+          </select>
+        </label>}
+        {resourceType === "dataset_file" && <label className="block text-sm font-medium">File ID
+          <input className={field} value={resourceId} onChange={(event) => setResourceId(event.target.value)} placeholder="Dataset file UUID" />
         </label>}
       </>}
       {step === 3 && <>
@@ -156,7 +174,17 @@ export default function GroupCreationWizard({ users, catalog, datasets, onCreate
       {step === 4 && <div className="space-y-2 text-sm">
         <p><strong>Name:</strong> {name}</p>
         <p><strong>Members:</strong> {memberIds.length}</p>
-        <p><strong>Resource:</strong> {codes.length ? (resourceType === "platform" ? "Platform" : datasets.find((dataset) => dataset.id === resourceId)?.title || "No dataset selected") : "None"}</p>
+        <p><strong>Resource:</strong> {codes.length ? (
+          resourceType === "platform"
+            ? "Platform"
+            : resourceType === "dataset"
+              ? (datasets.find((dataset) => dataset.id === resourceId)?.title || "No dataset selected")
+              : resourceType === "project"
+                ? (projects.find((project) => project.id === resourceId)?.name || "No project selected")
+                : resourceType === "collection"
+                  ? (collections.find((collection) => collection.id === resourceId)?.name || "No collection selected")
+                  : (resourceId || "No file selected")
+        ) : "None"}</p>
         <p><strong>Permissions:</strong> {codes.length ? codes.join(", ") : "None yet"}</p>
         {expiresAt && <p><strong>Expiry:</strong> {new Date(expiresAt).toLocaleString()}</p>}
       </div>}
@@ -165,7 +193,7 @@ export default function GroupCreationWizard({ users, catalog, datasets, onCreate
       <button type="button" className={action} disabled={step === 0 || busy} onClick={() => setStep((current) => current - 1)}>Back</button>
       {step < 4
         ? <button type="button" className={action} onClick={next}>Continue</button>
-        : <button type="button" className={action} disabled={busy || (codes.length > 0 && resourceType === "dataset" && !resourceId)} onClick={create}>Create group</button>}
+        : <button type="button" className={action} disabled={busy || (codes.length > 0 && resourceType !== "platform" && !resourceId)} onClick={create}>Create group</button>}
     </div>
   </section>;
 }

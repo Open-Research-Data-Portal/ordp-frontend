@@ -249,9 +249,16 @@ export async function completeUpload(
 // Step 4: accept T&Cs + submit for review.
 // Backend contract (views.py -> accept_terms_and_submit) requires
 // { "terms_accepted": true } in the JSON body.
-export async function submitDataset(datasetId, termsAccepted) {
+export async function submitDataset(datasetId, termsAccepted, licensingPayload = {}) {
   const { data } = await client.post(`${DATASETS_BASE}/${datasetId}/submit/`, {
     terms_accepted: Boolean(termsAccepted),
+    ...(licensingPayload?.license ? { license: licensingPayload.license } : {}),
+    ...(typeof licensingPayload?.licenseRightsConfirmed === "boolean"
+      ? { license_rights_confirmed: licensingPayload.licenseRightsConfirmed }
+      : {}),
+    ...(licensingPayload?.licenseCustomTerms
+      ? { license_custom_terms: licensingPayload.licenseCustomTerms }
+      : {}),
   });
   return data;
 }
@@ -986,4 +993,20 @@ export async function getDatasets(params) {
   return Array.isArray(data) || Array.isArray(data?.results)
     ? (Array.isArray(data) ? hydrateDatasetThumbnails(data) : { ...data, results: await hydrateDatasetThumbnails(data.results) })
     : data;
+}
+
+
+export async function getLicensingOptions() {
+  const { data } = await client.get(`${DATASETS_BASE}/licensing/options/`);
+  return data;
+}
+
+export async function getAdminLicensingSettings() {
+  const { data } = await client.get("/admin-panel/settings/licensing/");
+  return data;
+}
+
+export async function updateAdminLicensingSettings(default_license) {
+  const { data } = await client.post("/admin-panel/settings/licensing/", { default_license });
+  return data;
 }

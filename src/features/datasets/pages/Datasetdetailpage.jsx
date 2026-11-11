@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
+import { getLicenseInfo } from "../utils/licensing";
 import {
+  Scale,
+  ExternalLink,
   Download,
   Share2,
   ChevronDown,
@@ -302,6 +305,23 @@ function StatusBadge({ status }) {
     <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-semibold capitalize text-gray-600">
       {String(status).replace("_", " ")}
     </span>
+  );
+}
+
+function LicenseBadge({ license, licenseInfo }) {
+  const info = licenseInfo || getLicenseInfo(license);
+  return (
+    <a
+      href={info.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 hover:bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700 transition"
+      title={`${info.full_name || info.name} — ${info.description}`}
+    >
+      <Scale size={13} className="text-slate-500" />
+      <span>{info.short_name || info.name || license || "CC BY 4.0"}</span>
+      <ExternalLink size={11} className="text-slate-400" />
+    </a>
   );
 }
 
@@ -718,6 +738,7 @@ export default function DatasetDetailPage() {
                           </h1>
                           <VisibilityBadge visibility={dataset.visibility} />
                           <StatusBadge status={dataset.status} />
+                          <LicenseBadge license={dataset.license} licenseInfo={dataset.license_info} />
                         </div>
                         <div className="flex items-center gap-2 mb-3">
                           <div className="h-7 w-7 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-700">

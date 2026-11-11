@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { getLicenseInfo } from "../features/datasets/utils/licensing";
 import {
+  Scale,
+  ExternalLink,
   Download,
   Share2,
   X,
@@ -202,6 +205,10 @@ function normalizeDataset(raw) {
     ...raw,
     id: raw.id, // needed by download/share API calls
     visibility: raw.visibility, // ASSUMPTION: field name on DatasetSerializer — confirm/adjust if different
+    license: raw.license || "CC-BY-4.0",
+    license_info: raw.license_info || getLicenseInfo(raw.license),
+    license_rights_confirmed: Boolean(raw.license_rights_confirmed),
+    license_custom_terms: raw.license_custom_terms || "",
     title: raw.title,
     owner_id: ownerId,
     owner_email: ownerEmail,
@@ -292,6 +299,23 @@ function VisibilityBadge({ visibility }) {
       <span className="h-1.5 w-1.5 rounded-full bg-current" />
       {label}
     </span>
+  );
+}
+
+function LicenseBadge({ license, licenseInfo }) {
+  const info = licenseInfo || getLicenseInfo(license);
+  return (
+    <a
+      href={info.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 hover:bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700 transition"
+      title={`${info.full_name || info.name} — ${info.description}`}
+    >
+      <Scale size={13} className="text-slate-500" />
+      <span>{info.short_name || info.name || license || "CC BY 4.0"}</span>
+      <ExternalLink size={11} className="text-slate-400" />
+    </a>
   );
 }
 
@@ -954,11 +978,12 @@ export default function DatasetViewPage() {
           {/* Left Side: Title at top, then About dataset text & Download button below it */}
           <div className="flex flex-col justify-between h-full">
             <div>
-              <div className="flex items-center gap-3 mb-4">
+              <div className="flex flex-wrap items-center gap-3 mb-4">
                 <h1 className="text-3xl sm:text-4xl font-serif font-bold text-slate-900 leading-tight">
                   {dataset.title}
                 </h1>
                 <VisibilityBadge visibility={dataset.visibility} />
+                <LicenseBadge license={dataset.license} licenseInfo={dataset.license_info} />
               </div>
               <div className="flex items-center gap-2 mb-3">
                 <div className="h-7 w-7 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-700">
@@ -1017,6 +1042,12 @@ export default function DatasetViewPage() {
               {downloadError && (
                 <p className="mt-2 text-xs text-red-500">{downloadError}</p>
               )}
+              <p className="mt-3 text-xs text-slate-500 flex items-center gap-1.5">
+                <Scale size={13} className="text-slate-400 shrink-0" />
+                <span>
+                  Licensed under <strong>{dataset.license_info?.name || dataset.license || "CC BY 4.0"}</strong>. By downloading, you agree to comply with its conditions.
+                </span>
+              </p>
             </div>
           </div>
 

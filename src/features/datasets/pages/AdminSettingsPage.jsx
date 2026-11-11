@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
+import { SUPPORTED_LICENSES, getLicenseInfo } from "../utils/licensing";
 import {
+  Scale,
+  ExternalLink,
   SlidersHorizontal,
   Tag,
   CheckCircle2,
@@ -229,6 +232,9 @@ export default function AdminSettingsPage() {
   const [notifyOnArchive, setNotifyOnArchive] = useState(true);
   const [notifyOnDeletion, setNotifyOnDeletion] = useState(true);
   const [systemSaving, setSystemSaving] = useState(false);
+  const [defaultLicense, setDefaultLicense] = useState("CC-BY-4.0");
+  const [savingLicense, setSavingLicense] = useState(false);
+  const [licenseOptions, setLicenseOptions] = useState(SUPPORTED_LICENSES);
 
   // Inactive Users & Succession (Migrated from User Management)
   const [inactiveUsers, setInactiveUsers] = useState([]);
@@ -238,6 +244,16 @@ export default function AdminSettingsPage() {
   const [successionEmail, setSuccessionEmail] = useState("");
   const [successionFullName, setSuccessionFullName] = useState("");
   const [successionLoading, setSuccessionLoading] = useState(false);
+
+  useEffect(() => {
+    datasetsApi
+      .getAdminLicensingSettings()
+      .then((data) => {
+        if (data?.default_license) setDefaultLicense(data.default_license);
+        if (data?.supported_licenses?.length) setLicenseOptions(data.supported_licenses);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetchSavedWeights().then((saved) => {
@@ -375,16 +391,29 @@ export default function AdminSettingsPage() {
   async function handleSaveSystem() {
     setSystemSaving(true);
     try {
-      await client
-        .post("/admin-panel/settings/system/", {
+      await Promise.allSettled([
+        client.post("/admin-panel/settings/system/", {
           draft_expiration_days: draftDays,
           notify_on_archive: notifyOnArchive,
           notify_on_deletion: notifyOnDeletion,
-        })
-        .catch(() => {});
-      addToast("System settings saved.", "success");
+        }),
+        datasetsApi.updateAdminLicensingSettings(defaultLicense),
+      ]);
+      addToast("System settings and default license saved.", "success");
     } finally {
       setSystemSaving(false);
+    }
+  }
+
+  async function handleUpdateDefaultLicense() {
+    setSavingLicense(true);
+    try {
+      await datasetsApi.updateAdminLicensingSettings(defaultLicense);
+      addToast(`Default dataset license updated to ${defaultLicense}.`, "success");
+    } catch (err) {
+      addToast(err?.response?.data?.detail || "Failed to update default license.", "error");
+    } finally {
+      setSavingLicense(false);
     }
   }
 
@@ -554,6 +583,79 @@ export default function AdminSettingsPage() {
                     <Trash2 className="w-3.5 h-3.5 text-red-400" />
                   )}
                   Delete Expired Drafts
+                </button>
+              </div>
+            </div>
+
+            {/* Default Dataset License Card */}
+            <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Scale className="w-4 h-4 text-slate-500" />
+                    <p className="text-sm font-semibold text-slate-700">Default Dataset License</p>
+                  </div>
+                  <span className="text-xs bg-blue-50 text-blue-700 border border-blue-200 font-semibold px-2.5 py-0.5 rounded-full">
+                    {defaultLicense}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mb-4">
+                  Select which license will be pre-selected for researchers on the dataset contribution form.
+                </p>
+
+                <div className="space-y-3 mb-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">Active Default:</label>
+                    <select
+                      value={defaultLicense}
+                      onChange={(e) => setDefaultLicense(e.target.value)}
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-navy/30"
+                    >
+                      {licenseOptions.map((opt) => (
+                        <option key={opt.key} value={opt.key}>
+                          {opt.name || opt.short_name} — {opt.full_name || opt.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {(() => {
+                    const info = getLicenseInfo(defaultLicense);
+                    if (!info) return null;
+                    return (
+                      <div className="bg-slate-50 rounded-lg p-3 border border-slate-200/80 text-xs">
+                        <div className="flex items-center justify-between mb-1">
+                          <strong className="text-slate-800">{info.name || info.short_name}</strong>
+                          {info.url && (
+                            <a
+                              href={info.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[11px] text-gold-dark hover:underline flex items-center gap-1"
+                            >
+                              Legal terms <ExternalLink className="w-3 h-3" />
+                            </a>
+                          )}
+                        </div>
+                        <p className="text-slate-600 text-[11px] leading-relaxed m-0">
+                          {info.description}
+                        </p>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                <span className="text-[11px] text-slate-400">Applies to all new uploads</span>
+                <button
+                  type="button"
+                  onClick={handleUpdateDefaultLicense}
+                  disabled={savingLicense}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-navy text-white text-xs font-semibold hover:bg-navy-light disabled:opacity-50 transition cursor-pointer shadow-xs"
+                >
+                  {savingLicense ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5 text-gold" />}
+                  Update License
                 </button>
               </div>
             </div>

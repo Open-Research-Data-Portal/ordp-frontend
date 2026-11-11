@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { Scale, ExternalLink, ShieldCheck } from "lucide-react";
+import { getLicenseInfo, SUPPORTED_LICENSES, DEFAULT_LICENSE_KEY } from "../utils/licensing";
 import FormField from "../../../components/FormField";
 import TagInput from "../../../components/TagInput";
 import { useAuth } from "../../../context/useAuth";
@@ -45,7 +47,38 @@ export default function DetailsForm({ initialValues = {}, onNext, onInvite, isSu
   const [relatedResources, setRelatedResources] = useState(initialValues.relatedResources || []);
   const [geographicCoverage, setGeographicCoverage] = useState(initialValues.geographicCoverage || "");
   const [temporalCoverage, setTemporalCoverage] = useState(initialValues.temporalCoverage || "");
+  const [license, setLicense] = useState(initialValues.license || DEFAULT_LICENSE_KEY);
+  const [licenseRightsConfirmed, setLicenseRightsConfirmed] = useState(
+    Boolean(initialValues.licenseRightsConfirmed || initialValues.license_rights_confirmed)
+  );
+  const [licenseCustomTerms, setLicenseCustomTerms] = useState(
+    initialValues.licenseCustomTerms || initialValues.license_custom_terms || ""
+  );
+  const [licenseOptions, setLicenseOptions] = useState(SUPPORTED_LICENSES);
+  const [activeDefaultLicense, setActiveDefaultLicense] = useState(DEFAULT_LICENSE_KEY);
   const [localError, setLocalError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    datasetsApi
+      .getLicensingOptions()
+      .then((res) => {
+        if (!active) return;
+        if (Array.isArray(res?.supported_licenses) && res.supported_licenses.length > 0) {
+          setLicenseOptions(res.supported_licenses);
+        }
+        if (res?.default_license) {
+          setActiveDefaultLicense(res.default_license);
+          if (!initialValues.license) {
+            setLicense(res.default_license);
+          }
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [initialValues.license]);
 
   useEffect(() => {
     let active = true;
@@ -139,6 +172,10 @@ export default function DetailsForm({ initialValues = {}, onNext, onInvite, isSu
       setLocalError("Language is required.");
       return;
     }
+    if (!licenseRightsConfirmed) {
+      setLocalError("You must confirm that you hold the legal rights or authorization to apply this license.");
+      return;
+    }
     setLocalError("");
     await onNext({
       title,
@@ -146,6 +183,11 @@ export default function DetailsForm({ initialValues = {}, onNext, onInvite, isSu
       language,
       languageId,
       language_id: languageId,
+      license: license || activeDefaultLicense,
+      licenseRightsConfirmed,
+      license_rights_confirmed: licenseRightsConfirmed,
+      licenseCustomTerms,
+      license_custom_terms: licenseCustomTerms,
       authorId: user?.id,
       coAuthors,
       relatedResources,
@@ -368,6 +410,127 @@ export default function DetailsForm({ initialValues = {}, onNext, onInvite, isSu
             className={inputClass}
           />
         </FormField>
+      </div>
+
+      {/* ── Prominent Dataset Licensing & Legal Rights Section ── */}
+      <div className="border-t border-[#E3E1DA] pt-8 mt-8">
+        <div className="flex items-center justify-between gap-3 mb-2">
+          <div className="flex items-center gap-2.5">
+            <div className="p-1.5 rounded-lg bg-navy/5 text-navy">
+              <Scale className="w-5 h-5 text-gold-dark" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-navy">Dataset Licensing & Rights</h3>
+              <p className="text-xs text-gray-500">
+                Choose the legal terms under which other researchers may inspect, reuse, and cite this dataset.
+              </p>
+            </div>
+          </div>
+          <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 shrink-0">
+            Mandatory Selection
+          </span>
+        </div>
+
+        <div className="mt-4">
+          <FormField
+            label="Select License"
+            required
+            hint={
+              license === activeDefaultLicense
+                ? `Default license (${activeDefaultLicense}) pre-selected`
+                : "Non-default license chosen"
+            }
+          >
+            <select
+              value={license}
+              onChange={(e) => setLicense(e.target.value)}
+              className={inputClass}
+            >
+              {licenseOptions.map((opt) => (
+                <option key={opt.key} value={opt.key}>
+                  {opt.name || opt.short_name} {opt.key === activeDefaultLicense ? "(Default)" : ""} — {opt.full_name || opt.name}
+                </option>
+              ))}
+            </select>
+          </FormField>
+        </div>
+
+        {/* Selected License Plain-Language Card */}
+        {(() => {
+          const info = getLicenseInfo(license);
+          if (!info) return null;
+          return (
+            <div className="bg-[#FAF9F5] border border-[#E3E1DA] rounded-xl p-4 mt-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2 pb-2 border-b border-slate-200/60">
+                <div className="flex items-center gap-2">
+                  <span className={`inline-block w-2.5 h-2.5 rounded-full ${info.is_restricted ? "bg-amber-500" : "bg-emerald-500"}`} />
+                  <span className="text-xs font-bold text-navy uppercase tracking-wide">
+                    {info.name || info.short_name}
+                  </span>
+                  {info.key === activeDefaultLicense && (
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-200 text-slate-700">
+                      System Default
+                    </span>
+                  )}
+                </div>
+                {info.url && (
+                  <a
+                    href={info.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-gold-dark hover:text-navy transition"
+                  >
+                    View Official Legal Text <ExternalLink className="w-3 h-3" />
+                  </a>
+                )}
+              </div>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                {info.description}
+              </p>
+            </div>
+          );
+        })()}
+
+        {/* AASTU Restricted Custom Terms Input */}
+        {license === "AASTU-RESTRICTED" && (
+          <div className="mt-4 bg-amber-50/50 border border-amber-200/80 rounded-xl p-4">
+            <FormField
+              label="Institutional Restrictions / Data Access Conditions (Optional)"
+              hint="Specify any special institutional approval requirements or confidentiality constraints"
+            >
+              <textarea
+                value={licenseCustomTerms}
+                onChange={(e) => setLicenseCustomTerms(e.target.value)}
+                placeholder="e.g., Access restricted to accredited researchers upon AASTU Departmental Board review."
+                className={`${inputClass} resize-y bg-white`}
+                rows={3}
+              />
+            </FormField>
+          </div>
+        )}
+
+        {/* Rights Confirmation Checkbox */}
+        <label className={`flex items-start gap-3 mt-4 p-4 border rounded-xl cursor-pointer transition ${
+          licenseRightsConfirmed
+            ? "border-emerald-300 bg-emerald-50/40"
+            : "border-[#E3E1DA] bg-[#FAF9F5] hover:bg-slate-50"
+        }`}>
+          <input
+            type="checkbox"
+            checked={licenseRightsConfirmed}
+            onChange={(e) => setLicenseRightsConfirmed(e.target.checked)}
+            className="mt-1 w-4 h-4 text-navy rounded border-gray-300 focus:ring-navy cursor-pointer"
+          />
+          <div className="text-xs text-slate-700 leading-relaxed">
+            <strong className="block text-navy font-semibold text-sm mb-0.5 flex items-center gap-1.5">
+              <ShieldCheck className={`w-4 h-4 ${licenseRightsConfirmed ? "text-emerald-600" : "text-slate-400"}`} />
+              Ownership & Authority to License Confirmation *
+            </strong>
+            <p className="m-0 text-slate-600">
+              I certify that I am the legal rights holder or authorized representative with explicit authority to deposit this dataset under the selected license terms.
+            </p>
+          </div>
+        </label>
       </div>
 
       {localError && (

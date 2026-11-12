@@ -151,12 +151,14 @@ export default function DashboardSidebar({
   // Management tabs inside the page remain protected by the user's grants.
   // Work on a fresh list so dynamic entries are not duplicated across renders.
   const navItems = [...config.nav];
-  const myAccessIndex = navItems.findIndex((item) => item.to === "/access-management" || item.to === "/profile");
-  navItems.splice(
-    myAccessIndex < 0 ? navItems.length : myAccessIndex,
-    0,
-    { label: "My Access", icon: KeyRound, to: "/my-access" }
-  );
+  if (roleKey !== "admin") {
+    const myAccessIndex = navItems.findIndex((item) => item.to === "/access-management" || item.to === "/profile");
+    navItems.splice(
+      myAccessIndex < 0 ? navItems.length : myAccessIndex,
+      0,
+      { label: "My Access", icon: KeyRound, to: "/my-access" }
+    );
+  }
   if (sharedResources.length) {
     const accessIndex = navItems.findIndex((item) => item.to === "/access-management" || item.to === "/my-access");
     navItems.splice(accessIndex < 0 ? navItems.length : accessIndex, 0,

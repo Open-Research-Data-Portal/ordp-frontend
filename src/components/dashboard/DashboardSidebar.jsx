@@ -149,7 +149,8 @@ export default function DashboardSidebar({
   const showAccessManagement = canAccessManagement(accessControlMe);
   // Every signed-in user needs the Access entry to request permissions.
   // Management tabs inside the page remain protected by the user's grants.
-  const navItems = config.nav;
+  // Work on a fresh list so dynamic entries are not duplicated across renders.
+  const navItems = [...config.nav];
   const myAccessIndex = navItems.findIndex((item) => item.to === "/access-management" || item.to === "/profile");
   navItems.splice(
     myAccessIndex < 0 ? navItems.length : myAccessIndex,

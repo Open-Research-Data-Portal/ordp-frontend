@@ -30,6 +30,8 @@ import UserArchivedDatasetsPage from "../features/datasets/pages/UserArchivedDat
 import AdminSettingsPage from "../features/datasets/pages/AdminSettingsPage.jsx";
 import ReviewDatasetPage from "../features/datasets/pages/ReviewDatasetPage.jsx";
 import DatasetDetailPage from "../features/datasets/pages/Datasetdetailpage.jsx";
+import ReleaseDetailPage from "../features/datasets/pages/ReleaseDetailPage.jsx";
+import PidLandingPage from "../pages/PidLandingPage.jsx";
 import BrowseDatasetsPage from "../pages/BrowseDatasetsPage.jsx";
 import DatasetViewPage from "../pages/DatasetViewPage";
 import BookmarksPage from "../features/datasets/pages/BookmarksPage";
@@ -130,10 +132,17 @@ export default function AppRoutes() {
       <Route path="/access-requests/:id/owner-decision" element={<OwnerAccessDecisionPage />} />
       <Route path="/access-requests/decision/:id" element={<OwnerAccessDecisionPage />} />
 
+      {/* Public ORDP PID Resolver Landing Page */}
+      <Route path="/id/:pid" element={<PidLandingPage />} />
+      <Route path="/datasets/id/:pid" element={<PidLandingPage />} />
+
       {/* Public dataset browsing */}
       <Route path="/datasets" element={<BrowseDatasetsPage />} />
       <Route path="/datasets/:id" element={
         <ProtectedRoute><DatasetViewPage /></ProtectedRoute>
+      } />
+      <Route path="/datasets/:id/releases/:releaseId" element={
+        <ProtectedRoute><ReleaseDetailPage /></ProtectedRoute>
       } />
 
       {/* Protected */}

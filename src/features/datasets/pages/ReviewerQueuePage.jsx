@@ -16,12 +16,14 @@ import {
   FileText,
   X,
   ExternalLink,
+  ShieldCheck,
 } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import { StatusBadge, EmptyState } from "../../../components/dashboard/dashboardUi";
 import { useToast } from "../../../context/ToastContext.jsx";
 import * as datasetsApi from "../hooks/datasetsApi.js";
 import { fetchAllDatasets } from "../../../api/datasetsHub";
+import ReviewerProposalDecisionModal from "../components/ReviewerProposalDecisionModal";
 
 function normalizeList(data) {
   if (Array.isArray(data)) return data;
@@ -70,6 +72,7 @@ export default function ReviewerQueuePage() {
   const [recentAction, setRecentAction] = useState(null);
   const [comparisonModal, setComparisonModal] = useState(null);
   const [loadingComparison, setLoadingComparison] = useState(false);
+  const [selectedProposal, setSelectedProposal] = useState(null);
 
   async function handleOpenComparison(updateId) {
     setLoadingComparison(true);
@@ -399,6 +402,7 @@ export default function ReviewerQueuePage() {
                   actionId={actionId}
                   onVote={handleVote}
                   onViewComparison={handleOpenComparison}
+                  onReviewProposal={(item) => setSelectedProposal(item)}
                   loadingComparison={loadingComparison}
                   onEmptyAction={() => setTab("datasets")}
                 />
@@ -559,6 +563,21 @@ export default function ReviewerQueuePage() {
           </div>
         </div>
       )}
+      {selectedProposal && (
+        <ReviewerProposalDecisionModal
+          proposal={selectedProposal}
+          onClose={() => setSelectedProposal(null)}
+          onDecisionCompleted={() => {
+            setContentUpdates((prev) =>
+              prev.filter(
+                (p) =>
+                  String(p.id || p.update_id) !==
+                  String(selectedProposal.id || selectedProposal.update_id)
+              )
+            );
+          }}
+        />
+      )}
     </DashboardShell>
   );
 }
@@ -626,7 +645,7 @@ function ReviewDatasetsQueueTab({ items, onView }) {
 }
 
 // ── Generic Vote Table ──────────────────────────────────────────────────
-function VoteTable({ type, items, emptyTitle, emptyDesc, idKey, titleKey, descKey, actionId: currentActionId, onVote, onViewComparison, loadingComparison, onEmptyAction, actionLabel }) {
+function VoteTable({ type, items, emptyTitle, emptyDesc, idKey, titleKey, descKey, actionId: currentActionId, onVote, onViewComparison, onReviewProposal, loadingComparison, onEmptyAction, actionLabel }) {
   if (items.length === 0) {
     return (
       <EmptyState
@@ -664,6 +683,17 @@ function VoteTable({ type, items, emptyTitle, emptyDesc, idKey, titleKey, descKe
                 <td className="px-5 py-4 text-gray-500">{formatDate(item.created_at || item.requested_at)}</td>
                 <td className="px-5 py-4 text-right">
                   <div className="flex items-center justify-end gap-2">
+                    {onReviewProposal && (
+                      <button
+                        type="button"
+                        onClick={() => onReviewProposal(item)}
+                        className="inline-flex items-center gap-1.5 text-xs font-bold text-navy bg-gold hover:bg-gold-light rounded-lg px-3 py-2 transition-colors cursor-pointer shadow-2xs"
+                        title="Evaluate proposal, vote, request changes, or publish release"
+                      >
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                        Review & Publish
+                      </button>
+                    )}
                     {onViewComparison && (
                       <button
                         type="button"

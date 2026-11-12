@@ -534,8 +534,9 @@ export async function getRevisionRequestsQueue() {
   return data;
 }
 
+/** Legacy share queue (410) — use Access Management V2 pending requests. */
 export async function getAccessRequestsQueue() {
-  const { data } = await client.get("/sharing/access-requests/queue/");
+  const { data } = await client.get("/access-control/requests/", { params: { status: "pending" } });
   return data;
 }
 
@@ -581,8 +582,31 @@ export async function proposeRevision(datasetId, payload) {
   return data;
 }
 
+/**
+ * Legacy share vote (410). Prefer reviewing in Access Management.
+ * Maps approve/reject to a bulk V2 review when still called.
+ */
 export async function voteAccessRequest(requestId, payload) {
-  const { data } = await client.post(`/sharing/access-requests/${requestId}/vote/`, payload);
+  const raw =
+    typeof payload === "string"
+      ? payload
+      : payload?.decision || payload?.vote || payload?.status;
+  const decision =
+    raw === "approved" || raw === "approve"
+      ? "approved"
+      : raw === "rejected" || raw === "reject"
+        ? "rejected"
+        : raw;
+  const { data: detail } = await client.get(`/access-control/requests/${requestId}/`);
+  const decisions = (detail.items || []).map((item) => ({
+    permission: item.permission,
+    decision,
+    reason: payload?.comment || payload?.reason || "",
+  }));
+  const { data } = await client.post(`/access-control/requests/${requestId}/review/`, {
+    decisions,
+    comment: payload?.comment || "",
+  });
   return data;
 }
 

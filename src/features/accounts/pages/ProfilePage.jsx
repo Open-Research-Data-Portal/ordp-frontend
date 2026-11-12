@@ -17,6 +17,7 @@ import Select from "../../../components/ui/Select";
 import ResearchInterests from "../../../components/ui/ResearchInterests";
 import Button from "../../../components/ui/Button";
 import { useAuth } from "../../../context/useAuth";
+import { useConfirm } from "../../../context/ConfirmContext";
 import * as authApi from "../api/authApi";
 import {
   asEntityId,
@@ -178,6 +179,7 @@ function SectionCard({
 
 export default function ProfilePage() {
   const { user, isAuthenticated, setUser } = useAuth();
+  const { confirm } = useConfirm();
   const navigate = useNavigate();
 
   const [avatarUrl, setAvatarUrl] = useState(null);
@@ -317,8 +319,13 @@ export default function ProfilePage() {
     });
   };
 
-  const handleDiscardDraft = () => {
-    if (window.confirm("Discard all unsaved edits and restore your saved profile?")) {
+  const handleDiscardDraft = async () => {
+    if (await confirm({
+      title: "Discard edits",
+      message: "Discard all unsaved edits and restore your saved profile?",
+      confirmLabel: "Discard",
+      variant: "warning",
+    })) {
       clearLocalDraft(user);
       setHasDraft(false);
       window.location.reload();

@@ -161,7 +161,7 @@ export default function NotificationsPage() {
       handleMarkRead(notification.id);
     }
     if (notification.request_id) {
-      navigate(`/sharing/access-requests/${notification.request_id}/decision`);
+      navigate(`/access-management/requests/${notification.request_id}`);
       return;
     }
     const datasetId = getDatasetIdFromNotification(notification);

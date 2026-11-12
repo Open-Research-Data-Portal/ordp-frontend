@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import * as api from "../api/accessControl";
+import { useConfirm } from "../context/ConfirmContext";
 import { accessError } from "../utils/accessError";
 
 const field = "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-amber-600 focus:outline-none";
@@ -8,6 +9,7 @@ const secondary = "rounded-lg border border-slate-300 px-4 py-2 text-sm font-med
 const describeError = (error) => accessError(error, "This request could not be completed.");
 
 export default function GroupRequestsPanel({ requests, catalog, datasets, canReview, user, onChanged, openRequestId, allowSelfRequests = true }) {
+  const { confirm } = useConfirm();
   const [groups, setGroups] = useState([]);
   const [canRequestGroupPermission, setCanRequestGroupPermission] = useState(false);
   const [selected, setSelected] = useState(null);
@@ -85,7 +87,7 @@ export default function GroupRequestsPanel({ requests, catalog, datasets, canRev
     setError("");
   };
 
-  const submitDecision = () => {
+  const submitDecision = async () => {
     if (!selected) return;
     if (selected.kind === "group_membership" && !membershipDecision) {
       setError("Choose Approve or Reject.");
@@ -98,7 +100,12 @@ export default function GroupRequestsPanel({ requests, catalog, datasets, canRev
     const highImpact = Object.entries(decisions).some(([code, value]) =>
       value.decision === "approved" && /delete|permission|manage/.test(code)
     );
-    if (highImpact && !window.confirm("This grants a high-impact permission to the group. Continue?")) return;
+    if (highImpact && !(await confirm({
+      title: "High-impact permission",
+      message: "This grants a high-impact permission to the group. Continue?",
+      confirmLabel: "Continue",
+      variant: "warning",
+    }))) return;
     const body = selected.kind === "group_membership"
       ? { decision: membershipDecision, comment }
       : { decisions: selected.items.map((item) => ({

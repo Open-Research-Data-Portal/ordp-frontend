@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Download, Eye, Pencil, Trash2 } from "lucide-react";
 import DashboardShell from "../components/dashboard/DashboardShell";
+import { useConfirm } from "../context/ConfirmContext";
 import * as access from "../api/accessControl";
 import { accessError } from "../utils/accessError";
 
@@ -9,6 +10,7 @@ const button = "inline-flex items-center gap-2 rounded-lg border border-slate-30
 const input = "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-amber-600 focus:outline-none";
 
 export default function SharedAccessPage() {
+  const { confirm } = useConfirm();
   const [resources, setResources] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -60,8 +62,13 @@ export default function SharedAccessPage() {
     });
   };
 
-  const deleteDataset = (item) => {
-    if (!window.confirm(`Delete "${item.title}"? This removes it from the portal.`)) return;
+  const deleteDataset = async (item) => {
+    if (!(await confirm({
+      title: "Delete dataset",
+      message: `Delete "${item.title}"? This removes it from the portal.`,
+      confirmLabel: "Delete",
+      variant: "danger",
+    }))) return;
     perform(() => access.deleteSharedDataset(item.id));
   };
 

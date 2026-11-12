@@ -19,9 +19,11 @@ import {
   X,
   Trash2,
   Upload,
+  GitBranch,
 } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import { StatusBadge } from "../../../components/dashboard/dashboardUi";
+import IdentifierBadge from "../../../components/identifiers/IdentifierBadge";
 import { useAuth } from "../../../context/useAuth";
 import { isReviewer, isAdmin, getDashboardPath } from "../../../utils/userRoles";
 import { useToast } from "../../../context/ToastContext.jsx";
@@ -335,7 +337,19 @@ export default function ReviewDatasetPage() {
           {/* Header Card */}
           <div className="bg-white rounded-2xl border border-border p-6 shadow-xs">
             <div className="flex items-start justify-between gap-3 mb-3">
-              
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1 text-xs font-mono font-bold text-navy bg-slate-100 px-2.5 py-1 rounded-lg">
+                  <GitBranch className="w-3 h-3 text-gold-dark" />
+                  v{dataset.version || "1.0.0"}
+                </span>
+                {(dataset.concept_pid || dataset.ordp_pid) && (
+                  <IdentifierBadge
+                    scheme="ordp"
+                    role="concept"
+                    pid={dataset.concept_pid || dataset.ordp_pid}
+                  />
+                )}
+              </div>
               <StatusBadge status={String(dataset.status || "pending").toLowerCase()} />
             </div>
             <h1 className="text-2xl font-serif font-bold text-navy mb-3 leading-snug">

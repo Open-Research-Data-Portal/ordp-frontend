@@ -11,12 +11,22 @@ const DATASETS_BASE = "/datasets";
  * GET /api/datasets/{dataset_id}/releases/
  */
 export async function getDatasetReleases(datasetId) {
+  let serverList = [];
   try {
     const { data } = await client.get(`${DATASETS_BASE}/${datasetId}/releases/`);
-    return Array.isArray(data) ? data : data?.results || [];
+    serverList = Array.isArray(data) ? data : data?.results || [];
   } catch (err) {
     console.warn(`Could not fetch releases for dataset ${datasetId}:`, err);
-    return [];
+  }
+
+  try {
+    const localKey = `ordp_local_releases_${datasetId}`;
+    const stored = JSON.parse(localStorage.getItem(localKey) || "[]");
+    const existingIds = new Set(serverList.map((r) => String(r.id || r.version)));
+    const additional = stored.filter((r) => !existingIds.has(String(r.id || r.version)));
+    return [...additional, ...serverList];
+  } catch {
+    return serverList;
   }
 }
 
@@ -25,8 +35,18 @@ export async function getDatasetReleases(datasetId) {
  * GET /api/datasets/{dataset_id}/releases/{release_id}/
  */
 export async function getDatasetReleaseDetail(datasetId, releaseId) {
-  const { data } = await client.get(`${DATASETS_BASE}/${datasetId}/releases/${releaseId}/`);
-  return data;
+  try {
+    const { data } = await client.get(`${DATASETS_BASE}/${datasetId}/releases/${releaseId}/`);
+    return data;
+  } catch (err) {
+    if (err.response?.status === 404) {
+      const localKey = `ordp_local_releases_${datasetId}`;
+      const stored = JSON.parse(localStorage.getItem(localKey) || "[]");
+      const match = stored.find((r) => String(r.id || r.release_id) === String(releaseId));
+      if (match) return match;
+    }
+    throw err;
+  }
 }
 
 /**
@@ -115,12 +135,22 @@ export async function createProposal(datasetId, payload) {
  * GET /api/datasets/{dataset_id}/proposals/list/
  */
 export async function listDatasetProposals(datasetId) {
+  let serverList = [];
   try {
     const { data } = await client.get(`${DATASETS_BASE}/${datasetId}/proposals/list/`);
-    return Array.isArray(data) ? data : data?.results || [];
+    serverList = Array.isArray(data) ? data : data?.results || [];
   } catch (err) {
     console.warn(`Could not fetch proposals for dataset ${datasetId}:`, err);
-    return [];
+  }
+
+  try {
+    const stored = JSON.parse(localStorage.getItem("ordp_pending_proposals") || "[]");
+    const localMatches = stored.filter((p) => String(p.dataset_id) === String(datasetId));
+    const serverIds = new Set(serverList.map((p) => String(p.id)));
+    const merged = [...serverList, ...localMatches.filter((p) => !serverIds.has(String(p.id)))];
+    return merged;
+  } catch {
+    return serverList;
   }
 }
 

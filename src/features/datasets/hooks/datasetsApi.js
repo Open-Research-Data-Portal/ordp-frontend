@@ -529,8 +529,23 @@ export async function moderateDataset(datasetId, payload) {
 }
 
 export async function getContentUpdateQueue() {
-  const { data } = await client.get("/admin-panel/content-updates/queue/");
-  return data;
+  let serverList = [];
+  try {
+    const { data } = await client.get("/admin-panel/content-updates/queue/");
+    serverList = Array.isArray(data) ? data : data?.results || [];
+  } catch (err) {
+    console.warn("Could not load content updates queue from server:", err);
+  }
+
+  // Merge with locally routed proposals
+  try {
+    const stored = JSON.parse(localStorage.getItem("ordp_pending_proposals") || "[]");
+    const existingIds = new Set(serverList.map((i) => String(i.id || i.update_id)));
+    const additional = stored.filter((p) => !existingIds.has(String(p.id || p.update_id)));
+    return [...additional, ...serverList];
+  } catch {
+    return serverList;
+  }
 }
 
 export async function getRevisionRequestsQueue() {

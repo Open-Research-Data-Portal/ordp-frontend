@@ -983,5 +983,9 @@ export async function getDatasets(params) {
   return data;
 }
 
+// Re-export ORDP V2 Versioning, Releases, PIDs, and Proposals APIs
+export * from "../../../api/v2VersioningApi";
+
+
 
 

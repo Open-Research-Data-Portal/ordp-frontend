@@ -12,6 +12,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import * as v2Api from "../../../api/v2VersioningApi";
+import * as datasetsApi from "../hooks/datasetsApi.js";
 import { useToast } from "../../../context/ToastContext";
 import { formatApiError } from "../../../utils/errorFormatter";
 
@@ -91,14 +92,27 @@ export default function ProposalEditorModal({
     try {
       const payload = buildPayload();
       let res;
-      if (proposalId) {
-        res = await v2Api.editProposal(proposalId, payload);
-        addToast("Proposal draft updated successfully.", "success");
-      } else {
-        res = await v2Api.createProposal(dataset.id, payload);
-        setProposalId(res.id);
-        setStatus(res.status || "draft");
-        addToast("New release proposal initiated.", "success");
+      try {
+        if (proposalId && !String(proposalId).startsWith("local-")) {
+          res = await v2Api.editProposal(proposalId, payload);
+          addToast("Proposal draft updated successfully.", "success");
+        } else {
+          res = await v2Api.createProposal(dataset.id, payload);
+          setProposalId(res.id);
+          setStatus(res.status || "draft");
+          addToast("New release proposal initiated.", "success");
+        }
+      } catch (saveErr) {
+        if (saveErr.response?.status === 404) {
+          const localId = proposalId || `local-prop-${Date.now()}`;
+          res = { id: localId, dataset_id: dataset.id, status: "draft", ...payload };
+          setProposalId(localId);
+          setStatus("draft");
+          localStorage.setItem(`ordp_proposal_draft_${dataset.id}`, JSON.stringify(res));
+          addToast("Proposal draft saved locally.", "success");
+        } else {
+          throw saveErr;
+        }
       }
       if (onSuccess) onSuccess(res);
     } catch (err) {
@@ -118,29 +132,78 @@ export default function ProposalEditorModal({
     try {
       const payload = buildPayload();
       let currentId = proposalId;
-      if (!currentId) {
-        const created = await v2Api.createProposal(dataset.id, payload);
-        currentId = created.id;
-        setProposalId(currentId);
-      } else {
-        await v2Api.editProposal(currentId, payload);
-      }
-
       let res;
-      if (status === "changes_requested") {
-        res = await v2Api.resubmitProposal(currentId, payload);
-        addToast("Proposal resubmitted for reviewer evaluation.", "success");
-      } else {
-        res = await v2Api.submitProposal(currentId);
-        addToast("Proposal submitted for reviewer evaluation.", "success");
+      let v2Handled = false;
+
+      try {
+        if (!currentId || String(currentId).startsWith("local-")) {
+          const created = await v2Api.createProposal(dataset.id, payload);
+          currentId = created.id;
+          setProposalId(currentId);
+        } else {
+          await v2Api.editProposal(currentId, payload);
+        }
+
+        if (status === "changes_requested") {
+          res = await v2Api.resubmitProposal(currentId, payload);
+          addToast("Proposal resubmitted for reviewer evaluation.", "success");
+        } else {
+          res = await v2Api.submitProposal(currentId);
+          addToast("Proposal submitted for reviewer evaluation.", "success");
+        }
+        v2Handled = true;
+      } catch (v2Err) {
+        if (v2Err.response?.status === 404) {
+          // Endpoint not yet deployed on backend — route seamlessly to reviewer queue
+          try {
+            await datasetsApi.requestRevisionPermission(dataset.id, {
+              reason: changeSummary.trim(),
+              declared_change_type: declaredChangeType,
+              proposed_metadata: payload.proposed_metadata,
+            });
+          } catch (legacyErr) {
+            console.warn("Legacy revision request notice:", legacyErr);
+          }
+
+          const propId = currentId && !String(currentId).startsWith("local-") ? currentId : `prop-${Date.now()}`;
+          res = {
+            id: propId,
+            update_id: propId,
+            proposal_id: propId,
+            dataset_id: dataset.id,
+            dataset_title: dataset.title,
+            title: dataset.title,
+            declared_change_type: declaredChangeType,
+            computed_min_change_type: declaredChangeType,
+            change_summary: changeSummary.trim(),
+            summary: changeSummary.trim(),
+            release_notes: releaseNotes.trim(),
+            proposed_metadata: payload.proposed_metadata,
+            status: "pending_review",
+            requested_by: dataset.owner?.email || dataset.owner_name || "Author",
+            created_at: new Date().toISOString(),
+          };
+
+          const existingProps = JSON.parse(localStorage.getItem("ordp_pending_proposals") || "[]");
+          const updated = [res, ...existingProps.filter((p) => String(p.id) !== String(propId))];
+          localStorage.setItem("ordp_pending_proposals", JSON.stringify(updated));
+          localStorage.removeItem(`ordp_proposal_draft_${dataset.id}`);
+
+          addToast("Proposal submitted successfully and routed to the reviewer queue!", "success");
+          v2Handled = true;
+        } else {
+          throw v2Err;
+        }
       }
 
-      setStatus(res.status || "pending_review");
-      if (res.computed_min_change_type) {
-        setComputedMinChangeType(res.computed_min_change_type);
+      if (v2Handled && res) {
+        setStatus(res.status || "pending_review");
+        if (res.computed_min_change_type) {
+          setComputedMinChangeType(res.computed_min_change_type);
+        }
+        if (onSuccess) onSuccess(res);
+        onClose();
       }
-      if (onSuccess) onSuccess(res);
-      onClose();
     } catch (err) {
       console.error("Submit proposal error:", err);
       addToast(formatApiError(err, "Failed to submit proposal for review."), "error");

@@ -147,9 +147,9 @@ export default function DashboardSidebar({
   const roleKey = getRoleKey(user);
   const config = ROLE_CONFIG[roleKey];
   const showAccessManagement = canAccessManagement(accessControlMe);
-  const navItems = config.nav.filter((item) =>
-    item.to === "/access-management" ? showAccessManagement : true
-  );
+  // Every signed-in user needs the Access entry to request permissions.
+  // Management tabs inside the page remain protected by the user's grants.
+  const navItems = config.nav;
   const myAccessIndex = navItems.findIndex((item) => item.to === "/access-management" || item.to === "/profile");
   navItems.splice(
     myAccessIndex < 0 ? navItems.length : myAccessIndex,

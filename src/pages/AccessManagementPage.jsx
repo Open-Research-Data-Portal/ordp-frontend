@@ -287,9 +287,11 @@ export default function AccessManagementPage() {
   const visibleRequests = useMemo(
     () =>
       requests.filter(
-        (r) => r.kind === "permission" && (statusFilter === "all" || r.status === statusFilter)
+        (r) =>
+          r.kind === "permission" &&
+          (!adminAccount || statusFilter === "all" || r.status === statusFilter)
       ),
-    [requests, statusFilter]
+    [requests, statusFilter, adminAccount]
   );
 
   const pendingRequests = useMemo(
@@ -589,18 +591,20 @@ export default function AccessManagementPage() {
               <Section
                 title={adminAccount ? "Incoming requests" : "Requests"}
                 actions={
-                  <select
-                    aria-label="Request status"
-                    className={input}
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                  >
-                    {["pending", "approved", "partially_approved", "rejected", "cancelled", "all"].map((s) => (
-                      <option key={s} value={s}>
-                        {s.replaceAll("_", " ")}
-                      </option>
-                    ))}
-                  </select>
+                  adminAccount ? (
+                    <select
+                      aria-label="Request status"
+                      className={input}
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                    >
+                      {["pending", "approved", "partially_approved", "rejected", "cancelled", "all"].map((s) => (
+                        <option key={s} value={s}>
+                          {s.replaceAll("_", " ")}
+                        </option>
+                      ))}
+                    </select>
+                  ) : null
                 }
               >
                 <div className="divide-y divide-slate-100">

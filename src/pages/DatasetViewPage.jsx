@@ -29,6 +29,10 @@ import { getDatasetImage } from "../utils/datasetImage";
 import { useAuth } from "../context/useAuth";
 import { getDashboardPath } from "../utils/userRoles";
 import TabularPreview from "../components/ui/TabularPreview";
+import DatasetIdentityPanel from "../components/identifiers/DatasetIdentityPanel";
+import ReleaseHistoryList from "../features/datasets/components/ReleaseHistoryList";
+import ProposalEditorModal from "../features/datasets/components/ProposalEditorModal";
+import * as v2Api from "../api/v2VersioningApi";
 
 // ---------------------------------------------------------------------
 // DatasetViewPage — the PUBLIC read-only view a researcher lands on when
@@ -746,6 +750,12 @@ export default function DatasetViewPage() {
   const [linkCopied, setLinkCopied] = useState(false);
   const [revisionModalOpen, setRevisionModalOpen] = useState(false);
 
+  // V2 Versioning, Releases & Proposals
+  const [releases, setReleases] = useState([]);
+  const [loadingReleases, setLoadingReleases] = useState(false);
+  const [showReleaseHistory, setShowReleaseHistory] = useState(false);
+  const [proposalModalOpen, setProposalModalOpen] = useState(false);
+
   useEffect(() => {
     let isMounted = true;
 
@@ -754,7 +764,9 @@ export default function DatasetViewPage() {
       setError(false);
       try {
         const raw = await getDatasetById(id);
-        if (isMounted) setDataset(normalizeDataset(raw));
+        if (isMounted) {
+          setDataset(normalizeDataset(raw));
+        }
       } catch (err) {
         console.error("Failed to load dataset:", err);
         if (isMounted) setError(true);
@@ -763,7 +775,20 @@ export default function DatasetViewPage() {
       }
     }
 
+    async function fetchReleases() {
+      setLoadingReleases(true);
+      try {
+        const rels = await v2Api.getDatasetReleases(id);
+        if (isMounted) setReleases(rels);
+      } catch (err) {
+        console.warn("Could not load releases for dataset:", err);
+      } finally {
+        if (isMounted) setLoadingReleases(false);
+      }
+    }
+
     fetchDataset();
+    fetchReleases();
     return () => { isMounted = false; };
   }, [id]);
 
@@ -958,6 +983,29 @@ export default function DatasetViewPage() {
             </button>
           </div>
         )}
+      {/* V2 Dataset Identity Panel (Version, ORDP Concept PID, DOI, Release History Trigger) */}
+      <DatasetIdentityPanel
+        dataset={dataset}
+        currentRelease={releases?.[0]}
+        releaseCount={releases?.length || 0}
+        onOpenReleaseHistory={() => setShowReleaseHistory((prev) => !prev)}
+        onProposeNewRelease={() => setProposalModalOpen(true)}
+        canPropose={isOwner || dataset?.can_edit}
+        className="mb-6"
+      />
+
+      {/* Release History Expandable Section */}
+      {showReleaseHistory && (
+        <div className="mb-6">
+          <ReleaseHistoryList
+            datasetId={id}
+            releases={releases}
+            loading={loadingReleases}
+            currentReleaseId={releases?.[0]?.id}
+          />
+        </div>
+      )}
+
       {/* Header & About Card restructured as requested:
           Left side: About datasets part + download button below it.
           Right side: Title at top, then image below it, with nothing below the image.
@@ -1201,6 +1249,18 @@ export default function DatasetViewPage() {
       <RevisionRequestModal
         dataset={dataset}
         onClose={() => setRevisionModalOpen(false)}
+      />
+    )}
+
+    {proposalModalOpen && (
+      <ProposalEditorModal
+        dataset={dataset}
+        currentVersion={dataset.dataExplorer?.version || releases?.[0]?.version || "1.0.0"}
+        onClose={() => setProposalModalOpen(false)}
+        onSuccess={async () => {
+          const rels = await v2Api.getDatasetReleases(id);
+          setReleases(rels);
+        }}
       />
     )}
     </DashboardAwareLayout>

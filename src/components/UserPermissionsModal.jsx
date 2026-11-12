@@ -201,7 +201,7 @@ export default function UserPermissionsModal({
                             <label key={permission.code} className={`flex items-start gap-2 rounded-lg border p-3 text-sm ${checked ? "border-emerald-200 bg-emerald-50" : "border-slate-200 bg-white"}`}>
                               <input
                                 type="checkbox"
-                                className="mt-1"
+                                className="peer sr-only"
                                 checked={checked}
                                 disabled={busy || !permission.enforced || (needsResourceId && !resourceId)}
                                 onChange={(event) => setSelected((value) =>
@@ -210,6 +210,18 @@ export default function UserPermissionsModal({
                                     : value.filter((code) => code !== permission.code)
                                 )}
                               />
+                              <span
+                                aria-hidden="true"
+                                className={`relative mt-0.5 h-6 w-11 shrink-0 rounded-full transition-colors ${
+                                  checked ? "bg-emerald-600" : "bg-slate-300"
+                                } peer-focus-visible:ring-2 peer-focus-visible:ring-amber-500 peer-disabled:opacity-50`}
+                              >
+                                <span
+                                  className={`absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                                    checked ? "translate-x-5" : "translate-x-0"
+                                  }`}
+                                />
+                              </span>
                               <span>
                                 <span className="font-medium text-slate-900">{permission.name}</span>
                                 {!permission.enforced && <span className="ml-2 text-xs font-semibold text-amber-700">Coming later</span>}

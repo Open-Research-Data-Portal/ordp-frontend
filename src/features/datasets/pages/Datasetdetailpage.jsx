@@ -22,6 +22,10 @@ import * as datasetsApi from "../hooks/datasetsApi";
 import { getDownloadUrl, shareDatasetWith } from "../../../api/sharing";
 import TabularPreview from "../../../components/ui/TabularPreview";
 import { getDatasetImage } from "../../../utils/datasetImage";
+import DatasetIdentityPanel from "../../../components/identifiers/DatasetIdentityPanel";
+import ReleaseHistoryList from "../components/ReleaseHistoryList";
+import ProposalEditorModal from "../components/ProposalEditorModal";
+import * as v2Api from "../../../api/v2VersioningApi";
 
 // ---------------------------------------------------------------------
 // DatasetDetailPage — the OWNER'S view of their own dataset.
@@ -454,6 +458,11 @@ export default function DatasetDetailPage() {
   const [submittingUnarchive, setSubmittingUnarchive] = useState(false);
   const [isUnarchivingRequested, setIsUnarchivingRequested] = useState(false);
 
+  // V2 Versioning & Release Proposals
+  const [releases, setReleases] = useState([]);
+  const [loadingReleases, setLoadingReleases] = useState(false);
+  const [showReleaseHistory, setShowReleaseHistory] = useState(false);
+  const [proposalModalOpen, setProposalModalOpen] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -470,7 +479,21 @@ export default function DatasetDetailPage() {
         if (isMounted) setLoading(false);
       }
     };
+
+    const loadReleases = async () => {
+      setLoadingReleases(true);
+      try {
+        const rels = await v2Api.getDatasetReleases(id);
+        if (isMounted) setReleases(rels);
+      } catch (err) {
+        console.warn("Could not load releases for dataset:", err);
+      } finally {
+        if (isMounted) setLoadingReleases(false);
+      }
+    };
+
     load();
+    loadReleases();
     return () => {
       isMounted = false;
     };
@@ -677,6 +700,29 @@ export default function DatasetDetailPage() {
             ← Back to My Datasets
           </button>
         </div>
+
+        {/* V2 Dataset Identity Panel */}
+        <DatasetIdentityPanel
+          dataset={dataset}
+          currentRelease={releases?.[0]}
+          releaseCount={releases?.length || 0}
+          onOpenReleaseHistory={() => setShowReleaseHistory((prev) => !prev)}
+          onProposeNewRelease={() => setProposalModalOpen(true)}
+          canPropose={isOwner}
+          className="mb-6"
+        />
+
+        {/* Release History List */}
+        {showReleaseHistory && (
+          <div className="mb-6">
+            <ReleaseHistoryList
+              datasetId={id}
+              releases={releases}
+              loading={loadingReleases}
+              currentReleaseId={releases?.[0]?.id}
+            />
+          </div>
+        )}
 
         {/* Header */}
         <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
@@ -1685,6 +1731,18 @@ export default function DatasetDetailPage() {
                 : "Share request submitted for approval.",
               "success"
             );
+          }}
+        />
+      )}
+
+      {proposalModalOpen && (
+        <ProposalEditorModal
+          dataset={dataset}
+          currentVersion={dataset.version || releases?.[0]?.version || "1.0.0"}
+          onClose={() => setProposalModalOpen(false)}
+          onSuccess={async () => {
+            const rels = await v2Api.getDatasetReleases(id);
+            setReleases(rels);
           }}
         />
       )}

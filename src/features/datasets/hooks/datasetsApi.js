@@ -815,6 +815,11 @@ export async function getDownloadUrl(datasetId) {
   return data?.download_url;
 }
 
+export async function viewDatasetFile(datasetId, fileId) {
+  const { data } = await client.get(`${DATASETS_BASE}/${datasetId}/files/${fileId}/view/`);
+  return data;
+}
+
 export async function suggestThumbnail(datasetId, payload) {
   if (payload instanceof FormData) {
     const { data } = await client.post(`/admin-panel/datasets/${datasetId}/thumbnail-suggestion/`, payload);

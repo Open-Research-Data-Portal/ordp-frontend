@@ -102,26 +102,31 @@ export default function DatasetGrantActions({ datasetId, permissions = [], isOwn
           <p className="mb-2 inline-flex items-center gap-2 text-sm font-medium text-slate-800"><History size={15} /> Versions</p>
           {!versions.length && <p className="text-sm text-slate-500">No versions yet.</p>}
           <ul className="space-y-2">
-            {versions.map((version) => (
-              <li key={version.id} className="flex items-center justify-between gap-3 text-sm">
-                <span>Version {version.version_number} · {new Date(version.created_at).toLocaleDateString()}</span>
-                {canRestore && (
-                  <button
-                    type="button"
-                    className={button}
-                    disabled={busy}
-                    onClick={() => run(async () => {
-                      await datasetsApi.restoreDatasetVersion(datasetId, version.id);
-                      const rows = await datasetsApi.getDatasetVersions(datasetId);
-                      setVersions(Array.isArray(rows) ? rows : []);
-                      setMessage("Version restored.");
-                    })}
-                  >
-                    <RotateCcw size={15} /> Restore
-                  </button>
-                )}
-              </li>
-            ))}
+            {versions.map((version) => {
+              const legacy = Boolean(version.version_number);
+              const label = legacy ? version.version_number : version.version;
+              const when = legacy ? version.created_at : version.published_at;
+              return (
+                <li key={version.id} className="flex items-center justify-between gap-3 text-sm">
+                  <span>Version {label || "—"}{when ? ` · ${new Date(when).toLocaleDateString()}` : ""}</span>
+                  {canRestore && legacy && (
+                    <button
+                      type="button"
+                      className={button}
+                      disabled={busy}
+                      onClick={() => run(async () => {
+                        await datasetsApi.restoreDatasetVersion(datasetId, version.id);
+                        const rows = await datasetsApi.getDatasetVersions(datasetId);
+                        setVersions(Array.isArray(rows) ? rows : []);
+                        setMessage("Version restored.");
+                      })}
+                    >
+                      <RotateCcw size={15} /> Restore
+                    </button>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}

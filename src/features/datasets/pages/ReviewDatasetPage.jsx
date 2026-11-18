@@ -26,6 +26,7 @@ import { useAuth } from "../../../context/useAuth";
 import { isReviewer, isAdmin, getDashboardPath } from "../../../utils/userRoles";
 import { useToast } from "../../../context/ToastContext.jsx";
 import * as datasetsApi from "../hooks/datasetsApi.js";
+import { getMyPermissions } from "../../../api/accessControl";
 import { formatApiError } from "../../../utils/errorFormatter";
 
 const EVALUATION_QUESTIONS = [
@@ -108,11 +109,24 @@ export default function ReviewDatasetPage() {
   const navigate = useNavigate();
   const { addToast } = useToast();
 
-  // Role validation
+  const [canPublish, setCanPublish] = useState(false);
+
+  // Allowance validation. dataset.approve or dataset.publish is enough to open this page.
   useEffect(() => {
-    if (user && !isReviewer(user) && !isAdmin(user)) {
-      navigate(getDashboardPath(user), { replace: true });
-    }
+    if (!user) return;
+    let active = true;
+    getMyPermissions()
+      .then((me) => {
+        if (!active) return;
+        const codes = new Set((me?.effective || []).map((row) => row.code));
+        setCanPublish(codes.has("dataset.publish"));
+        const allowed = isReviewer(user) || isAdmin(user) || codes.has("dataset.approve") || codes.has("dataset.publish");
+        if (!allowed) navigate(getDashboardPath(user), { replace: true });
+      })
+      .catch(() => {
+        if (active && !isReviewer(user) && !isAdmin(user)) navigate(getDashboardPath(user), { replace: true });
+      });
+    return () => { active = false; };
   }, [user, navigate]);
 
   const [dataset, setDataset] = useState(null);
@@ -605,6 +619,28 @@ export default function ReviewDatasetPage() {
                 {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                 Approve Dataset
               </button>
+              {dataset?.ready_to_publish && canPublish && (
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={async () => {
+                    setSubmitting(true);
+                    try {
+                      await datasetsApi.publishDataset(datasetId);
+                      addToast("Dataset published.", "success");
+                      const data = await datasetsApi.getDatasetDetail(datasetId);
+                      setDataset(data);
+                    } catch (err) {
+                      addToast(formatApiError(err, "Could not publish this dataset."), "error");
+                    } finally {
+                      setSubmitting(false);
+                    }
+                  }}
+                  className="w-full inline-flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold rounded-xl py-3 shadow-xs transition disabled:opacity-40"
+                >
+                  Publish dataset
+                </button>
+              )}
 
               <div className="grid grid-cols-2 gap-2">
                 <button

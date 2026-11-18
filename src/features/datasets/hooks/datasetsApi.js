@@ -413,6 +413,66 @@ export async function getDatasetVersions(datasetId) {
   return data;
 }
 
+export async function restoreDatasetVersion(datasetId, versionId) {
+  const { data } = await client.post(`${DATASETS_BASE}/${datasetId}/versions/${versionId}/restore/`);
+  return data;
+}
+
+export async function downloadDatasetFile(datasetId, fileId) {
+  const { data } = await client.get(`${DATASETS_BASE}/${datasetId}/files/${fileId}/download/`);
+  return data;
+}
+
+export async function publishDataset(datasetId) {
+  const { data } = await client.post(`/admin-panel/${datasetId}/publish/`);
+  return data;
+}
+
+export async function uploadExistingDatasetFile(datasetId, file) {
+  const session = await initExistingDraftUpload(datasetId);
+  const sessionId = session.upload_session_id;
+  const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+  const fileChecksum = Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  let chunkSize = 5 * 1024 * 1024;
+  let totalChunks = Math.max(1, Math.ceil(file.size / chunkSize));
+  try {
+    const prep = await prepareUpload(sessionId, {
+      filename: file.name,
+      file_size: file.size,
+      file_checksum: fileChecksum,
+    });
+    if (prep?.chunk_size) chunkSize = prep.chunk_size;
+    if (prep?.total_chunks) totalChunks = prep.total_chunks;
+  } catch (error) {
+    if (error?.response?.status !== 404) throw error;
+  }
+  for (let index = 0; index < totalChunks; index += 1) {
+    const blob = file.slice(index * chunkSize, Math.min((index + 1) * chunkSize, file.size));
+    const chunkDigest = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
+    const checksum = Array.from(new Uint8Array(chunkDigest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+    await uploadChunk(sessionId, index, blob, checksum, {
+      filename: file.name,
+      fileSize: file.size,
+      fileChecksum,
+    });
+  }
+  const fileType = (file.name.split(".").pop() || "bin").toLowerCase();
+  await completeUpload(sessionId, {
+    datasetId,
+    filename: file.name,
+    fileType,
+    isStructured: false,
+    fileSize: file.size,
+    fileChecksum,
+  });
+  const { data } = await client.patch(`${DATASETS_BASE}/${datasetId}/update/`, {
+    upload_session_id: sessionId,
+    filename: file.name,
+    file_type: fileType,
+  });
+  return data;
+}
+
 export async function getAdminPendingReviews() {
   const { data } = await client.get(`${DATASETS_BASE}/admin/pending-reviews/`);
   return data;

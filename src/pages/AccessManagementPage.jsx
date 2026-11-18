@@ -8,6 +8,7 @@ import GroupRequestsPanel from "../components/GroupRequestsPanel";
 import GroupsPanel from "../components/GroupsPanel";
 import UserPermissionsModal from "../components/UserPermissionsModal";
 import PermissionCatalog from "../components/PermissionCatalog";
+import ResourceManagementPanel from "../components/ResourceManagementPanel";
 import UserManagementAudit from "../components/UserManagementAudit";
 import { useAuth } from "../context/useAuth";
 import { useConfirm } from "../context/ConfirmContext";
@@ -23,6 +24,7 @@ const tabs = [
   "Access Requests",
   "Group Requests",
   "Resources & Permissions",
+  "Projects & Collections",
   "Permission Catalog",
   "Audit History",
 ];
@@ -89,6 +91,9 @@ export default function AccessManagementPage() {
   const [userModalOpen, setUserModalOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [resource, setResource] = useState(null);
+  const [resourceKind, setResourceKind] = useState("dataset");
+  const [datasetFiles, setDatasetFiles] = useState([]);
+  const [fileDatasetId, setFileDatasetId] = useState("");
   const [resourceDirty, setResourceDirty] = useState(false);
   const [filter, setFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("pending");
@@ -302,8 +307,9 @@ export default function AccessManagementPage() {
     setError("");
     setNotice("");
     try {
-      await api.saveResourceMatrix("dataset", resource.resource.id, edits);
-      setResource(await api.getResourceAccess("dataset", resource.resource.id));
+      const kind = resource.resource.type || resourceKind;
+      await api.saveResourceMatrix(kind, resource.resource.id, edits);
+      setResource(await api.getResourceAccess(kind, resource.resource.id));
       setNotice("Permissions saved.");
       return true;
     } catch (err) {
@@ -336,6 +342,10 @@ export default function AccessManagementPage() {
   const visibleTabs = tabs.filter((name) => {
     if (name === "Overview" || name === "Users" || name === "Groups" || name === "Resources & Permissions") {
       return manager || Boolean(accessControlMe?.can_view_users);
+    }
+    if (name === "Projects & Collections") {
+      const codes = new Set((accessControlMe?.effective || []).map((row) => row.code));
+      return manager || ["project.view", "project.create", "project.edit", "project.delete", "project.member.add", "project.member.remove", "collection.view", "collection.create", "collection.edit", "collection.delete"].some((code) => codes.has(code));
     }
     if (name === "Audit History") return Boolean(accessControlMe?.can_view_audit) || canExportAudit;
     return true;
@@ -878,9 +888,58 @@ export default function AccessManagementPage() {
           </div>
         )}
 
+        {tab === "Projects & Collections" && (
+          <ResourceManagementPanel
+            effective={accessControlMe?.effective || []}
+            users={users}
+            projects={projects}
+            collections={collections}
+            confirm={confirm}
+            onChanged={refresh}
+          />
+        )}
+
         {tab === "Resources & Permissions" && manager && (
-          <Section title="Dataset access">
-            <div className="max-w-lg">
+          <Section title="Resource access">
+            <div className="grid max-w-3xl gap-3 sm:grid-cols-2">
+              <select
+                aria-label="Resource kind"
+                className={input}
+                value={resourceKind}
+                onChange={async (event) => {
+                  if (resourceDirty && !(await confirm({
+                    title: "Discard changes",
+                    message: "Discard unsaved permission changes?",
+                    confirmLabel: "Discard",
+                    variant: "warning",
+                  }))) return;
+                  setResourceKind(event.target.value);
+                  setResource(null);
+                  setDatasetFiles([]);
+                  setFileDatasetId("");
+                }}
+              >
+                <option value="dataset">Dataset</option>
+                <option value="dataset_file">Dataset file</option>
+                <option value="project">Project</option>
+                <option value="collection">Collection</option>
+              </select>
+              {resourceKind === "dataset_file" && (
+                <select
+                  aria-label="Dataset for files"
+                  className={input}
+                  value={fileDatasetId}
+                  onChange={async (event) => {
+                    const datasetId = event.target.value;
+                    setFileDatasetId(datasetId);
+                    setResource(null);
+                    setDatasetFiles(datasetId ? await api.listDatasetFiles(datasetId) : []);
+                  }}
+                >
+                  <option value="">Select a dataset</option>
+                  {datasets.map((dataset) => <option key={dataset.id} value={dataset.id}>{dataset.title}</option>)}
+                </select>
+              )}
               <select
                 aria-label="Select resource"
                 className={input}
@@ -893,15 +952,13 @@ export default function AccessManagementPage() {
                     variant: "warning",
                   }))) return;
                   perform(async () => {
-                    setResource(e.target.value ? await api.getResourceAccess("dataset", e.target.value) : null);
+                    setResource(e.target.value ? await api.getResourceAccess(resourceKind, e.target.value) : null);
                   }, "");
                 }}
               >
-                <option value="">Select a dataset</option>
-                {datasets.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.title}
-                  </option>
+                <option value="">Select a {resourceKind.replaceAll("_", " ")}</option>
+                {(resourceKind === "dataset" ? datasets : resourceKind === "project" ? projects : resourceKind === "collection" ? collections : datasetFiles).map((item) => (
+                  <option key={item.id} value={item.id}>{item.title || item.name}</option>
                 ))}
               </select>
             </div>
@@ -913,6 +970,7 @@ export default function AccessManagementPage() {
                   users={users}
                   groups={groups}
                   catalog={catalog}
+                  resourceType={resource.resource.type || resourceKind}
                   onSave={saveMatrix}
                   onDirtyChange={setResourceDirty}
                   disabled={busy}

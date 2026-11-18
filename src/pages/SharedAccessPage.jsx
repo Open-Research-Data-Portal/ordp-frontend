@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Download, Eye, Pencil, Trash2 } from "lucide-react";
 import DashboardShell from "../components/dashboard/DashboardShell";
+import DatasetGrantActions from "../components/DatasetGrantActions";
 import { useConfirm } from "../context/ConfirmContext";
 import * as access from "../api/accessControl";
 import { accessError } from "../utils/accessError";
@@ -45,18 +46,23 @@ export default function SharedAccessPage() {
     }
   };
 
-  const startEdit = (id) => perform(async () => {
-    const dataset = await access.getSharedDataset(id);
-    setDraft({ title: dataset.title || "", description: dataset.description || "" });
-    setEditing({ id, hasMetadata: Boolean(dataset.metadata) });
+  const startEdit = (item) => perform(async () => {
+    const dataset = await access.getSharedDataset(item.id);
+    const permissions = new Set(item.permissions);
+    setDraft({ title: dataset.title || "", description: dataset.description || dataset.metadata?.description || "" });
+    setEditing({
+      id: item.id,
+      hasMetadata: Boolean(dataset.metadata),
+      canEditCore: permissions.has("dataset.edit"),
+    });
   });
 
   const saveEdit = (event) => {
     event.preventDefault();
     perform(async () => {
-      const payload = editing.hasMetadata
-        ? { title: draft.title, description: draft.description }
-        : { title: draft.title };
+      const payload = {};
+      if (editing.canEditCore) payload.title = draft.title;
+      if (editing.hasMetadata) payload.description = draft.description;
       await access.updateSharedDataset(editing.id, payload);
       setEditing(null);
     });
@@ -101,7 +107,7 @@ export default function SharedAccessPage() {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Link to={`/datasets/${item.id}`} className={button}><Eye size={15} /> View</Link>
-                  {permissions.has("dataset.edit") && <button type="button" className={button} disabled={busy} onClick={() => startEdit(item.id)}><Pencil size={15} /> Edit</button>}
+                  {(permissions.has("dataset.edit") || permissions.has("dataset.metadata.edit")) && <button type="button" className={button} disabled={busy} onClick={() => startEdit(item)}><Pencil size={15} /> Edit</button>}
                   {permissions.has("dataset.download") && <button type="button" className={button} disabled={busy} onClick={() => downloadDataset(item.id)}><Download size={15} /> Download</button>}
                   {permissions.has("dataset.delete") && <button type="button" className={button} disabled={busy} onClick={() => deleteDataset(item)}><Trash2 size={15} /> Delete</button>}
                 </div>
@@ -114,9 +120,10 @@ export default function SharedAccessPage() {
                   return <span key={permission.code} className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-900" title={origin}>{permission.code.replace("dataset.", "")} · {origin}</span>;
                 })}
               </div>
+              <DatasetGrantActions datasetId={item.id} permissions={[...permissions]} files={item.files || []} />
               {editing?.id === item.id && (
                 <form onSubmit={saveEdit} className="mt-5 space-y-3 border-t border-slate-200 pt-4">
-                  <label className="block text-sm font-medium text-slate-700">Title<input required className={input} value={draft.title} onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))} /></label>
+                  {editing.canEditCore && <label className="block text-sm font-medium text-slate-700">Title<input required className={input} value={draft.title} onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))} /></label>}
                   {editing.hasMetadata && <label className="block text-sm font-medium text-slate-700">Description<textarea className={input} value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} /></label>}
                   <div className="flex gap-2"><button type="submit" disabled={busy} className={button}>Save changes</button><button type="button" className={button} onClick={() => setEditing(null)}>Cancel</button></div>
                 </form>

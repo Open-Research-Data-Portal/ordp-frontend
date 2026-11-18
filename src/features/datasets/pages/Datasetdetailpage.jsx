@@ -19,6 +19,7 @@ import { useAuth } from "../../../context/useAuth";
 import { useToast } from "../../../context/ToastContext";
 import { getDashboardPath } from "../../../utils/userRoles";
 import * as datasetsApi from "../hooks/datasetsApi";
+import DatasetGrantActions from "../../../components/DatasetGrantActions";
 import { getDownloadUrl, shareDatasetWith } from "../../../api/sharing";
 import TabularPreview from "../../../components/ui/TabularPreview";
 import { getDatasetImage } from "../../../utils/datasetImage";
@@ -128,7 +129,8 @@ function normalizeFile(f) {
       f.file_type ||
       (origName ? origName.split(".").pop()?.toUpperCase() : "CSV"),
     file_size: f.file_size || 0,
-    download_url: f.download_url || f.file_key || null,
+    preview_url: f.preview_url || null,
+    can_preview: f.can_preview !== false,
     columns,
     preview_rows: rows,
     item_count: f.item_count ?? f.row_count ?? null,
@@ -946,16 +948,22 @@ export default function DatasetDetailPage() {
                           </p>
                         </div>
                       </div>
-                      {f.download_url ? (
-                        <a
-                          href={f.download_url}
-                          className="shrink-0 text-gray-400 hover:text-slate-900 transition-colors"
-                          title="Download file"
-                          aria-label="Download file"
-                        >
-                          <Download size={16} />
-                        </a>
-                      ) : null}
+                      <button
+                        type="button"
+                        className="shrink-0 text-gray-400 hover:text-slate-900 transition-colors"
+                        title="Download file"
+                        aria-label="Download file"
+                        onClick={async () => {
+                          try {
+                            const result = await datasetsApi.downloadDatasetFile(dataset.id, f.id);
+                            if (result?.download_url) window.location.assign(result.download_url);
+                          } catch (err) {
+                            addToast(err?.response?.data?.detail || "You do not have permission to download this file.", "error");
+                          }
+                        }}
+                      >
+                        <Download size={16} />
+                      </button>
                     </div>
 
                     {/* Content View Based on Data Type */}
@@ -968,10 +976,10 @@ export default function DatasetDetailPage() {
                           maxHeight={320}
                         />
                       </div>
-                    ) : isImage && f.download_url ? (
+                    ) : isImage && f.preview_url ? (
                       <div className="p-4 flex flex-col items-center justify-center bg-gray-900/5">
                         <div className="max-h-96 max-w-full overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-                          <img src={f.download_url} alt={f.filename} className="h-auto max-h-96 w-auto object-contain mx-auto" />
+                          <img src={f.preview_url} alt={f.filename || f.original_filename} className="h-auto max-h-96 w-auto object-contain mx-auto" />
                         </div>
                         <p className="text-xs text-gray-500 mt-2">Image Preview ({f.file_type?.toUpperCase() || "IMAGE"})</p>
                       </div>
@@ -984,6 +992,7 @@ export default function DatasetDetailPage() {
                 );
               })
             )}
+            <DatasetGrantActions datasetId={dataset?.id} isOwner loadVersions />
           </div>
 
           {/* Dataset Details (editable core metadata) */}

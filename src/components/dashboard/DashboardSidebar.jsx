@@ -24,7 +24,6 @@ import { useAuth } from "../../context/useAuth";
 import { getDashboardPath, isResearcher, getActiveRole } from "../../utils/userRoles";
 import logo from "../../assets/aastulogo.png";
 import { getMyResources } from "../../api/accessControl";
-import { canAccessManagement } from "../../utils/accessManagement";
 
 const ROLE_CONFIG = {
   user: {
@@ -146,38 +145,35 @@ export default function DashboardSidebar({
 
   const roleKey = getRoleKey(user);
   const config = ROLE_CONFIG[roleKey];
-  const showAccessManagement = canAccessManagement(accessControlMe);
-  const navItems = config.nav.filter((item) =>
-    item.to === "/access-management" ? showAccessManagement : true
-  );
-  const myAccessIndex = navItems.findIndex((item) => item.to === "/access-management" || item.to === "/profile");
-  navItems.splice(
-    myAccessIndex < 0 ? navItems.length : myAccessIndex,
-    0,
-    { label: "My Access", icon: KeyRound, to: "/my-access" }
-  );
+  // Every signed-in user needs the Access entry to request permissions.
+  // Management tabs inside the page remain protected by the user's grants.
+  // Work on a fresh list so dynamic entries are not duplicated across renders.
+  const navItems = [...config.nav];
+  if (roleKey !== "admin") {
+    const myAccessIndex = navItems.findIndex((item) => item.to === "/access-management" || item.to === "/profile");
+    navItems.splice(
+      myAccessIndex < 0 ? navItems.length : myAccessIndex,
+      0,
+      { label: "My Access", icon: KeyRound, to: "/my-access" }
+    );
+  }
   if (sharedResources.length) {
     const accessIndex = navItems.findIndex((item) => item.to === "/access-management" || item.to === "/my-access");
     navItems.splice(accessIndex < 0 ? navItems.length : accessIndex, 0,
       { label: "Shared with me", icon: FolderKanban, to: "/shared-with-me" });
   }
   const accessSections = [
-    { label: "Overview", tab: "Overview", show: Boolean(accessControlMe?.can_view_users) },
-    { label: "Users", tab: "Users", show: Boolean(accessControlMe?.can_view_users) },
-    { label: "Groups", tab: "Groups", show: Boolean(accessControlMe?.can_view_users) },
     {
       label: roleKey === "admin" ? "Access requests to review" : "Access requests",
       tab: "Access Requests",
-      show: Boolean(accessControlMe?.can_review_requests) || true,
+      show: true,
     },
     {
       label: roleKey === "admin" ? "Group requests to review" : "Group requests",
       tab: "Group Requests",
-      show: Boolean(accessControlMe?.can_review_requests) || true,
+      show: true,
     },
-    { label: "Dataset permissions", tab: "Resources & Permissions", show: Boolean(accessControlMe?.can_view_users) },
-    { label: "Permission catalog", tab: "Permission Catalog", show: showAccessManagement },
-    { label: "Audit History", tab: "Audit History", show: Boolean(accessControlMe?.can_view_audit) },
+    { label: "Dataset permissions", tab: "Resources & Permissions", show: roleKey === "admin" },
   ].filter((section) => section.show).map((section) => ({
     ...section, to: `/access-management?tab=${encodeURIComponent(section.tab)}`,
   }));

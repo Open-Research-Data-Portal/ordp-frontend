@@ -1271,14 +1271,24 @@ export default function AdminDashboardPage() {
                                   <div className="text-[11px] text-slate-400 font-mono">
                                     Format: {dataset.format || dataset.data_format || "Tabular/Archive"}
                                   </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => navigate(`/datasets/${id}`)}
-                                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-navy hover:bg-navy-light text-white text-xs font-semibold shadow-xs hover:shadow transition cursor-pointer"
-                                  >
-                                    More
-                                    <ArrowRight className="w-3.5 h-3.5 text-gold" />
-                                  </button>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => navigate(`/reviewer/review/${id}`)}
+                                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gold hover:bg-gold-dark text-navy text-xs font-semibold shadow-xs hover:shadow transition cursor-pointer"
+                                    >
+                                      Review
+                                      <ArrowRight className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => navigate(`/datasets/${id}`)}
+                                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-navy hover:bg-navy-light text-white text-xs font-semibold shadow-xs hover:shadow transition cursor-pointer"
+                                    >
+                                      More
+                                      <ArrowRight className="w-3.5 h-3.5 text-gold" />
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
                             </td>

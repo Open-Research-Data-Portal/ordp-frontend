@@ -600,6 +600,11 @@ export async function getAccessRequestsQueue() {
   return data;
 }
 
+export async function voteOnAccessRequest(requestId, vote) {
+  const { data } = await client.post(`/sharing/access-requests/${requestId}/vote/`, { vote });
+  return data;
+}
+
 export async function getReviewerGuidelines() {
   const { data } = await client.get("/admin-panel/dashboard/reviewer/guidelines/");
   return data;
@@ -868,6 +873,11 @@ export async function listContributors(datasetId) {
 export async function getDownloadUrl(datasetId) {
   const { data } = await client.get(`/sharing/${datasetId}/download/`);
   return data?.download_url;
+}
+
+export async function viewDatasetFile(datasetId, fileId) {
+  const { data } = await client.get(`${DATASETS_BASE}/${datasetId}/files/${fileId}/view/`);
+  return data;
 }
 
 export async function suggestThumbnail(datasetId, payload) {

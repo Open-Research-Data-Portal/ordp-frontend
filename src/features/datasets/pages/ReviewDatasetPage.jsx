@@ -70,6 +70,45 @@ const SCORE_LABELS = {
   5: "5 · Excellent",
 };
 
+const DECISION_COPY = {
+  approved: "You approved this dataset",
+  rejected: "You rejected this dataset",
+  changes_requested: "You requested changes on this dataset",
+};
+
+function SubmittedDecision({ decision, showPublish, submitting, onPublish }) {
+  const label = DECISION_COPY[decision.decision] || "You already reviewed this dataset";
+  const reason = (decision.reason || "").trim();
+  const Icon = decision.decision === "rejected" ? XCircle : decision.decision === "changes_requested" ? MessageSquare : CheckCircle2;
+  const iconClass = decision.decision === "rejected" ? "text-red-600" : decision.decision === "changes_requested" ? "text-amber-600" : "text-emerald-600";
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-1">
+        <Icon className={`w-5 h-5 ${iconClass}`} />
+        <h2 className="text-lg font-bold text-navy">Your review</h2>
+      </div>
+      <p className="text-sm font-semibold text-navy mt-4">{label}</p>
+      <p className="text-xs text-gray-500 mt-1">{formatDate(decision.decided_at)}</p>
+      {reason && (
+        <p className="text-sm text-slate-700 mt-4 whitespace-pre-wrap rounded-xl bg-slate-50 border border-slate-200 p-3">
+          {reason}
+        </p>
+      )}
+      {showPublish && (
+        <button
+          type="button"
+          disabled={submitting}
+          onClick={onPublish}
+          className="mt-5 w-full inline-flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold rounded-xl py-3 shadow-xs transition disabled:opacity-40"
+        >
+          {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+          Publish dataset
+        </button>
+      )}
+    </div>
+  );
+}
+
 function formatDate(dateString) {
   if (!dateString) return "—";
   const d = new Date(dateString);
@@ -130,6 +169,7 @@ export default function ReviewDatasetPage() {
   }, [user, navigate]);
 
   const [dataset, setDataset] = useState(null);
+  const [myDecision, setMyDecision] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -158,9 +198,16 @@ export default function ReviewDatasetPage() {
     async function fetchDetail() {
       setLoading(true);
       setError("");
+      setMyDecision(null);
       try {
-        const data = await datasetsApi.getDatasetDetail(datasetId);
-        if (active) setDataset(data);
+        const [data, decision] = await Promise.all([
+          datasetsApi.getDatasetDetail(datasetId),
+          datasetsApi.getMyDatasetDecision(datasetId).catch(() => null),
+        ]);
+        if (active) {
+          setDataset(data);
+          setMyDecision(decision);
+        }
       } catch (err) {
         if (active) {
           const msg = formatApiError(err, "Could not load dataset details.");
@@ -204,6 +251,20 @@ export default function ReviewDatasetPage() {
       ...prev,
       [questionId]: Number(score),
     }));
+  }
+
+  async function publishCurrentDataset() {
+    setSubmitting(true);
+    try {
+      await datasetsApi.publishDataset(datasetId);
+      addToast("Dataset published.", "success");
+      const data = await datasetsApi.getDatasetDetail(datasetId);
+      setDataset(data);
+    } catch (err) {
+      addToast(formatApiError(err, "Could not publish this dataset."), "error");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   async function handleDownload() {
@@ -497,6 +558,15 @@ export default function ReviewDatasetPage() {
         {/* Right Column: 6-Question Evaluation Questionnaire (5 cols) */}
         <div className="lg:col-span-5 space-y-6">
           <div className="bg-white rounded-2xl border border-border p-6 shadow-sm sticky top-6">
+            {myDecision ? (
+              <SubmittedDecision
+                decision={myDecision}
+                showPublish={Boolean(dataset?.ready_to_publish && canPublish)}
+                submitting={submitting}
+                onPublish={publishCurrentDataset}
+              />
+            ) : (
+            <>
             <div className="flex items-center gap-2 mb-1">
               <Shield className="w-5 h-5 text-gold" />
               <h2 className="text-lg font-bold text-navy">Peer Review Evaluation</h2>
@@ -623,19 +693,7 @@ export default function ReviewDatasetPage() {
                 <button
                   type="button"
                   disabled={submitting}
-                  onClick={async () => {
-                    setSubmitting(true);
-                    try {
-                      await datasetsApi.publishDataset(datasetId);
-                      addToast("Dataset published.", "success");
-                      const data = await datasetsApi.getDatasetDetail(datasetId);
-                      setDataset(data);
-                    } catch (err) {
-                      addToast(formatApiError(err, "Could not publish this dataset."), "error");
-                    } finally {
-                      setSubmitting(false);
-                    }
-                  }}
+                  onClick={publishCurrentDataset}
                   className="w-full inline-flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold rounded-xl py-3 shadow-xs transition disabled:opacity-40"
                 >
                   Publish dataset
@@ -677,6 +735,8 @@ export default function ReviewDatasetPage() {
                 </button>
               </div>
             </div>
+            </>
+            )}
           </div>
         </div>
       </div>

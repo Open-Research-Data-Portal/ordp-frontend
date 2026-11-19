@@ -488,6 +488,12 @@ export async function getReviewerQueue() {
   return data;
 }
 
+export async function getMyDatasetDecision(datasetId) {
+  const { data } = await client.get("/admin-panel/my-reviews/");
+  const list = Array.isArray(data) ? data : data?.results || [];
+  return list.find((row) => String(row.dataset_id) === String(datasetId)) || null;
+}
+
 export async function getMyReviews(user) {
   const userId = user?.id || user?.user_id || user?.pk || "user";
   const localList = getStoredReviewerDecisions(userId);

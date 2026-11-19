@@ -10,15 +10,11 @@ import {
   Table,
   Shield,
   Loader2,
-  ExternalLink,
   Info,
   Calendar,
   User,
   Tag,
-  BookOpen,
   X,
-  Trash2,
-  Upload,
 } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import { StatusBadge } from "../../../components/dashboard/dashboardUi";
@@ -61,14 +57,6 @@ const EVALUATION_QUESTIONS = [
     description: "Can another independent researcher interpret, reproduce, or build upon the research findings using this data?",
   },
 ];
-
-const SCORE_LABELS = {
-  1: "1 · Poor",
-  2: "2 · Fair",
-  3: "3 · Satisfactory",
-  4: "4 · Good",
-  5: "5 · Excellent",
-};
 
 const DECISION_COPY = {
   approved: "You approved this dataset",
@@ -196,16 +184,6 @@ export default function ReviewDatasetPage() {
   const [decisionModal, setDecisionModal] = useState(null); // "rejected" | "changes_requested"
   const [modalReason, setModalReason] = useState("");
 
-  // Suggest thumbnail & deletion modals
-  const [showThumbModal, setShowThumbModal] = useState(false);
-  const [thumbnailUrl, setThumbnailUrl] = useState("");
-  const [thumbnailFile, setThumbnailFile] = useState(null);
-  const [submittingThumb, setSubmittingThumb] = useState(false);
-
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deleteReason, setDeleteReason] = useState("");
-  const [submittingDelete, setSubmittingDelete] = useState(false);
-
   // Load dataset
   useEffect(() => {
     let active = true;
@@ -327,49 +305,6 @@ export default function ReviewDatasetPage() {
     await submitDecision(decisionModal, modalReason.trim());
     setDecisionModal(null);
     setModalReason("");
-  }
-
-  async function handleSuggestThumbnail(e) {
-    e.preventDefault();
-    setSubmittingThumb(true);
-    try {
-      if (thumbnailFile) {
-        const formData = new FormData();
-        formData.append("thumbnail", thumbnailFile);
-        if (thumbnailUrl.trim()) formData.append("reason", thumbnailUrl.trim());
-        await datasetsApi.suggestThumbnail(datasetId, formData);
-      } else if (thumbnailUrl.trim()) {
-        await datasetsApi.suggestThumbnail(datasetId, { thumbnail_url: thumbnailUrl.trim() });
-      } else {
-        addToast("Select an image or enter a URL.", "error");
-        setSubmittingThumb(false);
-        return;
-      }
-      addToast("Thumbnail suggestion sent!", "success");
-      setShowThumbModal(false);
-      setThumbnailUrl("");
-      setThumbnailFile(null);
-    } catch (err) {
-      addToast(formatApiError(err, "Failed to submit thumbnail."), "error");
-    } finally {
-      setSubmittingThumb(false);
-    }
-  }
-
-  async function handleRequestDeletion(e) {
-    e.preventDefault();
-    if (!deleteReason.trim()) return;
-    setSubmittingDelete(true);
-    try {
-      await datasetsApi.requestDatasetDeletion(datasetId, deleteReason.trim());
-      addToast("Deletion request submitted to administrators.", "success");
-      setShowDeleteModal(false);
-      setDeleteReason("");
-    } catch (err) {
-      addToast(formatApiError(err, "Failed to submit deletion request."), "error");
-    } finally {
-      setSubmittingDelete(false);
-    }
   }
 
   if (loading) {

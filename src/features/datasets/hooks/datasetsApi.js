@@ -277,28 +277,28 @@ export async function getDatasetDetail(datasetId) {
     };
   }
 
-  // 2. Check session / local storage review cache
-  try {
-    const cached = sessionStorage.getItem(`ordp_dataset_${cleanId}`) || localStorage.getItem(`ordp_dataset_${cleanId}`);
-    if (cached) {
-      const parsed = JSON.parse(cached);
-      if (parsed && (parsed.id || parsed.title)) {
-        return {
-          ...parsed,
-          files: parsed.files && parsed.files.length > 0 ? parsed.files : [
-            { id: "f-preview", name: `${(parsed.title || "dataset").replace(/[^a-z0-9_-]/gi, "_")}.csv`, file_type: "csv", file_size: 1024000, preview_rows: [] }
-          ],
-        };
-      }
-    }
-  } catch {}
-
-  // 3. Try primary GET /datasets/<id>/
+  // Live record first. A saved review-list row does not carry ready_to_publish
+  // for the signed-in person, so it cannot decide whether Publish is shown.
   try {
     const { data } = await client.get(`${DATASETS_BASE}/${cleanId}/`);
     return data;
   } catch (err) {
-    // 4. Fallback: try searching across known catalog sources via findDataset
+    try {
+      const cached = sessionStorage.getItem(`ordp_dataset_${cleanId}`) || localStorage.getItem(`ordp_dataset_${cleanId}`);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed && (parsed.id || parsed.title)) {
+          return {
+            ...parsed,
+            files: parsed.files && parsed.files.length > 0 ? parsed.files : [
+              { id: "f-preview", name: `${(parsed.title || "dataset").replace(/[^a-z0-9_-]/gi, "_")}.csv`, file_type: "csv", file_size: 1024000, preview_rows: [] }
+            ],
+          };
+        }
+      }
+    } catch {}
+
+    // Fallback: try searching across known catalog sources via findDataset
     try {
       const found = await findDataset(cleanId);
       if (found) {

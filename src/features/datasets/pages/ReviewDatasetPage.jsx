@@ -76,7 +76,20 @@ const DECISION_COPY = {
   changes_requested: "You requested changes on this dataset",
 };
 
-function SubmittedDecision({ decision, showPublish, submitting, onPublish }) {
+function ApprovalCount({ count }) {
+  if (count == null || count === "") return null;
+  const total = Number(count);
+  if (Number.isNaN(total)) return null;
+  const label = total === 1 ? "1 approval" : `${total} approvals`;
+  return (
+    <p className="mt-3 text-sm font-semibold text-navy">
+      {label}
+      <span className="ml-1 font-normal text-gray-500">of 2 required to publish</span>
+    </p>
+  );
+}
+
+function SubmittedDecision({ decision, approveVotes, showPublish, submitting, onPublish }) {
   const label = DECISION_COPY[decision.decision] || "You already reviewed this dataset";
   const reason = (decision.reason || "").trim();
   const Icon = decision.decision === "rejected" ? XCircle : decision.decision === "changes_requested" ? MessageSquare : CheckCircle2;
@@ -89,6 +102,7 @@ function SubmittedDecision({ decision, showPublish, submitting, onPublish }) {
       </div>
       <p className="text-sm font-semibold text-navy mt-4">{label}</p>
       <p className="text-xs text-gray-500 mt-1">{formatDate(decision.decided_at)}</p>
+      <ApprovalCount count={approveVotes} />
       {reason && (
         <p className="text-sm text-slate-700 mt-4 whitespace-pre-wrap rounded-xl bg-slate-50 border border-slate-200 p-3">
           {reason}
@@ -561,6 +575,7 @@ export default function ReviewDatasetPage() {
             {myDecision ? (
               <SubmittedDecision
                 decision={myDecision}
+                approveVotes={dataset?.approve_votes}
                 showPublish={Boolean(dataset?.ready_to_publish && canPublish)}
                 submitting={submitting}
                 onPublish={publishCurrentDataset}
@@ -571,9 +586,12 @@ export default function ReviewDatasetPage() {
               <Shield className="w-5 h-5 text-gold" />
               <h2 className="text-lg font-bold text-navy">Peer Review Evaluation</h2>
             </div>
-            <p className="text-xs text-gray-500 mb-5">
-              Rate all 6 standard criteria (1–5). At least 4 criteria must score 3+ to enable approval.
-            </p>
+            <div className="mb-5">
+              <p className="text-xs text-gray-500">
+                Rate all 6 standard criteria (1–5). At least 4 criteria must score 3+ to enable approval.
+              </p>
+              <ApprovalCount count={dataset?.approve_votes} />
+            </div>
 
             {/* Questions List */}
             <div className="space-y-5">

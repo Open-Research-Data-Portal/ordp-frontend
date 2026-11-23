@@ -23,20 +23,31 @@ export default function FileAnalysisCard({
   className = "",
 }) {
   const [analysis, setAnalysis] = useState(initialAnalysis);
+  const [prevInitial, setPrevInitial] = useState(initialAnalysis);
   const [loading, setLoading] = useState(!initialAnalysis && !!fileId);
   const [expanded, setExpanded] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
 
+  if (initialAnalysis !== prevInitial) {
+    setPrevInitial(initialAnalysis);
+    setAnalysis(initialAnalysis);
+  }
+
   useEffect(() => {
-    if (initialAnalysis) {
-      setAnalysis(initialAnalysis);
-    } else if (fileId) {
-      setLoading(true);
+    let ignore = false;
+    if (!initialAnalysis && fileId) {
       getFileAnalysis(fileId)
-        .then((data) => setAnalysis(data))
+        .then((data) => {
+          if (!ignore) setAnalysis(data);
+        })
         .catch(() => {})
-        .finally(() => setLoading(false));
+        .finally(() => {
+          if (!ignore) setLoading(false);
+        });
     }
+    return () => {
+      ignore = true;
+    };
   }, [fileId, initialAnalysis]);
 
   const levelInfo = getLevelInfo(analysis?.level);

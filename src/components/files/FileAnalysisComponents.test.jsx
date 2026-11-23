@@ -108,3 +108,4 @@ describe("FileAnalysis Components", () => {
     expect(handleClose).toHaveBeenCalledTimes(1);
   });
 });
+

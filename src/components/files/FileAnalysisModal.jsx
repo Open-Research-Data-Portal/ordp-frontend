@@ -33,9 +33,15 @@ export default function FileAnalysisModal({
   initialAnalysis = null,
 }) {
   const [analysis, setAnalysis] = useState(initialAnalysis);
+  const [prevInitial, setPrevInitial] = useState(initialAnalysis);
   const [loading, setLoading] = useState(!initialAnalysis);
   const [error, setError] = useState(null);
   const [copiedSha, setCopiedSha] = useState(false);
+
+  if (initialAnalysis !== prevInitial) {
+    setPrevInitial(initialAnalysis);
+    setAnalysis(initialAnalysis);
+  }
 
   const fetchAnalysis = useCallback(async () => {
     if (!fileId) return;
@@ -56,14 +62,30 @@ export default function FileAnalysisModal({
   }, [fileId]);
 
   useEffect(() => {
-    if (isOpen) {
-      if (initialAnalysis) {
-        setAnalysis(initialAnalysis);
-      } else if (fileId) {
-        fetchAnalysis();
-      }
+    let ignore = false;
+    if (isOpen && !initialAnalysis && fileId) {
+      getFileAnalysis(fileId)
+        .then((data) => {
+          if (!ignore) {
+            setAnalysis(data);
+            setLoading(false);
+          }
+        })
+        .catch((err) => {
+          if (!ignore) {
+            if (err?.response?.status === 404) {
+              setError("Analysis not yet queued or file is inaccessible.");
+            } else {
+              setError(err?.response?.data?.detail || "Failed to load file analysis details.");
+            }
+            setLoading(false);
+          }
+        });
     }
-  }, [isOpen, fileId, initialAnalysis, fetchAnalysis]);
+    return () => {
+      ignore = true;
+    };
+  }, [isOpen, fileId, initialAnalysis]);
 
   // Handle ESC key
   useEffect(() => {

@@ -10,6 +10,7 @@ import {
   ExternalLink,
   CheckCircle2,
   XCircle,
+  MinusCircle,
 } from "lucide-react";
 import { getFileAnalysis, getLevelInfo, getCheckFriendlyName } from "../../api/fileAnalysis";
 import FileAnalysisModal from "./FileAnalysisModal";
@@ -41,14 +42,30 @@ export default function FileAnalysisCard({
   const levelInfo = getLevelInfo(analysis?.level);
   const checks = Array.isArray(analysis?.checks) ? analysis.checks : [];
   const passedCount = checks.filter((c) => c.result === "pass").length;
+  const skippedCount = checks.filter((c) => c.result === "skipped").length;
+  const effectiveTotal = checks.length - skippedCount;
+  const malwareCheck = checks.find((c) => c.name === "malware_scan");
   const warningsCount = Array.isArray(analysis?.warnings) ? analysis.warnings.length : 0;
   const status = analysis?.status || "queued";
+
+  // Malware note: never say "Zero malware detected" if the scanner was skipped.
+  const malwareNote =
+    malwareCheck?.result === "skipped"
+      ? " \u00b7 Malware scan skipped, not configured"
+      : malwareCheck?.result === "pass"
+      ? " \u00b7 Zero malware detected"
+      : "";
+
+  const warningsNote =
+    warningsCount > 0
+      ? ` \u00b7 ${warningsCount} warning${warningsCount > 1 ? "s" : ""}`
+      : "";
 
   if (loading) {
     return (
       <div className={`p-3.5 rounded-xl border border-gray-100 bg-gray-50 flex items-center gap-2 text-xs text-gray-500 ${className}`}>
         <Loader2 className="w-4 h-4 animate-spin text-navy" />
-        <span>Loading AI file analysis…</span>
+        <span>Loading AI file analysis&hellip;</span>
       </div>
     );
   }
@@ -114,12 +131,11 @@ export default function FileAnalysisCard({
                 )}
               </div>
               <p className="text-[11px] text-gray-500 mt-0.5">
-                {status === "done"
-                  ? `${passedCount} of ${checks.length} checks passed · Zero malware detected`
+                {status === "done" || status === "partial"
+                  ? `${passedCount} of ${effectiveTotal} checks passed${malwareNote}${warningsNote}`
                   : status === "failed"
                   ? analysis.error || "File format or integrity check failed"
                   : "Automated analysis in progress"}
-                {warningsCount > 0 && ` · ${warningsCount} warning${warningsCount > 1 ? "s" : ""}`}
               </p>
             </div>
           </div>
@@ -161,6 +177,8 @@ export default function FileAnalysisCard({
                       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                     ) : c.result === "warn" ? (
                       <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                    ) : c.result === "skipped" ? (
+                      <MinusCircle className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                     ) : (
                       <XCircle className="w-3.5 h-3.5 text-red-600 shrink-0" />
                     )}
@@ -174,10 +192,12 @@ export default function FileAnalysisCard({
                         ? "bg-emerald-50 text-emerald-700"
                         : c.result === "warn"
                         ? "bg-amber-50 text-amber-700"
+                        : c.result === "skipped"
+                        ? "bg-slate-50 text-slate-500"
                         : "bg-red-50 text-red-700"
                     }`}
                   >
-                    {c.result}
+                    {c.result === "skipped" ? "Skipped" : c.result}
                   </span>
                 </div>
               ))}

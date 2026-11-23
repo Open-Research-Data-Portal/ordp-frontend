@@ -15,7 +15,7 @@ export default function FileAnalysisBadge({
   fileName = "File",
   initialAnalysis = null,
   showModalOnClick = true,
-  pollInterval = 4000,
+  pollInterval = 5000,
   size = "md",
   className = "",
 }) {
@@ -165,3 +165,4 @@ export default function FileAnalysisBadge({
     </>
   );
 }
+

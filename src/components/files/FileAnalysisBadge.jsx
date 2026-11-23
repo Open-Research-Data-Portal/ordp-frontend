@@ -20,8 +20,14 @@ export default function FileAnalysisBadge({
   className = "",
 }) {
   const [analysis, setAnalysis] = useState(initialAnalysis);
+  const [prevInitial, setPrevInitial] = useState(initialAnalysis);
   const [loading, setLoading] = useState(!initialAnalysis && !!fileId);
   const [modalOpen, setModalOpen] = useState(false);
+
+  if (initialAnalysis !== prevInitial) {
+    setPrevInitial(initialAnalysis);
+    setAnalysis(initialAnalysis);
+  }
 
   const fetchAnalysis = useCallback(async () => {
     if (!fileId) return;
@@ -37,12 +43,23 @@ export default function FileAnalysisBadge({
   }, [fileId]);
 
   useEffect(() => {
-    if (initialAnalysis) {
-      setAnalysis(initialAnalysis);
-    } else if (fileId) {
-      fetchAnalysis();
+    let ignore = false;
+    if (!initialAnalysis && fileId) {
+      getFileAnalysis(fileId)
+        .then((data) => {
+          if (!ignore) {
+            setAnalysis(data);
+            setLoading(false);
+          }
+        })
+        .catch(() => {
+          if (!ignore) setLoading(false);
+        });
     }
-  }, [fileId, initialAnalysis, fetchAnalysis]);
+    return () => {
+      ignore = true;
+    };
+  }, [fileId, initialAnalysis]);
 
   // Auto-polling while status is queued or running
   useEffect(() => {
@@ -78,7 +95,7 @@ export default function FileAnalysisBadge({
   }[size] || "text-xs px-2.5 py-1 gap-1.5";
 
   // Render badge content based on status & level
-  let badgeContent = null;
+  let badgeContent;
   if (loading) {
     badgeContent = (
       <span className="inline-flex items-center gap-1 text-gray-400">

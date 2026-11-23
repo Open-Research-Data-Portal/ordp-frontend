@@ -7,7 +7,9 @@ import {
   CheckCircle2,
   AlertCircle,
   Sparkles,
+  Shield,
 } from "lucide-react";
+import { FileAnalysisBadge } from "../../../components/files";
 
 export default function PreReviewSummary({
   formData = {},
@@ -240,11 +242,24 @@ export default function PreReviewSummary({
                         <FileText className="w-4 h-4 text-navy shrink-0" />
                         <span className="font-mono font-medium text-slate-800 truncate">{f.name || f.file?.name}</span>
                       </div>
-                      <span className="text-gray-400 font-mono text-[11px] ml-2 shrink-0">
-                        {f.sizeLabel || (f.file?.size ? (f.file.size / 1024).toFixed(1) + " KB" : "")}
-                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {f.id && (
+                          <FileAnalysisBadge
+                            fileId={f.id}
+                            fileName={f.name || f.file?.name}
+                            size="sm"
+                          />
+                        )}
+                        <span className="text-gray-400 font-mono text-[11px] ml-2">
+                          {f.sizeLabel || (f.file?.size ? (f.file.size / 1024).toFixed(1) + " KB" : "")}
+                        </span>
+                      </div>
                     </div>
                   ))}
+                  <div className="mt-2 p-2.5 rounded-lg bg-emerald-50/60 border border-emerald-100 flex items-center gap-2 text-[11px] text-emerald-800">
+                    <Shield className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>Autonomous AI File Check will inspect file integrity, format classification, and malware safety upon finalization.</span>
+                  </div>
                 </div>
               )}
             </div>

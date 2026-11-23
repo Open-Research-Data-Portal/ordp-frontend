@@ -29,6 +29,7 @@ import { getDatasetImage } from "../utils/datasetImage";
 import { useAuth } from "../context/useAuth";
 import { getDashboardPath } from "../utils/userRoles";
 import TabularPreview from "../components/ui/TabularPreview";
+import { FileAnalysisBadge, FileAnalysisCard } from "../components/files";
 
 // ---------------------------------------------------------------------
 // DatasetViewPage — the PUBLIC read-only view a researcher lands on when
@@ -218,8 +219,10 @@ function normalizeDataset(raw) {
     thumbnailUrl: getDatasetImage(raw),
     tags: meta.keywords || [],
     aboutText: meta.description || raw.description || "No description provided.",
+    files,
     dataFile: primaryFile
       ? {
+          id: primaryFile.id,
           name: primaryFile.original_filename || primaryFile.file_key || "data file",
           sizeLabel: formatBytes(primaryFile.file_size),
           columns: (primaryFile.preview_rows && typeof primaryFile.preview_rows === "object" && Array.isArray(primaryFile.preview_rows.columns) && primaryFile.preview_rows.columns.length > 0)
@@ -1051,14 +1054,34 @@ export default function DatasetViewPage() {
       {/* Data preview + Data Explorer */}
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_260px]">
         <div className="rounded-2xl border border-gray-200 bg-white p-5 min-w-0 overflow-hidden">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
             <div>
               <p className="text-sm font-semibold text-slate-900">{dataset.dataFile.name}</p>
               <p className="text-xs text-gray-400">{dataset.dataFile.sizeLabel}</p>
             </div>
-            <button type="button" aria-label="Download file" className="text-gray-400 hover:text-slate-900">
-              <Download size={16} />
-            </button>
+            <div className="flex items-center gap-2">
+              <FileAnalysisBadge
+                fileId={dataset.dataFile.id || dataset.files?.[0]?.id}
+                fileName={dataset.dataFile.name}
+                size="sm"
+              />
+              <button
+                type="button"
+                aria-label="Download file"
+                onClick={handleDownloadClick}
+                className="text-gray-400 hover:text-slate-900 p-1"
+              >
+                <Download size={16} />
+              </button>
+            </div>
+          </div>
+
+          {/* AI File Check Inspection Summary */}
+          <div className="mt-3">
+            <FileAnalysisCard
+              fileId={dataset.dataFile.id || dataset.files?.[0]?.id}
+              fileName={dataset.dataFile.name}
+            />
           </div>
 
           <div className="mt-4">

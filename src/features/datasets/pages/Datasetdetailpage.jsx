@@ -22,6 +22,7 @@ import * as datasetsApi from "../hooks/datasetsApi";
 import { getDownloadUrl, shareDatasetWith } from "../../../api/sharing";
 import TabularPreview from "../../../components/ui/TabularPreview";
 import { getDatasetImage } from "../../../utils/datasetImage";
+import { FileAnalysisBadge, FileAnalysisCard } from "../../../components/files";
 
 // ---------------------------------------------------------------------
 // DatasetDetailPage — the OWNER'S view of their own dataset.
@@ -946,16 +947,31 @@ export default function DatasetDetailPage() {
                           </p>
                         </div>
                       </div>
-                      {f.download_url ? (
-                        <a
-                          href={f.download_url}
-                          className="shrink-0 text-gray-400 hover:text-slate-900 transition-colors"
-                          title="Download file"
-                          aria-label="Download file"
-                        >
-                          <Download size={16} />
-                        </a>
-                      ) : null}
+                      <div className="flex items-center gap-2 shrink-0">
+                        <FileAnalysisBadge
+                          fileId={f.id}
+                          fileName={f.filename || `File ${idx + 1}`}
+                          size="sm"
+                        />
+                        {f.download_url ? (
+                          <a
+                            href={f.download_url}
+                            className="shrink-0 text-gray-400 hover:text-slate-900 transition-colors p-1"
+                            title="Download file"
+                            aria-label="Download file"
+                          >
+                            <Download size={16} />
+                          </a>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    {/* AI File Check Inspection */}
+                    <div className="px-4 pt-3 pb-1">
+                      <FileAnalysisCard
+                        fileId={f.id}
+                        fileName={f.filename || `File ${idx + 1}`}
+                      />
                     </div>
 
                     {/* Content View Based on Data Type */}

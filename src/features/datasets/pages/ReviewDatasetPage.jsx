@@ -23,6 +23,7 @@ import {
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import { StatusBadge } from "../../../components/dashboard/dashboardUi";
 import { useAuth } from "../../../context/useAuth";
+import { FileAnalysisBadge, FileAnalysisCard } from "../../../components/files";
 import { isReviewer, isAdmin, getDashboardPath } from "../../../utils/userRoles";
 import { useToast } from "../../../context/ToastContext.jsx";
 import * as datasetsApi from "../hooks/datasetsApi.js";
@@ -421,17 +422,32 @@ export default function ReviewDatasetPage() {
                           {formatFileSize(file.file_size || file.size)} · {file.file_type || file.content_type || "data"}
                         </p>
                       </div>
-                      {file.preview_rows && file.preview_rows.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => downloadPreviewCsv(file, dataset.title)}
-                          className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg px-2.5 py-1.5 transition"
-                          title="Download preview rows as CSV"
-                        >
-                          <Download className="w-3 h-3 text-gold" />
-                          Export CSV Preview
-                        </button>
-                      )}
+                      <div className="flex items-center gap-2">
+                        <FileAnalysisBadge
+                          fileId={file.id}
+                          fileName={file.filename || file.name || `File ${idx + 1}`}
+                          size="sm"
+                        />
+                        {file.preview_rows && file.preview_rows.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => downloadPreviewCsv(file, dataset.title)}
+                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg px-2.5 py-1.5 transition"
+                            title="Download preview rows as CSV"
+                          >
+                            <Download className="w-3 h-3 text-gold" />
+                            Export CSV Preview
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* AI File Integrity & Security Inspection */}
+                    <div className="p-3 border-b border-border bg-slate-50/50">
+                      <FileAnalysisCard
+                        fileId={file.id}
+                        fileName={file.filename || file.name || `File ${idx + 1}`}
+                      />
                     </div>
 
                     {/* Preview Table if structured */}

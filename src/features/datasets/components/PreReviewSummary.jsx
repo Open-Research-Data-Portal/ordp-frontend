@@ -243,9 +243,9 @@ export default function PreReviewSummary({
                         <span className="font-mono font-medium text-slate-800 truncate">{f.name || f.file?.name}</span>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        {f.id && (
+                        {(f.id || f.logical_file_id || f.stored_object_id) && (
                           <FileAnalysisBadge
-                            fileId={f.id}
+                            fileId={f.id || f.logical_file_id || f.stored_object_id}
                             fileName={f.name || f.file?.name}
                             size="sm"
                           />

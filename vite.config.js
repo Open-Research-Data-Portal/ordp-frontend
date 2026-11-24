@@ -11,7 +11,7 @@ export default defineConfig({
   server: {
     proxy: {
       "/api": {
-        target: "https://ordp-backend.onrender.com",
+        target: process.env.VITE_PROXY_TARGET || "https://ordp-backend.onrender.com",
         changeOrigin: true,
         secure: false,
       },

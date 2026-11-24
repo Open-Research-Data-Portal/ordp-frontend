@@ -424,7 +424,7 @@ export default function ReviewDatasetPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         <FileAnalysisBadge
-                          fileId={file.id}
+                          fileId={file.id || file.logical_file_id || file.stored_object_id}
                           fileName={file.filename || file.name || `File ${idx + 1}`}
                           size="sm"
                         />
@@ -445,7 +445,7 @@ export default function ReviewDatasetPage() {
                     {/* AI File Integrity & Security Inspection */}
                     <div className="p-3 border-b border-border bg-slate-50/50">
                       <FileAnalysisCard
-                        fileId={file.id}
+                        fileId={file.id || file.logical_file_id || file.stored_object_id}
                         fileName={file.filename || file.name || `File ${idx + 1}`}
                       />
                     </div>

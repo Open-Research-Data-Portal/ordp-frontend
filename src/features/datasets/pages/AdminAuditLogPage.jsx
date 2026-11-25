@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Download, Clock, Database, AlertTriangle, TrendingUp, BarChart3, ShieldAlert } from "lucide-react";
+import { ArrowLeft, Download, Clock, Database, TrendingUp, BarChart3 } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
+import UserManagementAudit from "../../../components/UserManagementAudit";
 import * as datasetsApi from "../hooks/datasetsApi";
 
 export default function AdminAuditLogPage() {
@@ -11,7 +12,7 @@ export default function AdminAuditLogPage() {
 
   const [peakHours, setPeakHours] = useState([]);
   const [mostAccessed, setMostAccessed] = useState([]);
-  const [flagged, setFlagged] = useState({ bursts: [], off_hours: [] });
+  const [, setFlagged] = useState({ bursts: [], off_hours: [] });
   const [graphs, setGraphs] = useState({ uploads: [], downloads: [], views: [] });
   const [daysWindow, setDaysWindow] = useState("30");
 
@@ -69,6 +70,7 @@ export default function AdminAuditLogPage() {
   return (
     <DashboardShell role="admin">
       <section className="space-y-6 max-w-7xl mx-auto pb-12">
+        <UserManagementAudit />
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-border shadow-sm">
           <div>
             <button

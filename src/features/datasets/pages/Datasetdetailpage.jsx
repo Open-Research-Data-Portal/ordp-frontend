@@ -437,6 +437,9 @@ export default function DatasetDetailPage() {
   const [downloadError, setDownloadError] = useState(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [openedFiles, setOpenedFiles] = useState({});
+  const [openingFileId, setOpeningFileId] = useState(null);
+  const [fileOpenError, setFileOpenError] = useState(null);
 
   // Archival Request Modal state (5 form fields)
   const [showArchiveModal, setShowArchiveModal] = useState(false);
@@ -479,6 +482,20 @@ export default function DatasetDetailPage() {
   const isOwner = dataset?.is_owner || String(dataset?.owner) === String(user?.id);
   const isApproved = dataset?.status === "approved" || dataset?.status === "published";
   const files = dataset?.files || [];
+
+  async function handleOpenFile(file) {
+    if (!file?.id) return;
+    setOpeningFileId(file.id);
+    setFileOpenError(null);
+    try {
+      const opened = await datasetsApi.viewDatasetFile(id, file.id);
+      setOpenedFiles((current) => ({ ...current, [file.id]: opened }));
+    } catch (err) {
+      setFileOpenError(err.response?.data?.detail || "You do not have permission to open this file.");
+    } finally {
+      setOpeningFileId(null);
+    }
+  }
 
   async function handleArchiveSubmit(e) {
     e.preventDefault();
@@ -946,6 +963,14 @@ export default function DatasetDetailPage() {
                           </p>
                         </div>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenFile(f)}
+                        disabled={openingFileId === f.id}
+                        className="shrink-0 rounded-lg border border-amber-200 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-50 disabled:opacity-60"
+                      >
+                        {openingFileId === f.id ? "Opening…" : "Open file"}
+                      </button>
                       {f.download_url ? (
                         <a
                           href={f.download_url}
@@ -959,25 +984,27 @@ export default function DatasetDetailPage() {
                     </div>
 
                     {/* Content View Based on Data Type */}
-                    {isTabular && f.preview_rows && f.preview_rows.length > 0 ? (
+                    {fileOpenError ? (
+                      <p className="p-4 text-xs text-red-600">{fileOpenError}</p>
+                    ) : openedFiles[f.id]?.preview?.available && isTabular ? (
                       <div className="p-4">
                         <TabularPreview
-                          columns={f.columns}
-                          rows={f.preview_rows}
+                          columns={openedFiles[f.id].preview.columns}
+                          rows={openedFiles[f.id].preview.rows}
                           maxRows={10}
                           maxHeight={320}
                         />
                       </div>
-                    ) : isImage && f.download_url ? (
+                    ) : openedFiles[f.id]?.file_url && isImage ? (
                       <div className="p-4 flex flex-col items-center justify-center bg-gray-900/5">
                         <div className="max-h-96 max-w-full overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-                          <img src={f.download_url} alt={f.filename} className="h-auto max-h-96 w-auto object-contain mx-auto" />
+                          <img src={openedFiles[f.id].file_url} alt={f.filename} className="h-auto max-h-96 w-auto object-contain mx-auto" />
                         </div>
                         <p className="text-xs text-gray-500 mt-2">Image Preview ({f.file_type?.toUpperCase() || "IMAGE"})</p>
                       </div>
                     ) : (
                       <div className="p-6 text-center text-xs text-gray-400">
-                        Preview not available for this file format ({f.file_type || "unknown"}).
+                        Select “Open file” to view this file using your assigned permission.
                       </div>
                     )}
                   </div>

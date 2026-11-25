@@ -10,15 +10,11 @@ import {
   Table,
   Shield,
   Loader2,
-  ExternalLink,
   Info,
   Calendar,
   User,
   Tag,
-  BookOpen,
   X,
-  Trash2,
-  Upload,
 } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
 import { StatusBadge } from "../../../components/dashboard/dashboardUi";
@@ -27,6 +23,7 @@ import { FileAnalysisBadge, FileAnalysisCard } from "../../../components/files";
 import { isReviewer, isAdmin, getDashboardPath } from "../../../utils/userRoles";
 import { useToast } from "../../../context/ToastContext.jsx";
 import * as datasetsApi from "../hooks/datasetsApi.js";
+import { getMyPermissions } from "../../../api/accessControl";
 import { formatApiError } from "../../../utils/errorFormatter";
 
 const EVALUATION_QUESTIONS = [
@@ -62,13 +59,58 @@ const EVALUATION_QUESTIONS = [
   },
 ];
 
-const SCORE_LABELS = {
-  1: "1 · Poor",
-  2: "2 · Fair",
-  3: "3 · Satisfactory",
-  4: "4 · Good",
-  5: "5 · Excellent",
+const DECISION_COPY = {
+  approved: "You approved this dataset",
+  rejected: "You rejected this dataset",
+  changes_requested: "You requested changes on this dataset",
 };
+
+function ApprovalCount({ count }) {
+  if (count == null || count === "") return null;
+  const total = Number(count);
+  if (Number.isNaN(total)) return null;
+  const label = total === 1 ? "1 approval" : `${total} approvals`;
+  return (
+    <p className="mt-3 text-sm font-semibold text-navy">
+      {label}
+      <span className="ml-1 font-normal text-gray-500">of 2 required to publish</span>
+    </p>
+  );
+}
+
+function SubmittedDecision({ decision, approveVotes, showPublish, submitting, onPublish }) {
+  const label = DECISION_COPY[decision.decision] || "You already reviewed this dataset";
+  const reason = (decision.reason || "").trim();
+  const Icon = decision.decision === "rejected" ? XCircle : decision.decision === "changes_requested" ? MessageSquare : CheckCircle2;
+  const iconClass = decision.decision === "rejected" ? "text-red-600" : decision.decision === "changes_requested" ? "text-amber-600" : "text-emerald-600";
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-1">
+        <Icon className={`w-5 h-5 ${iconClass}`} />
+        <h2 className="text-lg font-bold text-navy">Your review</h2>
+      </div>
+      <p className="text-sm font-semibold text-navy mt-4">{label}</p>
+      <p className="text-xs text-gray-500 mt-1">{formatDate(decision.decided_at)}</p>
+      <ApprovalCount count={approveVotes} />
+      {reason && (
+        <p className="text-sm text-slate-700 mt-4 whitespace-pre-wrap rounded-xl bg-slate-50 border border-slate-200 p-3">
+          {reason}
+        </p>
+      )}
+      {showPublish && (
+        <button
+          type="button"
+          disabled={submitting}
+          onClick={onPublish}
+          className="mt-5 w-full inline-flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold rounded-xl py-3 shadow-xs transition disabled:opacity-40"
+        >
+          {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+          Publish dataset
+        </button>
+      )}
+    </div>
+  );
+}
 
 function formatDate(dateString) {
   if (!dateString) return "—";
@@ -109,14 +151,28 @@ export default function ReviewDatasetPage() {
   const navigate = useNavigate();
   const { addToast } = useToast();
 
-  // Role validation
+  const [canPublish, setCanPublish] = useState(false);
+
+  // Allowance validation. dataset.approve or dataset.publish is enough to open this page.
   useEffect(() => {
-    if (user && !isReviewer(user) && !isAdmin(user)) {
-      navigate(getDashboardPath(user), { replace: true });
-    }
+    if (!user) return;
+    let active = true;
+    getMyPermissions()
+      .then((me) => {
+        if (!active) return;
+        const codes = new Set((me?.effective || []).map((row) => row.code));
+        setCanPublish(codes.has("dataset.publish"));
+        const allowed = isReviewer(user) || isAdmin(user) || codes.has("dataset.approve") || codes.has("dataset.publish");
+        if (!allowed) navigate(getDashboardPath(user), { replace: true });
+      })
+      .catch(() => {
+        if (active && !isReviewer(user) && !isAdmin(user)) navigate(getDashboardPath(user), { replace: true });
+      });
+    return () => { active = false; };
   }, [user, navigate]);
 
   const [dataset, setDataset] = useState(null);
+  const [myDecision, setMyDecision] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -129,25 +185,22 @@ export default function ReviewDatasetPage() {
   const [decisionModal, setDecisionModal] = useState(null); // "rejected" | "changes_requested"
   const [modalReason, setModalReason] = useState("");
 
-  // Suggest thumbnail & deletion modals
-  const [showThumbModal, setShowThumbModal] = useState(false);
-  const [thumbnailUrl, setThumbnailUrl] = useState("");
-  const [thumbnailFile, setThumbnailFile] = useState(null);
-  const [submittingThumb, setSubmittingThumb] = useState(false);
-
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deleteReason, setDeleteReason] = useState("");
-  const [submittingDelete, setSubmittingDelete] = useState(false);
-
   // Load dataset
   useEffect(() => {
     let active = true;
     async function fetchDetail() {
       setLoading(true);
       setError("");
+      setMyDecision(null);
       try {
-        const data = await datasetsApi.getDatasetDetail(datasetId);
-        if (active) setDataset(data);
+        const [data, decision] = await Promise.all([
+          datasetsApi.getDatasetDetail(datasetId),
+          datasetsApi.getMyDatasetDecision(datasetId).catch(() => null),
+        ]);
+        if (active) {
+          setDataset(data);
+          setMyDecision(decision);
+        }
       } catch (err) {
         if (active) {
           const msg = formatApiError(err, "Could not load dataset details.");
@@ -191,6 +244,20 @@ export default function ReviewDatasetPage() {
       ...prev,
       [questionId]: Number(score),
     }));
+  }
+
+  async function publishCurrentDataset() {
+    setSubmitting(true);
+    try {
+      await datasetsApi.publishDataset(datasetId);
+      addToast("Dataset published.", "success");
+      const data = await datasetsApi.getDatasetDetail(datasetId);
+      setDataset(data);
+    } catch (err) {
+      addToast(formatApiError(err, "Could not publish this dataset."), "error");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   async function handleDownload() {
@@ -239,49 +306,6 @@ export default function ReviewDatasetPage() {
     await submitDecision(decisionModal, modalReason.trim());
     setDecisionModal(null);
     setModalReason("");
-  }
-
-  async function handleSuggestThumbnail(e) {
-    e.preventDefault();
-    setSubmittingThumb(true);
-    try {
-      if (thumbnailFile) {
-        const formData = new FormData();
-        formData.append("thumbnail", thumbnailFile);
-        if (thumbnailUrl.trim()) formData.append("reason", thumbnailUrl.trim());
-        await datasetsApi.suggestThumbnail(datasetId, formData);
-      } else if (thumbnailUrl.trim()) {
-        await datasetsApi.suggestThumbnail(datasetId, { thumbnail_url: thumbnailUrl.trim() });
-      } else {
-        addToast("Select an image or enter a URL.", "error");
-        setSubmittingThumb(false);
-        return;
-      }
-      addToast("Thumbnail suggestion sent!", "success");
-      setShowThumbModal(false);
-      setThumbnailUrl("");
-      setThumbnailFile(null);
-    } catch (err) {
-      addToast(formatApiError(err, "Failed to submit thumbnail."), "error");
-    } finally {
-      setSubmittingThumb(false);
-    }
-  }
-
-  async function handleRequestDeletion(e) {
-    e.preventDefault();
-    if (!deleteReason.trim()) return;
-    setSubmittingDelete(true);
-    try {
-      await datasetsApi.requestDatasetDeletion(datasetId, deleteReason.trim());
-      addToast("Deletion request submitted to administrators.", "success");
-      setShowDeleteModal(false);
-      setDeleteReason("");
-    } catch (err) {
-      addToast(formatApiError(err, "Failed to submit deletion request."), "error");
-    } finally {
-      setSubmittingDelete(false);
-    }
   }
 
   if (loading) {
@@ -499,13 +523,26 @@ export default function ReviewDatasetPage() {
         {/* Right Column: 6-Question Evaluation Questionnaire (5 cols) */}
         <div className="lg:col-span-5 space-y-6">
           <div className="bg-white rounded-2xl border border-border p-6 shadow-sm sticky top-6">
+            {myDecision ? (
+              <SubmittedDecision
+                decision={myDecision}
+                approveVotes={dataset?.approve_votes}
+                showPublish={Boolean(dataset?.ready_to_publish && canPublish)}
+                submitting={submitting}
+                onPublish={publishCurrentDataset}
+              />
+            ) : (
+            <>
             <div className="flex items-center gap-2 mb-1">
               <Shield className="w-5 h-5 text-gold" />
               <h2 className="text-lg font-bold text-navy">Peer Review Evaluation</h2>
             </div>
-            <p className="text-xs text-gray-500 mb-5">
-              Rate all 6 standard criteria (1–5). At least 4 criteria must score 3+ to enable approval.
-            </p>
+            <div className="mb-5">
+              <p className="text-xs text-gray-500">
+                Rate all 6 standard criteria (1–5). At least 4 criteria must score 3+ to enable approval.
+              </p>
+              <ApprovalCount count={dataset?.approve_votes} />
+            </div>
 
             {/* Questions List */}
             <div className="space-y-5">
@@ -621,6 +658,16 @@ export default function ReviewDatasetPage() {
                 {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                 Approve Dataset
               </button>
+              {dataset?.ready_to_publish && canPublish && (
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={publishCurrentDataset}
+                  className="w-full inline-flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold rounded-xl py-3 shadow-xs transition disabled:opacity-40"
+                >
+                  Publish dataset
+                </button>
+              )}
 
               <div className="grid grid-cols-2 gap-2">
                 <button
@@ -657,6 +704,8 @@ export default function ReviewDatasetPage() {
                 </button>
               </div>
             </div>
+            </>
+            )}
           </div>
         </div>
       </div>

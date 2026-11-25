@@ -26,6 +26,7 @@ import { getDownloadUrl, requestShareAccess, shareDatasetWith } from "../api/sha
 import { createRequest, getCatalog } from "../api/accessControl";
 import * as datasetsApi from "../features/datasets/hooks/datasetsApi";
 import DashboardAwareLayout from "../layouts/DashboardAwareLayout";
+import DatasetGrantActions from "../components/DatasetGrantActions";
 import { getDatasetImage } from "../utils/datasetImage";
 import { useAuth } from "../context/useAuth";
 import { getDashboardPath } from "../utils/userRoles";
@@ -223,6 +224,7 @@ function normalizeDataset(raw) {
     aboutText: meta.description || raw.description || "No description provided.",
     dataFile: primaryFile
       ? {
+          id: primaryFile.id,
           name: primaryFile.original_filename || primaryFile.file_key || "data file",
           sizeLabel: formatBytes(primaryFile.file_size),
           columns: (primaryFile.preview_rows && typeof primaryFile.preview_rows === "object" && Array.isArray(primaryFile.preview_rows.columns) && primaryFile.preview_rows.columns.length > 0)
@@ -1137,11 +1139,31 @@ export default function DatasetViewPage() {
               <p className="text-sm font-semibold text-slate-900">{dataset.dataFile.name}</p>
               <p className="text-xs text-gray-400">{dataset.dataFile.sizeLabel}</p>
             </div>
-            <button type="button" aria-label="Download file" className="text-gray-400 hover:text-slate-900">
+            <button
+              type="button"
+              aria-label="Download file"
+              className="text-gray-400 hover:text-slate-900 disabled:opacity-40"
+              disabled={!dataset.dataFile.id || downloading}
+              onClick={async () => {
+                if (!dataset.dataFile.id) return;
+                setDownloading(true);
+                setDownloadError(null);
+                try {
+                  const result = await datasetsApi.downloadDatasetFile(dataset.id, dataset.dataFile.id);
+                  if (!result?.download_url) throw new Error("Download link unavailable.");
+                  window.location.assign(result.download_url);
+                } catch (err) {
+                  setDownloadError(err?.response?.data?.detail || err?.message || "You do not have permission to download this file.");
+                } finally {
+                  setDownloading(false);
+                }
+              }}
+            >
               <Download size={16} />
             </button>
           </div>
 
+          <DatasetGrantActions datasetId={dataset.id} isOwner={isOwner} loadVersions />
           <div className="mt-4">
             <TabularPreview
               columns={dataset.dataFile.columns}

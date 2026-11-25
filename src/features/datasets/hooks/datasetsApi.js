@@ -277,28 +277,28 @@ export async function getDatasetDetail(datasetId) {
     };
   }
 
-  // 2. Check session / local storage review cache
-  try {
-    const cached = sessionStorage.getItem(`ordp_dataset_${cleanId}`) || localStorage.getItem(`ordp_dataset_${cleanId}`);
-    if (cached) {
-      const parsed = JSON.parse(cached);
-      if (parsed && (parsed.id || parsed.title)) {
-        return {
-          ...parsed,
-          files: parsed.files && parsed.files.length > 0 ? parsed.files : [
-            { id: "f-preview", name: `${(parsed.title || "dataset").replace(/[^a-z0-9_-]/gi, "_")}.csv`, file_type: "csv", file_size: 1024000, preview_rows: [] }
-          ],
-        };
-      }
-    }
-  } catch {}
-
-  // 3. Try primary GET /datasets/<id>/
+  // Live record first. A saved review-list row does not carry ready_to_publish
+  // for the signed-in person, so it cannot decide whether Publish is shown.
   try {
     const { data } = await client.get(`${DATASETS_BASE}/${cleanId}/`);
     return data;
   } catch (err) {
-    // 4. Fallback: try searching across known catalog sources via findDataset
+    try {
+      const cached = sessionStorage.getItem(`ordp_dataset_${cleanId}`) || localStorage.getItem(`ordp_dataset_${cleanId}`);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed && (parsed.id || parsed.title)) {
+          return {
+            ...parsed,
+            files: parsed.files && parsed.files.length > 0 ? parsed.files : [
+              { id: "f-preview", name: `${(parsed.title || "dataset").replace(/[^a-z0-9_-]/gi, "_")}.csv`, file_type: "csv", file_size: 1024000, preview_rows: [] }
+            ],
+          };
+        }
+      }
+    } catch {}
+
+    // Fallback: try searching across known catalog sources via findDataset
     try {
       const found = await findDataset(cleanId);
       if (found) {
@@ -413,6 +413,66 @@ export async function getDatasetVersions(datasetId) {
   return data;
 }
 
+export async function restoreDatasetVersion(datasetId, versionId) {
+  const { data } = await client.post(`${DATASETS_BASE}/${datasetId}/versions/${versionId}/restore/`);
+  return data;
+}
+
+export async function downloadDatasetFile(datasetId, fileId) {
+  const { data } = await client.get(`${DATASETS_BASE}/${datasetId}/files/${fileId}/download/`);
+  return data;
+}
+
+export async function publishDataset(datasetId) {
+  const { data } = await client.post(`/admin-panel/${datasetId}/publish/`);
+  return data;
+}
+
+export async function uploadExistingDatasetFile(datasetId, file) {
+  const session = await initExistingDraftUpload(datasetId);
+  const sessionId = session.upload_session_id;
+  const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+  const fileChecksum = Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  let chunkSize = 5 * 1024 * 1024;
+  let totalChunks = Math.max(1, Math.ceil(file.size / chunkSize));
+  try {
+    const prep = await prepareUpload(sessionId, {
+      filename: file.name,
+      file_size: file.size,
+      file_checksum: fileChecksum,
+    });
+    if (prep?.chunk_size) chunkSize = prep.chunk_size;
+    if (prep?.total_chunks) totalChunks = prep.total_chunks;
+  } catch (error) {
+    if (error?.response?.status !== 404) throw error;
+  }
+  for (let index = 0; index < totalChunks; index += 1) {
+    const blob = file.slice(index * chunkSize, Math.min((index + 1) * chunkSize, file.size));
+    const chunkDigest = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
+    const checksum = Array.from(new Uint8Array(chunkDigest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+    await uploadChunk(sessionId, index, blob, checksum, {
+      filename: file.name,
+      fileSize: file.size,
+      fileChecksum,
+    });
+  }
+  const fileType = (file.name.split(".").pop() || "bin").toLowerCase();
+  await completeUpload(sessionId, {
+    datasetId,
+    filename: file.name,
+    fileType,
+    isStructured: false,
+    fileSize: file.size,
+    fileChecksum,
+  });
+  const { data } = await client.patch(`${DATASETS_BASE}/${datasetId}/update/`, {
+    upload_session_id: sessionId,
+    filename: file.name,
+    file_type: fileType,
+  });
+  return data;
+}
+
 export async function getAdminPendingReviews() {
   const { data } = await client.get(`${DATASETS_BASE}/admin/pending-reviews/`);
   return data;
@@ -426,6 +486,12 @@ export async function getAdminUploadRequests() {
 export async function getReviewerQueue() {
   const { data } = await client.get("/admin-panel/queue/");
   return data;
+}
+
+export async function getMyDatasetDecision(datasetId) {
+  const { data } = await client.get("/admin-panel/my-reviews/");
+  const list = Array.isArray(data) ? data : data?.results || [];
+  return list.find((row) => String(row.dataset_id) === String(datasetId)) || null;
 }
 
 export async function getMyReviews(user) {
@@ -537,11 +603,6 @@ export async function getRevisionRequestsQueue() {
 /** Legacy share queue (410) — use Access Management V2 pending requests. */
 export async function getAccessRequestsQueue() {
   const { data } = await client.get("/access-control/requests/", { params: { status: "pending" } });
-  return data;
-}
-
-export async function voteOnAccessRequest(requestId, vote) {
-  const { data } = await client.post(`/sharing/access-requests/${requestId}/vote/`, { vote });
   return data;
 }
 

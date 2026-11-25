@@ -26,12 +26,15 @@ import {
 } from "recharts";
 import { getDatasetById } from "../api/datasets";
 import { getDownloadUrl, requestShareAccess, shareDatasetWith } from "../api/sharing";
+import { createRequest, getCatalog } from "../api/accessControl";
 import * as datasetsApi from "../features/datasets/hooks/datasetsApi";
 import DashboardAwareLayout from "../layouts/DashboardAwareLayout";
 import { getDatasetImage } from "../utils/datasetImage";
 import { useAuth } from "../context/useAuth";
 import { getDashboardPath } from "../utils/userRoles";
 import TabularPreview from "../components/ui/TabularPreview";
+
+const DEFAULT_REQUEST_PERMISSIONS = ["dataset.view", "dataset.download"];
 
 // ---------------------------------------------------------------------
 // DatasetViewPage — the PUBLIC read-only view a researcher lands on when
@@ -255,15 +258,19 @@ function normalizeDataset(raw) {
       columnCount: primaryFile?.columns?.length || MOCK_DATASET.dataExplorer.columnCount, // FIXME: backend doesn't return column count yet
     },
     metadataSections: MOCK_DATASET.metadataSections, // FIXME: no Collaborators/Coverage/DOI-citation endpoint yet
-    activity: {
-      views: raw.view_count ?? 0,
-      viewsDeltaPct: MOCK_DATASET.activity.viewsDeltaPct, // FIXME: no % change endpoint yet
-      downloads: raw.download_count ?? 0,
-      downloadsDeltaPct: MOCK_DATASET.activity.downloadsDeltaPct, // FIXME: no % change endpoint yet
-      topContributors: MOCK_DATASET.activity.topContributors, // FIXME: no contributors-on-detail endpoint wired yet
-    },
-    viewsSeries: MOCK_DATASET.viewsSeries, // FIXME: no per-dataset views time-series endpoint yet
-    downloadsSeries: MOCK_DATASET.downloadsSeries, // FIXME: no per-dataset downloads time-series endpoint yet
+    activity: (() => {
+      const localViews = Number(typeof localStorage !== "undefined" ? localStorage.getItem(`ordp_views_${raw.id}`) || 0 : 0);
+      const localDownloads = Number(typeof localStorage !== "undefined" ? localStorage.getItem(`ordp_downloads_${raw.id}`) || 0 : 0);
+      return {
+        views: (raw.view_count || raw.views || 0) + localViews,
+        viewsDeltaPct: raw.views_delta_pct ?? null,
+        downloads: (raw.download_count || raw.downloads || 0) + localDownloads,
+        downloadsDeltaPct: raw.downloads_delta_pct ?? null,
+        topContributors: [],
+      };
+    })(),
+    viewsSeries: raw.views_series || [],
+    downloadsSeries: raw.downloads_series || [],
     is_archived: raw.is_archived ?? false,
     archived_at: raw.archived_at ?? null,
   };
@@ -400,11 +407,14 @@ function ShareAccessModal({ dataset, mode = "download", isOwner = false, onClose
   const [purpose, setPurpose] = useState("");
   const [justification, setJustification] = useState("");
   const [durationDays, setDurationDays] = useState(30);
+  const [selectedPermissions, setSelectedPermissions] = useState(DEFAULT_REQUEST_PERMISSIONS);
+  const [permissionOptions, setPermissionOptions] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [submitted, setSubmitted] = useState(false);
   const isRestricted = dataset?.visibility === "restricted";
   const isShareMode = mode === "share";
+  const useV2Request = isRestricted && !isShareMode;
 
   // Safeguard: Owner should never submit request for their own dataset.
   // Backend allows direct download, so handle immediately.
@@ -423,9 +433,47 @@ function ShareAccessModal({ dataset, mode = "download", isOwner = false, onClose
     }
   }, [isOwner, isShareMode, dataset?.id, onDownloadReady]);
 
+  useEffect(() => {
+    if (!useV2Request) return;
+    let active = true;
+    getCatalog()
+      .then((rows) => {
+        if (!active) return;
+        const opts = (Array.isArray(rows) ? rows : []).filter(
+          (r) =>
+            r.resource_type === "dataset" &&
+            r.enforced !== false &&
+            ["dataset.view", "dataset.download", "dataset.edit", "dataset.metadata.edit"].includes(r.code)
+        );
+        setPermissionOptions(opts.length ? opts : DEFAULT_REQUEST_PERMISSIONS.map((code) => ({ code, name: code })));
+      })
+      .catch(() => {
+        if (active) {
+          setPermissionOptions(DEFAULT_REQUEST_PERMISSIONS.map((code) => ({ code, name: code })));
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [useV2Request]);
+
+  const togglePermission = (code) => {
+    setSelectedPermissions((prev) =>
+      prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]
+    );
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!purpose.trim()) return;
+    if (useV2Request && justification.trim().length < 10) {
+      setError("Please provide a justification of at least 10 characters.");
+      return;
+    }
+    if (useV2Request && selectedPermissions.length === 0) {
+      setError("Select at least one permission.");
+      return;
+    }
 
     // Safeguard: If owner in download mode, download directly
     if (isOwner && !isShareMode) {
@@ -444,6 +492,19 @@ function ShareAccessModal({ dataset, mode = "download", isOwner = false, onClose
     setSubmitting(true);
     setError(null);
     try {
+      if (useV2Request) {
+        const text = [purpose.trim(), justification.trim()].filter(Boolean).join("\n\n");
+        await createRequest({
+          kind: "permission",
+          resource_type: "dataset",
+          resource_id: dataset.id,
+          permissions: selectedPermissions,
+          justification: text.length >= 10 ? text : `${text}\n\nRequested via dataset page.`,
+        });
+        setSubmitted(true);
+        return;
+      }
+
       const payload = {
         purpose: purpose.trim(),
         reason: purpose.trim(),
@@ -586,7 +647,27 @@ function ShareAccessModal({ dataset, mode = "download", isOwner = false, onClose
               </div>
             )}
 
-            {(isShareMode || isRestricted) && (
+            {useV2Request && (
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-2">
+                  Permissions requested <span className="text-red-500">*</span>
+                </label>
+                <div className="space-y-2">
+                  {permissionOptions.map((opt) => (
+                    <label key={opt.code} className="flex items-center gap-2 text-sm text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={selectedPermissions.includes(opt.code)}
+                        onChange={() => togglePermission(opt.code)}
+                      />
+                      <span>{opt.name || opt.code}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {(isShareMode || (isRestricted && !useV2Request)) && (
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1">
                   Requested duration (days)
@@ -755,7 +836,7 @@ export default function DatasetViewPage() {
 
   const [dataset, setDataset] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState("");
   const [expandedSections, setExpandedSections] = useState(() => new Set());
   const [detailViewOpen, setDetailViewOpen] = useState(true);
 
@@ -771,13 +852,19 @@ export default function DatasetViewPage() {
 
     async function fetchDataset() {
       setLoading(true);
-      setError(false);
+      setError("");
       try {
         const raw = await getDatasetById(id);
         if (isMounted) setDataset(normalizeDataset(raw));
       } catch (err) {
         console.error("Failed to load dataset:", err);
-        if (isMounted) setError(true);
+        if (isMounted) setError(
+          err?.response?.status === 403
+            ? "Access denied. You don't have permission to view this dataset."
+            : err?.response?.status === 404
+              ? "This dataset is unavailable or you don't have access to it."
+              : "Couldn't load this dataset right now. Please try again shortly."
+        );
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -804,9 +891,7 @@ export default function DatasetViewPage() {
       <DashboardAwareLayout>
         <div className="w-full py-16 text-center flex-1">
           <p className="text-sm text-gray-500">
-            {error
-              ? "Couldn't load this dataset right now. Please try again shortly."
-              : "This dataset couldn't be found."}
+            {error || "This dataset couldn't be found."}
           </p>
           <div className="mt-4 flex items-center justify-center gap-3">
             <button
@@ -892,7 +977,7 @@ export default function DatasetViewPage() {
     } catch (err) {
       console.error("Failed to get download URL:", err);
       if (err.response?.status === 403) {
-        setDownloadError("You don't have access to this dataset.");
+        setDownloadError("Access denied. You don't have permission to download this dataset.");
       } else if (err.response?.status === 404) {
         setDownloadError("This dataset has no published file yet.");
       } else {
@@ -904,6 +989,15 @@ export default function DatasetViewPage() {
   };
 
   const handleDownloadReady = (url) => {
+    // Track real download
+    if (dataset?.id && typeof localStorage !== "undefined") {
+      const current = Number(localStorage.getItem(`ordp_downloads_${dataset.id}`) || 0);
+      localStorage.setItem(`ordp_downloads_${dataset.id}`, String(current + 1));
+      setDataset((prev) => prev ? {
+        ...prev,
+        activity: { ...prev.activity, downloads: (prev.activity?.downloads || 0) + 1 }
+      } : prev);
+    }
     setShareModalOpen(false);
     setDownloadError(null);
     if (!url) return;

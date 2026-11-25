@@ -5,6 +5,7 @@ import Sidebar from "../../layouts/Sidebar";
 import TopBar from "../../layouts/TopBar";
 import Button from "../../components/ui/Button";
 import { useAuth } from "../../context/useAuth";
+import { useConfirm } from "../../context/ConfirmContext";
 import * as datasetsApi from "../../features/datasets/api/datasetsApi";
 
 function getDisplayName(user) {
@@ -17,6 +18,7 @@ function getDisplayName(user) {
 export default function DashboardPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { confirm } = useConfirm();
   const [datasets, setDatasets] = useState([]);
   const [loadingDatasets, setLoadingDatasets] = useState(true);
   const [datasetError, setDatasetError] = useState("");
@@ -48,7 +50,12 @@ export default function DashboardPage() {
   }, []);
 
   async function handleSoftDelete(dataset) {
-    const confirmed = window.confirm(`Deactivate "${dataset.title}"?`);
+    const confirmed = await confirm({
+      title: "Deactivate dataset",
+      message: `Deactivate "${dataset.title}"?`,
+      confirmLabel: "Deactivate",
+      variant: "warning",
+    });
     if (!confirmed) return;
     setBusyDatasetId(dataset.id);
     setDatasetError("");
@@ -65,9 +72,12 @@ export default function DashboardPage() {
   }
 
   async function handleHardDelete(dataset) {
-    const confirmed = window.confirm(
-      `Permanently delete "${dataset.title}"? This cannot be undone.`
-    );
+    const confirmed = await confirm({
+      title: "Permanently delete",
+      message: `Permanently delete "${dataset.title}"? This cannot be undone.`,
+      confirmLabel: "Delete permanently",
+      variant: "danger",
+    });
     if (!confirmed) return;
     setBusyDatasetId(dataset.id);
     setDatasetError("");

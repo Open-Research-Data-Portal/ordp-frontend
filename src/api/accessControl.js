@@ -1,0 +1,43 @@
+import client from "./client";
+
+const base = "/access-control";
+const data = async (promise) => (await promise).data;
+
+export const getCatalog = () => data(client.get(`${base}/catalog/`));
+export const getMyPermissions = () => data(client.get(`${base}/me/`));
+export const getMyResources = () => data(client.get(`${base}/my-resources/`));
+export const getSharedDataset = (id) => data(client.get(`/datasets/${id}/`));
+export const updateSharedDataset = (id, payload) => data(client.patch(`/datasets/${id}/update/`, payload));
+export const deleteSharedDataset = (id) => data(client.delete(`/datasets/${id}/delete/`));
+export const downloadSharedDataset = (id) => data(client.get(`/sharing/${id}/download/`));
+export const getOverview = () => data(client.get(`${base}/overview/`));
+export const getUsers = (params = {}) => data(client.get(`${base}/users/`, { params }));
+export const getUser = (id) => data(client.get(`${base}/users/${id}/`));
+export const grantUser = (id, payload) => data(client.post(`${base}/users/${id}/grants/`, payload));
+export const grantUserBulk = (id, grants) => data(client.post(`${base}/users/${id}/grants/bulk/`, { grants }));
+export const revokeUserGrant = (id, reason = "") =>
+  data(client.delete(`${base}/user-grants/${id}/`, reason ? { data: { reason } } : undefined));
+export const getGroups = () => data(client.get(`${base}/groups/`));
+export const getGroupDirectory = () => data(client.get(`${base}/group-directory/`));
+export const getGroup = (id) => data(client.get(`${base}/groups/${id}/`));
+export const getGroupActivity = (id) => data(client.get(`${base}/groups/${id}/activity/`));
+export const createGroup = (payload) => data(client.post(`${base}/groups/`, payload));
+export const updateGroup = (id, payload) => data(client.patch(`${base}/groups/${id}/`, payload));
+export const archiveGroup = (id) => data(client.delete(`${base}/groups/${id}/`));
+export const addMember = (groupId, userId) => data(client.post(`${base}/groups/${groupId}/members/${userId}/`));
+export const removeMember = (groupId, userId) => data(client.delete(`${base}/groups/${groupId}/members/${userId}/`));
+export const grantGroup = (id, payload) => data(client.post(`${base}/groups/${id}/grants/`, payload));
+export const revokeGroupGrant = (id) => data(client.delete(`${base}/group-grants/${id}/`));
+export const getRequests = (params = {}) => data(client.get(`${base}/requests/`, { params }));
+export const getRequest = (id) => data(client.get(`${base}/requests/${id}/`));
+export const createRequest = (payload) => data(client.post(`${base}/requests/`, payload));
+export const cancelRequest = (id) => data(client.delete(`${base}/requests/${id}/`));
+export const reviewRequest = (id, payload) => data(client.post(`${base}/requests/${id}/review/`, payload));
+export const getResourceAccess = (type, id) => data(client.get(`${base}/resources/${type}/${id}/`));
+export const saveResourceMatrix = (type, id, edits) => data(client.post(`${base}/resources/${type}/${id}/matrix/`, { edits }));
+export const getAudit = () => data(client.get(`${base}/audit/`));
+export const exportAudit = () => data(client.get(`${base}/audit/export/`));
+export const getUserManagementAudit = () => data(client.get(`${base}/audit/user-management/`));
+export const getDiscoverableDatasets = () => data(client.get(`${base}/resources/`));
+export const listProjects = (params = {}) => data(client.get(`${base}/projects/`, { params }));
+export const listCollections = (params = {}) => data(client.get(`${base}/collections/`, { params }));

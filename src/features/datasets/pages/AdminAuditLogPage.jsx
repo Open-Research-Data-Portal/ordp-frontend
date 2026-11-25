@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Download, Clock, Database, AlertTriangle, TrendingUp, BarChart3, ShieldAlert } from "lucide-react";
+import { ArrowLeft, Download, Clock, Database, TrendingUp, BarChart3 } from "lucide-react";
 import DashboardShell from "../../../components/dashboard/DashboardShell";
+import UserManagementAudit from "../../../components/UserManagementAudit";
 import * as datasetsApi from "../hooks/datasetsApi";
 
 export default function AdminAuditLogPage() {
@@ -11,7 +12,7 @@ export default function AdminAuditLogPage() {
 
   const [peakHours, setPeakHours] = useState([]);
   const [mostAccessed, setMostAccessed] = useState([]);
-  const [flagged, setFlagged] = useState({ bursts: [], off_hours: [] });
+  const [, setFlagged] = useState({ bursts: [], off_hours: [] });
   const [graphs, setGraphs] = useState({ uploads: [], downloads: [], views: [] });
   const [daysWindow, setDaysWindow] = useState("30");
 
@@ -69,6 +70,7 @@ export default function AdminAuditLogPage() {
   return (
     <DashboardShell role="admin">
       <section className="space-y-6 max-w-7xl mx-auto pb-12">
+        <UserManagementAudit />
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-border shadow-sm">
           <div>
             <button
@@ -82,7 +84,7 @@ export default function AdminAuditLogPage() {
               <BarChart3 className="w-7 h-7 text-gold" /> Audit Log & Platform Analytics
             </h1>
             <p className="text-sm text-gray-600 mt-1">
-              Aggregated platform activity patterns, peak usage hours, top accessed datasets, and security heuristics. Individual logs are available via CSV/PDF export.
+              Aggregated platform activity patterns, peak usage hours, and top accessed datasets. Individual logs are available via CSV/PDF export.
             </p>
           </div>
           <div className="flex items-center gap-3 flex-wrap">
@@ -153,18 +155,7 @@ export default function AdminAuditLogPage() {
                 </p>
               </div>
 
-              <div className="bg-white p-6 rounded-xl border border-border shadow-sm space-y-2">
-                <div className="flex items-center justify-between text-gray-500 text-xs font-semibold uppercase tracking-wider">
-                  <span>Security Heuristics (Flagged)</span>
-                  <ShieldAlert className="w-4 h-4 text-amber-600" />
-                </div>
-                <div className="text-2xl font-extrabold text-navy">
-                  {(flagged.bursts?.length || 0) + (flagged.off_hours?.length || 0)} Alerts
-                </div>
-                <p className="text-xs text-gray-500">
-                  {flagged.bursts?.length || 0} download bursts, {flagged.off_hours?.length || 0} off-hours patterns
-                </p>
-              </div>
+
             </div>
 
             <div className="bg-white p-6 rounded-xl border border-border shadow-sm space-y-4">
@@ -204,7 +195,7 @@ export default function AdminAuditLogPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 gap-6">
               <div className="bg-white p-6 rounded-xl border border-border shadow-sm space-y-4 flex flex-col">
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg font-bold text-navy flex items-center gap-2">
@@ -241,46 +232,7 @@ export default function AdminAuditLogPage() {
                 </div>
               </div>
 
-              <div className="bg-white p-6 rounded-xl border border-border shadow-sm space-y-4 flex flex-col">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-bold text-navy flex items-center gap-2">
-                    <AlertTriangle className="w-5 h-5 text-amber-600" /> Flagged Activity & Heuristics
-                  </h2>
-                </div>
-                <div className="space-y-4 flex-1">
-                  <div>
-                    <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Download Bursts (Hourly)</h3>
-                    {(!flagged.bursts || flagged.bursts.length === 0) ? (
-                      <p className="text-xs text-gray-500 bg-bg p-3 rounded-lg">No abnormal download bursts detected.</p>
-                    ) : (
-                      <div className="space-y-2 max-h-40 overflow-y-auto">
-                        {flagged.bursts.map((b, i) => (
-                          <div key={i} className="flex items-center justify-between text-xs bg-amber-50/60 border border-amber-200 p-2.5 rounded-lg">
-                            <span className="font-medium text-navy">{b.user_name || `User #${b.user_id}`}</span>
-                            <span className="font-mono text-amber-800 font-bold">{b.count} downloads in hour</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <div>
-                    <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Off-Hours Access (Midnight – 5 AM)</h3>
-                    {(!flagged.off_hours || flagged.off_hours.length === 0) ? (
-                      <p className="text-xs text-gray-500 bg-bg p-3 rounded-lg">No unusual off-hours access patterns detected.</p>
-                    ) : (
-                      <div className="space-y-2 max-h-40 overflow-y-auto">
-                        {flagged.off_hours.map((o, i) => (
-                          <div key={i} className="flex items-center justify-between text-xs bg-red-50/60 border border-red-200 p-2.5 rounded-lg">
-                            <span className="font-medium text-navy">{o.user_name || `User #${o.user_id}`}</span>
-                            <span className="font-mono text-red-800 font-bold">{o.count} off-hours requests</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
+              
             </div>
 
             <div className="bg-white p-6 rounded-xl border border-border shadow-sm space-y-4">

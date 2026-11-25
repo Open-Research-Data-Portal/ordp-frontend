@@ -29,9 +29,13 @@ import StatCard from "../../../components/dashboard/StatCard";
 import { SectionHeader, StatusBadge, ProfileSavedNotice, EmptyState } from "../../../components/dashboard/dashboardUi";
 import * as datasetsApi from "../hooks/datasetsApi";
 import { fetchAllDatasets } from "../../../api/datasetsHub";
+import { useConfirm } from "../../../context/ConfirmContext.jsx";
 import { useToast } from "../../../context/ToastContext.jsx";
 import { useAuth } from "../../../context/useAuth";
 import { getEffectiveRoles } from "../../../utils/userRoles";
+import UserPermissionsModal from "../../../components/UserPermissionsModal";
+import * as accessApi from "../../../api/accessControl";
+import { accessError } from "../../../utils/accessError";
 
 function normalizeList(data) {
   if (Array.isArray(data)) return data;
@@ -118,6 +122,7 @@ export default function AdminDashboardPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { addToast } = useToast();
+  const { confirm } = useConfirm();
   const tab = searchParams.get("tab") || "overview";
 
   const [cards, setCards] = useState(null);
@@ -147,10 +152,70 @@ export default function AdminDashboardPage() {
   const [datasetStatusFilter, setDatasetStatusFilter] = useState("all");
   const [expandedDatasetId, setExpandedDatasetId] = useState(null);
   const [expandedUserId, setExpandedUserId] = useState(null);
+  const [accessUser, setAccessUser] = useState(null);
+  const [accessCatalog, setAccessCatalog] = useState([]);
+  const [accessDatasets, setAccessDatasets] = useState([]);
+  const [accessBusy, setAccessBusy] = useState(false);
+  const [accessErrorText, setAccessErrorText] = useState("");
 
   const { user: authUser } = useAuth();
   const currentAdminId = authUser?.id || authUser?.user_id;
   const currentAdminEmail = authUser?.email?.toLowerCase();
+
+  async function openUserAccess(userId) {
+    setAccessBusy(true);
+    setAccessErrorText("");
+    try {
+      const [account, catalog, datasets] = await Promise.all([
+        accessApi.getUser(userId), accessApi.getCatalog(), accessApi.getDiscoverableDatasets(),
+      ]);
+      setAccessUser(account);
+      setAccessCatalog(catalog);
+      setAccessDatasets(datasets);
+    } catch (error) {
+      addToast(accessError(error, "Could not open this user's permissions."), "error");
+    } finally {
+      setAccessBusy(false);
+    }
+  }
+
+  async function grantUserAccess(grants) {
+    setAccessBusy(true);
+    setAccessErrorText("");
+    try {
+      await accessApi.grantUserBulk(accessUser.id, grants);
+      setAccessUser(await accessApi.getUser(accessUser.id));
+      window.dispatchEvent(new Event("ordp:permissions-changed"));
+      addToast("Permissions granted.", "success");
+      return true;
+    } catch (error) {
+      setAccessErrorText(accessError(error));
+      return false;
+    } finally {
+      setAccessBusy(false);
+    }
+  }
+
+  async function revokeUserAccess(grantId) {
+    if (!(await confirm({
+      title: "Revoke permission",
+      message: "Revoke this direct permission?",
+      confirmLabel: "Revoke",
+      variant: "danger",
+    }))) return;
+    setAccessBusy(true);
+    setAccessErrorText("");
+    try {
+      await accessApi.revokeUserGrant(grantId);
+      setAccessUser(await accessApi.getUser(accessUser.id));
+      window.dispatchEvent(new Event("ordp:permissions-changed"));
+      addToast("Permission revoked.", "success");
+    } catch (error) {
+      setAccessErrorText(accessError(error));
+    } finally {
+      setAccessBusy(false);
+    }
+  }
 
   useEffect(() => {
     let active = true;
@@ -327,6 +392,7 @@ export default function AdminDashboardPage() {
       setNewUserFullName("");
       setNewUserRole("public");
       setShowCreateForm(false);
+      if (res?.user_id || res?.id) await openUserAccess(res.user_id || res.id);
     } catch (err) {
       const detail =
         err?.response?.data?.detail ||
@@ -408,7 +474,12 @@ export default function AdminDashboardPage() {
       return;
     }
 
-    if (!window.confirm(`Revoke the "${formatRoleLabel(roleToRevoke)}" role from ${targetUser.full_name || targetUser.email}?`)) {
+    if (!(await confirm({
+      title: "Revoke role",
+      message: `Revoke the "${formatRoleLabel(roleToRevoke)}" role from ${targetUser.full_name || targetUser.email}?`,
+      confirmLabel: "Revoke role",
+      variant: "danger",
+    }))) {
       return;
     }
 
@@ -551,6 +622,10 @@ export default function AdminDashboardPage() {
 
   return (
     <DashboardShell title="ORDP Admin Console" subtitle="System status and key metrics">
+      {accessUser && <UserPermissionsModal key={accessUser.id} user={accessUser} catalog={accessCatalog}
+        datasets={accessDatasets} busy={accessBusy} error={accessErrorText}
+        onClose={() => { setAccessUser(null); setAccessErrorText(""); }}
+        onGrant={grantUserAccess} onRevoke={revokeUserAccess} />}
       <ProfileSavedNotice />
       <div className="flex justify-between items-start mb-6 animate-fade-in-up">
         <div>
@@ -679,7 +754,7 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
               <p className="mt-2 text-xs text-slate-500">
-                Tip: If this email already has an account, the selected role will be added to it. If it is a new email, an account will be created and an activation link sent.
+                If this email already has an account, the selected role will be added. After saving, you can choose this user’s permissions in the access panel.
               </p>
               <div className="mt-3 flex items-center justify-end gap-2">
                 <button
@@ -694,7 +769,7 @@ export default function AdminDashboardPage() {
                   disabled={creatingUser}
                   className="bg-navy hover:bg-navy-light text-white text-sm font-semibold rounded-lg px-4 py-2 disabled:opacity-50 transition-colors"
                 >
-                  {creatingUser ? "Processing…" : "Assign / Create User"}
+                  {creatingUser ? "Processing…" : "Create user & choose access"}
                 </button>
               </div>
             </form>
@@ -740,6 +815,11 @@ export default function AdminDashboardPage() {
                             <div className="min-w-0">
                               <p className="font-medium text-navy truncate">{u.full_name || u.name || "—"}</p>
                               <p className="text-xs text-gray-500 truncate">{u.email}</p>
+                              <button type="button" onClick={() => openUserAccess(uid)} disabled={accessBusy}
+                                className="mt-1 inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-900 hover:bg-amber-100"
+                                aria-label={`Manage access for ${u.email}`}>
+                                <Shield className="h-3 w-3" /> Manage access
+                              </button>
                             </div>
                           </div>
                         </td>
@@ -1191,14 +1271,24 @@ export default function AdminDashboardPage() {
                                   <div className="text-[11px] text-slate-400 font-mono">
                                     Format: {dataset.format || dataset.data_format || "Tabular/Archive"}
                                   </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => navigate(`/datasets/${id}`)}
-                                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-navy hover:bg-navy-light text-white text-xs font-semibold shadow-xs hover:shadow transition cursor-pointer"
-                                  >
-                                    More
-                                    <ArrowRight className="w-3.5 h-3.5 text-gold" />
-                                  </button>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => navigate(`/reviewer/review/${id}`)}
+                                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gold hover:bg-gold-dark text-navy text-xs font-semibold shadow-xs hover:shadow transition cursor-pointer"
+                                    >
+                                      Review
+                                      <ArrowRight className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => navigate(`/datasets/${id}`)}
+                                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-navy hover:bg-navy-light text-white text-xs font-semibold shadow-xs hover:shadow transition cursor-pointer"
+                                    >
+                                      More
+                                      <ArrowRight className="w-3.5 h-3.5 text-gold" />
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
                             </td>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutGrid,
@@ -6,7 +6,6 @@ import {
   Settings,
   HelpCircle,
   LogOut,
-  ShieldCheck,
   ClipboardCheck,
   Users,
   Database,
@@ -19,10 +18,12 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
+  KeyRound,
 } from "lucide-react";
 import { useAuth } from "../../context/useAuth";
-import { getDashboardPath, isAdmin, isResearcher, getActiveRole } from "../../utils/userRoles";
+import { getDashboardPath, isResearcher, getActiveRole } from "../../utils/userRoles";
 import logo from "../../assets/aastulogo.png";
+import { getMyResources } from "../../api/accessControl";
 
 const ROLE_CONFIG = {
   user: {
@@ -35,6 +36,7 @@ const ROLE_CONFIG = {
       { label: "Archived", icon: Archive, to: "/archived-datasets" },
       { label: "Bookmarks", icon: Bookmark, to: "/bookmarks" },
       { label: "Notifications", icon: Bell, to: "/notifications" },
+      { label: "Access", icon: Shield, to: "/access-management" },
       { label: "Settings", icon: Settings, to: "/profile" },
     ],
   },
@@ -48,6 +50,7 @@ const ROLE_CONFIG = {
       { label: "Other Datasets", icon: Database, to: "/datasets" },
       { label: "Bookmarks", icon: Bookmark, to: "/bookmarks" },
       { label: "Notifications", icon: Bell, to: "/notifications" },
+      { label: "Access", icon: Shield, to: "/access-management" },
       { label: "Settings", icon: Settings, to: "/profile" },
     ],
   },
@@ -60,6 +63,7 @@ const ROLE_CONFIG = {
       { label: "Review Datasets", icon: ClipboardCheck, to: "/reviewer/review-queue" },
       { label: "Archive Requests", icon: Archive, to: "/reviewer/archive-requests" },
       { label: "Notifications", icon: Bell, to: "/notifications" },
+      { label: "Access", icon: Shield, to: "/access-management" },
       { label: "Settings", icon: Settings, to: "/profile" },
     ],
   },
@@ -73,6 +77,7 @@ const ROLE_CONFIG = {
       { label: "Audit Log", icon: ScrollText, to: "/admin/audit-log" },
       { label: "Archived", icon: Archive, to: "/admin/archived-datasets" },
       { label: "Users", icon: Users, to: "/admin-dashboard?tab=users" },
+      { label: "Access", icon: Shield, to: "/access-management" },
       { label: "Settings", icon: Settings, to: "/admin/settings" },
       { label: "Notifications", icon: Bell, to: "/notifications" },
     ],
@@ -104,8 +109,33 @@ export default function DashboardSidebar({
 }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { logout, user } = useAuth();
+  const { logout, user, accessControlMe, refreshAccessControlMe } = useAuth();
   const [, setRoleTick] = useState(0);
+  const [sharedResources, setSharedResources] = useState([]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    let active = true;
+    const refreshAccess = () => {
+      getMyResources()
+        .then((resources) => {
+          if (!active) return;
+          setSharedResources(Array.isArray(resources) ? resources : []);
+        })
+        .catch(() => {
+          if (active) setSharedResources([]);
+        });
+      refreshAccessControlMe?.();
+    };
+    refreshAccess();
+    window.addEventListener("focus", refreshAccess);
+    window.addEventListener("ordp:permissions-changed", refreshAccess);
+    return () => {
+      active = false;
+      window.removeEventListener("focus", refreshAccess);
+      window.removeEventListener("ordp:permissions-changed", refreshAccess);
+    };
+  }, [user?.id, refreshAccessControlMe]);
 
   useEffect(() => {
     const handleRoleChanged = () => setRoleTick((t) => t + 1);
@@ -115,8 +145,43 @@ export default function DashboardSidebar({
 
   const roleKey = getRoleKey(user);
   const config = ROLE_CONFIG[roleKey];
+  // Every signed-in user needs the Access entry to request permissions.
+  // Management tabs inside the page remain protected by the user's grants.
+  // Work on a fresh list so dynamic entries are not duplicated across renders.
+  const navItems = [...config.nav];
+  if (roleKey !== "admin") {
+    const myAccessIndex = navItems.findIndex((item) => item.to === "/access-management" || item.to === "/profile");
+    navItems.splice(
+      myAccessIndex < 0 ? navItems.length : myAccessIndex,
+      0,
+      { label: "My Access", icon: KeyRound, to: "/my-access" }
+    );
+  }
+  if (sharedResources.length) {
+    const accessIndex = navItems.findIndex((item) => item.to === "/access-management" || item.to === "/my-access");
+    navItems.splice(accessIndex < 0 ? navItems.length : accessIndex, 0,
+      { label: "Shared with me", icon: FolderKanban, to: "/shared-with-me" });
+  }
+  const accessSections = [
+    {
+      label: roleKey === "admin" ? "Access requests to review" : "Access requests",
+      tab: "Access Requests",
+      show: true,
+    },
+    {
+      label: roleKey === "admin" ? "Group requests to review" : "Group requests",
+      tab: "Group Requests",
+      show: true,
+    },
+    { label: "Dataset permissions", tab: "Resources & Permissions", show: roleKey === "admin" },
+  ].filter((section) => section.show).map((section) => ({
+    ...section, to: `/access-management?tab=${encodeURIComponent(section.tab)}`,
+  }));
   const dashboardPath = getDashboardPath(user);
   const { pathname, search } = location;
+  const [accessExpanded, setAccessExpanded] = useState(null);
+  const onAccessPage = pathname.startsWith("/access-management");
+  const accessOpen = accessExpanded ?? onAccessPage;
 
   const [internalCollapsed, setInternalCollapsed] = useState(() => {
     return localStorage.getItem("sidebar_collapsed") === "true";
@@ -138,11 +203,21 @@ export default function DashboardSidebar({
     }
   };
 
-  const handleCloseMobile = () => {
+  const handleCloseMobile = useCallback(() => {
     if (controlledOnCloseMobile) {
       controlledOnCloseMobile();
     } else {
       setInternalMobileOpen(false);
+    }
+  }, [controlledOnCloseMobile]);
+
+  const handleAccessClick = (event, mobile = false) => {
+    if (onAccessPage) {
+      event.preventDefault();
+      setAccessExpanded((current) => !(current ?? true));
+    } else {
+      setAccessExpanded(true);
+      if (mobile) handleCloseMobile();
     }
   };
 
@@ -154,7 +229,7 @@ export default function DashboardSidebar({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [mobileOpen]);
+  }, [mobileOpen, handleCloseMobile]);
 
   async function handleSignOut() {
     await logout();
@@ -193,12 +268,14 @@ export default function DashboardSidebar({
 
         {/* Navigation Items */}
         <nav className="flex-1 px-3 py-3 space-y-1 overflow-y-auto min-h-0 custom-scrollbar">
-          {config.nav.map(({ label, icon: Icon, to }) => {
-            const active = isNavActive(to, pathname, search);
+          {navItems.map(({ label, icon: Icon, to }) => {
+            const active = to === "/access-management" ? onAccessPage : isNavActive(to, pathname, search);
             return (
+              <div key={to}>
               <Link
-                key={to}
                 to={to}
+                onClick={to === "/access-management" ? handleAccessClick : undefined}
+                aria-expanded={to === "/access-management" ? accessOpen : undefined}
                 title={collapsed ? label : undefined}
                 className={[
                   "flex items-center gap-3 py-2.5 rounded-lg text-sm font-medium transition group relative",
@@ -211,6 +288,15 @@ export default function DashboardSidebar({
                 <Icon className="w-5 h-5 shrink-0" />
                 {!collapsed && <span className="truncate">{label}</span>}
               </Link>
+              {to === "/access-management" && !collapsed && accessOpen && onAccessPage && (
+                <div className="ml-7 space-y-0.5 border-l border-white/15 pl-2" aria-label="Access sections">
+                  {accessSections.map((section) => <Link key={section.to} to={section.to}
+                    className={`block rounded-md px-3 py-1.5 text-xs ${isNavActive(section.to, pathname, search) ? "bg-white/10 font-semibold text-white" : "text-slate-400 hover:bg-white/5 hover:text-white"}`}>
+                    {section.label}
+                  </Link>)}
+                </div>
+              )}
+              </div>
             );
           })}
         </nav>
@@ -273,13 +359,14 @@ export default function DashboardSidebar({
 
             {/* Mobile Navigation */}
             <nav className="flex-1 px-3 py-3 space-y-1 overflow-y-auto min-h-0">
-              {config.nav.map(({ label, icon: Icon, to }) => {
-                const active = isNavActive(to, pathname, search);
+              {navItems.map(({ label, icon: Icon, to }) => {
+                const active = to === "/access-management" ? onAccessPage : isNavActive(to, pathname, search);
                 return (
+                  <div key={to}>
                   <Link
-                    key={to}
                     to={to}
-                    onClick={handleCloseMobile}
+                    onClick={to === "/access-management" ? (event) => handleAccessClick(event, true) : handleCloseMobile}
+                    aria-expanded={to === "/access-management" ? accessOpen : undefined}
                     className={[
                       "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition",
                       active
@@ -290,6 +377,15 @@ export default function DashboardSidebar({
                     <Icon className="w-5 h-5 shrink-0" />
                     <span>{label}</span>
                   </Link>
+                  {to === "/access-management" && accessOpen && onAccessPage && (
+                    <div className="ml-7 space-y-0.5 border-l border-white/15 pl-2" aria-label="Access sections">
+                      {accessSections.map((section) => <Link key={section.to} to={section.to} onClick={handleCloseMobile}
+                        className={`block rounded-md px-3 py-2 text-xs ${isNavActive(section.to, pathname, search) ? "bg-white/10 font-semibold text-white" : "text-slate-400 hover:bg-white/5 hover:text-white"}`}>
+                        {section.label}
+                      </Link>)}
+                    </div>
+                  )}
+                  </div>
                 );
               })}
             </nav>

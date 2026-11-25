@@ -166,14 +166,20 @@ async function markProfileReadyForUpload() {
 }
 
 async function startUploadSession(detailsData) {
+  const licensingFields = {
+    license: detailsData.license,
+    license_rights_confirmed: detailsData.licenseRightsConfirmed,
+    license_custom_terms: detailsData.licenseCustomTerms,
+  };
   const payloads = [
     {
       title: detailsData.title,
       description: detailsData.description || detailsData.title,
       visibility: "restricted",
+      ...licensingFields,
     },
-    { title: detailsData.title, visibility: "restricted" },
-    { name: detailsData.title, title: detailsData.title, visibility: "public" },
+    { title: detailsData.title, visibility: "restricted", ...licensingFields },
+    { name: detailsData.title, title: detailsData.title, visibility: "public", ...licensingFields },
   ];
   let lastErr;
   for (const payload of payloads) {
@@ -325,7 +331,12 @@ export default function useDatasetSubmission(draftId = null) {
         }
       } else {
         try {
-          await datasetsApi.updateDataset(did, { title: detailsData.title });
+          await datasetsApi.updateDataset(did, {
+            title: detailsData.title,
+            license: detailsData.license,
+            license_rights_confirmed: detailsData.licenseRightsConfirmed,
+            license_custom_terms: detailsData.licenseCustomTerms,
+          });
         } catch (e) {
           console.warn("Dataset title update deferred:", e);
         }
@@ -609,7 +620,11 @@ export default function useDatasetSubmission(draftId = null) {
         if (!policyData.termsAccepted) {
           throw new Error("You must accept the Terms & Conditions to submit a dataset.");
         }
-        await datasetsApi.submitDataset(datasetId, true);
+        await datasetsApi.submitDataset(datasetId, true, {
+          license: details.license,
+          licenseRightsConfirmed: details.licenseRightsConfirmed,
+          licenseCustomTerms: details.licenseCustomTerms,
+        });
       }
 
       const status = policyData.isDraft ? "draft" : "pending";

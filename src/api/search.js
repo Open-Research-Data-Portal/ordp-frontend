@@ -18,14 +18,42 @@ export async function searchDatasets(params = {}) {
     list = Array.isArray(data) ? data : (data?.results || data?.datasets || []);
     // Keep the deployed API authoritative, while applying the category name
     // locally when the response does not expose a category UUID.
-    return applyLocalFilters(list, { ...params, category_name: categoryName });
+    const hydrated = await hydrateDatasetThumbnails(list);
+    return applyLocalFilters(hydrated, { ...params, category_name: categoryName });
   } catch (err) {
     console.warn("searchDatasets primary failed, falling back:", err?.message);
   }
 
   // Fallback: pull from all available sources (always includes mock data)
   list = await fetchAllDatasets();
-  return applyLocalFilters(list, { ...params, category_name: categoryName });
+  const hydrated = await hydrateDatasetThumbnails(list);
+  return applyLocalFilters(hydrated, { ...params, category_name: categoryName });
+}
+
+export async function hydrateDatasetThumbnails(list) {
+  const datasets = Array.isArray(list) ? list : [];
+  const pending = datasets.map(async (dataset) => {
+    if (!dataset?.id) {
+      return dataset;
+    }
+
+    const thumbnailKey = dataset.thumbnail_key || dataset.thumbnailKey;
+    if (!thumbnailKey) return dataset;
+
+    try {
+      const data = await getCached(`/datasets/${dataset.id}/thumbnail/url/`);
+      return {
+        ...dataset,
+        thumbnail_url: data?.thumbnail_url || data?.thumbnailUrl || data?.url || null,
+        thumbnail_url_expires_at:
+          data?.thumbnail_url_expires_at || data?.thumbnailUrlExpiresAt || null,
+      };
+    } catch {
+      return dataset;
+    }
+  });
+
+  return Promise.all(pending);
 }
 
 /**
@@ -141,7 +169,10 @@ export async function getDiscoverFeed() {
     const response = await client.get("/search/discover/");
     const data = response.data;
     const list = Array.isArray(data) ? data : (data?.results || data?.datasets || []);
-    if (list.length > 0) return applyLocalFilters(list, { order_by: "popular" });
+    if (list.length > 0) {
+      const hydrated = await hydrateDatasetThumbnails(list);
+      return applyLocalFilters(hydrated, { order_by: "popular" });
+    }
   } catch (err) {
     console.warn("getDiscoverFeed failed, falling back:", err?.message);
   }

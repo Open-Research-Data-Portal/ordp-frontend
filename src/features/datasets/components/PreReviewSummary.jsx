@@ -7,7 +7,9 @@ import {
   CheckCircle2,
   AlertCircle,
   Sparkles,
+  Scale,
 } from "lucide-react";
+import { getLicenseInfo } from "../utils/licensing";
 
 export default function PreReviewSummary({
   formData = {},
@@ -24,6 +26,7 @@ export default function PreReviewSummary({
   const files = (upload.files || []).filter((e) => e.file || e.name);
   const totalSizeBytes = files.reduce((acc, f) => acc + (f.file?.size || 0), 0);
   const totalSizeLabel = totalSizeBytes > 0 ? (totalSizeBytes / (1024 * 1024)).toFixed(2) + " MB" : "—";
+  const licenseInfo = getLicenseInfo(details.license);
 
   return (
     <div className="bg-white border border-[#E3E1DA] shadow-xl rounded-2xl p-6 sm:p-10 animate-fade-in-up">
@@ -93,6 +96,37 @@ export default function PreReviewSummary({
                 <span className="text-gray-400 block text-[11px] uppercase font-semibold">Temporal Coverage</span>
                 <span className="font-medium text-slate-800">{details.temporalCoverage || "—"}</span>
               </div>
+            </div>
+
+            {/* Licensing & Rights Summary */}
+            <div className="pt-3 border-t border-slate-200/70 mt-3">
+              <span className="text-gray-400 block text-[11px] uppercase font-semibold mb-1 flex items-center gap-1.5">
+                <Scale className="w-3.5 h-3.5 text-gold-dark" />
+                License & Rights Authorization
+              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                  {licenseInfo.name || licenseInfo.short_name || details.license}
+                </span>
+                {details.licenseRightsConfirmed && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <ShieldCheck className="w-3 h-3 text-emerald-600" /> Rights Confirmed
+                  </span>
+                )}
+                {licenseInfo.url && (
+                  <a
+                    href={licenseInfo.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-gold-dark hover:underline ml-auto"
+                  >
+                    View Terms ↗
+                  </a>
+                )}
+              </div>
+              <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                {licenseInfo.description}
+              </p>
             </div>
             {Array.isArray(details.coAuthors) && details.coAuthors.length > 0 && (
               <div className="pt-2">

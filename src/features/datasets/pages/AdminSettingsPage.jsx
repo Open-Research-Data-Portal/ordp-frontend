@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
+import { SUPPORTED_LICENSES, getLicenseInfo } from "../utils/licensing";
 import {
+  Scale,
+  ExternalLink,
   SlidersHorizontal,
   Tag,
   CheckCircle2,
@@ -231,6 +234,23 @@ export default function AdminSettingsPage() {
   const [notifyOnArchive, setNotifyOnArchive] = useState(true);
   const [notifyOnDeletion, setNotifyOnDeletion] = useState(true);
   const [systemSaving, setSystemSaving] = useState(false);
+  const [defaultLicense, setDefaultLicense] = useState("CC-BY-4.0");
+  const [savingLicense, setSavingLicense] = useState(false);
+  const [licenseOptions, setLicenseOptions] = useState(SUPPORTED_LICENSES);
+  const [allLicenses, setAllLicenses] = useState(SUPPORTED_LICENSES);
+  const [showAddLicenseForm, setShowAddLicenseForm] = useState(false);
+  const [editingLicenseKey, setEditingLicenseKey] = useState(null);
+  const [creatingLicense, setCreatingLicense] = useState(false);
+  const [togglingLicenseKey, setTogglingLicenseKey] = useState(null);
+  const [deletingLicenseKey, setDeletingLicenseKey] = useState(null);
+  const [newLicense, setNewLicense] = useState({
+    name: "",
+    key: "",
+    short_name: "",
+    url: "",
+    description: "",
+    is_restricted: false,
+  });
 
   // Inactive Users & Succession (Migrated from User Management)
   const [inactiveUsers, setInactiveUsers] = useState([]);
@@ -240,6 +260,18 @@ export default function AdminSettingsPage() {
   const [successionEmail, setSuccessionEmail] = useState("");
   const [successionFullName, setSuccessionFullName] = useState("");
   const [successionLoading, setSuccessionLoading] = useState(false);
+
+  useEffect(() => {
+    datasetsApi
+      .getAdminLicensingSettings()
+      .then((data) => {
+        if (data?.default_license) setDefaultLicense(data.default_license);
+        if (data?.supported_licenses?.length) setLicenseOptions(data.supported_licenses);
+        if (data?.all_licenses?.length) setAllLicenses(data.all_licenses);
+        else if (data?.supported_licenses?.length) setAllLicenses(data.supported_licenses);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetchSavedWeights().then((saved) => {
@@ -392,16 +424,136 @@ export default function AdminSettingsPage() {
   async function handleSaveSystem() {
     setSystemSaving(true);
     try {
-      await client
-        .post("/admin-panel/settings/system/", {
+      await Promise.allSettled([
+        client.post("/admin-panel/settings/system/", {
           draft_expiration_days: draftDays,
           notify_on_archive: notifyOnArchive,
           notify_on_deletion: notifyOnDeletion,
-        })
-        .catch(() => {});
-      addToast("System settings saved.", "success");
+        }),
+        datasetsApi.updateAdminLicensingSettings(defaultLicense),
+      ]);
+      addToast("System settings and default license saved.", "success");
     } finally {
       setSystemSaving(false);
+    }
+  }
+
+  async function handleUpdateDefaultLicense() {
+    setSavingLicense(true);
+    try {
+      await datasetsApi.updateAdminLicensingSettings(defaultLicense);
+      addToast(`Default dataset license updated to ${defaultLicense}.`, "success");
+    } catch (err) {
+      addToast(err?.response?.data?.detail || "Failed to update default license.", "error");
+    } finally {
+      setSavingLicense(false);
+    }
+  }
+
+  function resetLicenseForm() {
+    setNewLicense({
+      name: "",
+      key: "",
+      short_name: "",
+      url: "",
+      description: "",
+      is_restricted: false,
+    });
+    setEditingLicenseKey(null);
+    setShowAddLicenseForm(false);
+  }
+
+  function startEditCustomLicense(lic) {
+    setEditingLicenseKey(lic.key);
+    setNewLicense({
+      name: lic.name || "",
+      key: lic.key || "",
+      short_name: lic.short_name || "",
+      url: lic.url || "",
+      description: lic.description || "",
+      is_restricted: Boolean(lic.is_restricted),
+    });
+    setShowAddLicenseForm(true);
+  }
+
+  function syncLicenseLists(data) {
+    if (data?.supported_licenses?.length) setLicenseOptions(data.supported_licenses);
+    if (data?.all_licenses?.length) setAllLicenses(data.all_licenses);
+    if (data?.default_license) setDefaultLicense(data.default_license);
+  }
+
+  async function handleSaveCustomLicense(e) {
+    e.preventDefault();
+    if (!newLicense.name.trim()) {
+      addToast("License name is required.", "error");
+      return;
+    }
+    setCreatingLicense(true);
+    try {
+      const payload = {
+        name: newLicense.name.trim(),
+        ...(newLicense.short_name.trim() ? { short_name: newLicense.short_name.trim() } : {}),
+        url: newLicense.url.trim(),
+        description: newLicense.description.trim(),
+        is_restricted: newLicense.is_restricted,
+      };
+      if (editingLicenseKey) {
+        const data = await datasetsApi.updateAdminCustomLicense(editingLicenseKey, payload);
+        syncLicenseLists(data);
+        resetLicenseForm();
+        addToast(`License "${data?.license?.name || payload.name}" updated.`, "success");
+      } else {
+        const data = await datasetsApi.createAdminCustomLicense({
+          ...payload,
+          ...(newLicense.key.trim() ? { key: newLicense.key.trim() } : {}),
+        });
+        syncLicenseLists(data);
+        if (data?.license?.key) {
+          setDefaultLicense(data.license.key);
+        }
+        resetLicenseForm();
+        addToast(`License "${data?.license?.name || payload.name}" added.`, "success");
+      }
+    } catch (err) {
+      addToast(err?.response?.data?.detail || "Failed to save license.", "error");
+    } finally {
+      setCreatingLicense(false);
+    }
+  }
+
+  async function handleToggleCustomLicenseActive(lic) {
+    const nextActive = !lic.is_active;
+    setTogglingLicenseKey(lic.key);
+    try {
+      const data = await datasetsApi.updateAdminCustomLicense(lic.key, { is_active: nextActive });
+      syncLicenseLists(data);
+      addToast(
+        `License "${lic.name}" ${nextActive ? "activated" : "deactivated"}.`,
+        "success"
+      );
+    } catch (err) {
+      addToast(err?.response?.data?.detail || "Failed to update license status.", "error");
+    } finally {
+      setTogglingLicenseKey(null);
+    }
+  }
+
+  async function handleDeleteCustomLicense(licenseKey) {
+    if (!(await confirm({
+      title: "Delete custom license",
+      message: `Are you sure you want to delete the custom license "${licenseKey}"?`,
+      confirmLabel: "Delete license",
+    }))) return;
+    setDeletingLicenseKey(licenseKey);
+    try {
+      const data = await datasetsApi.deleteAdminCustomLicense(licenseKey);
+      syncLicenseLists(data);
+      if (editingLicenseKey === licenseKey) resetLicenseForm();
+      addToast(`Custom license "${licenseKey}" removed.`, "success");
+    } catch (err) {
+      addToast(err?.response?.data?.detail || "Failed to remove custom license.", "error");
+    } finally {
+      setDeletingLicenseKey(null);
     }
   }
 
@@ -571,6 +723,281 @@ export default function AdminSettingsPage() {
                     <Trash2 className="w-3.5 h-3.5 text-red-400" />
                   )}
                   Delete Expired Drafts
+                </button>
+              </div>
+            </div>
+
+            {/* Default Dataset License Card */}
+            <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Scale className="w-4 h-4 text-slate-500" />
+                    <p className="text-sm font-semibold text-slate-700">Default Dataset License</p>
+                  </div>
+                  <span className="text-xs bg-blue-50 text-blue-700 border border-blue-200 font-semibold px-2.5 py-0.5 rounded-full">
+                    {defaultLicense}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mb-4">
+                  Select which license will be pre-selected for researchers on the dataset contribution form.
+                </p>
+
+                <div className="space-y-3 mb-4">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-slate-600">Active Default:</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (showAddLicenseForm) resetLicenseForm();
+                        else setShowAddLicenseForm(true);
+                      }}
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-navy hover:text-navy-light cursor-pointer"
+                    >
+                      {showAddLicenseForm ? <X className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
+                      {showAddLicenseForm ? "Cancel" : "Add New License"}
+                    </button>
+                  </div>
+                  <div>
+                    <select
+                      value={defaultLicense}
+                      onChange={(e) => setDefaultLicense(e.target.value)}
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-semibold text-slate-800 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-navy/30"
+                    >
+                      {licenseOptions.map((opt) => (
+                        <option key={opt.key} value={opt.key}>
+                          {opt.name || opt.short_name} — {opt.full_name || opt.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {showAddLicenseForm && (
+                    <form
+                      onSubmit={handleSaveCustomLicense}
+                      className="bg-slate-50 rounded-lg p-3 border border-slate-200 space-y-2.5"
+                    >
+                      <p className="text-xs font-semibold text-slate-700 m-0">
+                        {editingLicenseKey ? `Edit Custom License (${editingLicenseKey})` : "Create Custom License"}
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[11px] font-medium text-slate-600 mb-0.5">
+                            Name <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="e.g. MIT Data License"
+                            value={newLicense.name}
+                            onChange={(e) => setNewLicense((p) => ({ ...p, name: e.target.value }))}
+                            className="w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-navy/30"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-slate-600 mb-0.5">
+                            Key / Code {editingLicenseKey ? "(locked)" : "(optional)"}
+                          </label>
+                          <input
+                            type="text"
+                            disabled={Boolean(editingLicenseKey)}
+                            placeholder="e.g. MIT-DATA"
+                            value={newLicense.key}
+                            onChange={(e) => setNewLicense((p) => ({ ...p, key: e.target.value }))}
+                            className="w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs bg-white disabled:bg-slate-100 disabled:text-slate-500 focus:outline-none focus:ring-2 focus:ring-navy/30"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-slate-600 mb-0.5">
+                            Short Name (optional)
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. MIT Data"
+                            value={newLicense.short_name}
+                            onChange={(e) => setNewLicense((p) => ({ ...p, short_name: e.target.value }))}
+                            className="w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-navy/30"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-medium text-slate-600 mb-0.5">
+                            Legal Terms URL (optional)
+                          </label>
+                          <input
+                            type="url"
+                            placeholder="https://..."
+                            value={newLicense.url}
+                            onChange={(e) => setNewLicense((p) => ({ ...p, url: e.target.value }))}
+                            className="w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-navy/30"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-medium text-slate-600 mb-0.5">
+                          Description (optional)
+                        </label>
+                        <textarea
+                          rows={2}
+                          placeholder="Brief summary of permissions and conditions..."
+                          value={newLicense.description}
+                          onChange={(e) => setNewLicense((p) => ({ ...p, description: e.target.value }))}
+                          className="w-full border border-slate-200 rounded-md px-2.5 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-navy/30"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between pt-1">
+                        <label className="inline-flex items-center gap-1.5 text-[11px] text-slate-700 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={newLicense.is_restricted}
+                            onChange={(e) => setNewLicense((p) => ({ ...p, is_restricted: e.target.checked }))}
+                            className="rounded border-slate-300 text-navy focus:ring-navy/30"
+                          />
+                          Restricted access license
+                        </label>
+                        <button
+                          type="submit"
+                          disabled={creatingLicense}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-navy text-white text-xs font-semibold hover:bg-navy-light disabled:opacity-50 transition cursor-pointer"
+                        >
+                          {creatingLicense ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : editingLicenseKey ? (
+                            <Save className="w-3 h-3 text-gold" />
+                          ) : (
+                            <Plus className="w-3 h-3 text-gold" />
+                          )}
+                          {editingLicenseKey ? "Save Changes" : "Save License"}
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  {(() => {
+                    const info =
+                      licenseOptions.find((opt) => opt.key === defaultLicense) ||
+                      getLicenseInfo(defaultLicense);
+                    if (!info) return null;
+                    return (
+                      <div className="bg-slate-50 rounded-lg p-3 border border-slate-200/80 text-xs">
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center gap-1.5">
+                            <strong className="text-slate-800">{info.name || info.short_name}</strong>
+                            {info.is_custom && (
+                              <span className="text-[10px] bg-slate-200 text-slate-700 font-semibold px-1.5 py-0.5 rounded">
+                                Custom
+                              </span>
+                            )}
+                          </div>
+                          {info.url && (
+                            <a
+                              href={info.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[11px] text-gold-dark hover:underline flex items-center gap-1"
+                            >
+                              Legal terms <ExternalLink className="w-3 h-3" />
+                            </a>
+                          )}
+                        </div>
+                        <p className="text-slate-600 text-[11px] leading-relaxed m-0">
+                          {info.description || "No description provided."}
+                        </p>
+                      </div>
+                    );
+                  })()}
+
+                  {allLicenses.some((l) => l.is_custom) && (
+                    <div className="border-t border-slate-100 pt-3 space-y-2">
+                      <p className="text-[11px] font-semibold text-slate-600 m-0">
+                        Custom Licenses
+                      </p>
+                      <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                        {allLicenses
+                          .filter((l) => l.is_custom)
+                          .map((lic) => (
+                            <div
+                              key={lic.key}
+                              className="flex items-center justify-between gap-2 bg-slate-50 border border-slate-200/80 rounded-lg px-2.5 py-1.5 text-xs"
+                            >
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-semibold text-slate-800 truncate">
+                                    {lic.name}
+                                  </span>
+                                  <span className="text-[10px] text-slate-500 font-mono">
+                                    {lic.key}
+                                  </span>
+                                  <span
+                                    className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
+                                      lic.is_active !== false
+                                        ? "bg-emerald-50 text-emerald-700"
+                                        : "bg-slate-200 text-slate-600"
+                                    }`}
+                                  >
+                                    {lic.is_active !== false ? "Active" : "Inactive"}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => startEditCustomLicense(lic)}
+                                  title="Edit license"
+                                  className="p-1 rounded text-slate-500 hover:text-navy hover:bg-slate-200/60 cursor-pointer"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleCustomLicenseActive(lic)}
+                                  disabled={togglingLicenseKey === lic.key}
+                                  title={lic.is_active !== false ? "Deactivate license" : "Activate license"}
+                                  className={`p-1 rounded cursor-pointer disabled:opacity-50 ${
+                                    lic.is_active !== false
+                                      ? "text-amber-600 hover:bg-amber-50"
+                                      : "text-emerald-600 hover:bg-emerald-50"
+                                  }`}
+                                >
+                                  {togglingLicenseKey === lic.key ? (
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  ) : lic.is_active !== false ? (
+                                    <XCircle className="w-3.5 h-3.5" />
+                                  ) : (
+                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                  )}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteCustomLicense(lic.key)}
+                                  disabled={deletingLicenseKey === lic.key}
+                                  title="Delete custom license"
+                                  className="p-1 rounded text-red-500 hover:text-red-700 hover:bg-red-50 disabled:opacity-50 cursor-pointer"
+                                >
+                                  {deletingLicenseKey === lic.key ? (
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                <span className="text-[11px] text-slate-400">Applies to all new uploads</span>
+                <button
+                  type="button"
+                  onClick={handleUpdateDefaultLicense}
+                  disabled={savingLicense}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-navy text-white text-xs font-semibold hover:bg-navy-light disabled:opacity-50 transition cursor-pointer shadow-xs"
+                >
+                  {savingLicense ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5 text-gold" />}
+                  Update License
                 </button>
               </div>
             </div>

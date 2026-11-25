@@ -42,21 +42,29 @@ export async function getAccessRequestDetail(requestId) {
 }
 
 export async function decideAccessRequestAsOwner(requestId, payload) {
+  const rawDecision = typeof payload === "string"
+    ? payload
+    : payload?.decision || payload?.vote || payload?.status;
+  const decision = rawDecision === "approved" || rawDecision === "approve"
+    ? "approve"
+    : rawDecision === "rejected" || rawDecision === "reject"
+      ? "reject"
+      : rawDecision;
+
+  if (decision !== "approve" && decision !== "reject") {
+    throw new Error("A valid access decision is required.");
+  }
+
   let body = {};
-  if (typeof payload === "string") {
-    body = {
-      decision: payload,
-      vote: payload,
-      status: payload,
-    };
-  } else if (payload && typeof payload === "object") {
+  if (payload && typeof payload === "object") {
     body = {
       ...payload,
-      decision: payload.decision || payload.vote || payload.status,
-      vote: payload.vote || payload.decision,
-      status: payload.status || payload.decision,
     };
   }
+  body.decision = decision;
+  delete body.vote;
+  delete body.status;
+
   const { data } = await client.post(`/sharing/access-requests/${requestId}/owner-decision/`, body);
   return data;
 }

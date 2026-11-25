@@ -38,6 +38,8 @@ function formatDate(dateString) {
 const TABS = [
   { id: "datasets", label: "Review Datasets" },
   { id: "content-updates", label: "Content Updates" },
+  { id: "revision-requests", label: "Revision Requests" },
+  { id: "access-requests", label: "Access Requests" },
   { id: "my-reviews", label: "My Reviews" },
 ];
 
@@ -233,7 +235,10 @@ export default function ReviewerQueuePage() {
     const handler = voterMap[type];
     if (!handler) return;
     try {
-      await handler.fn(itemId, { vote, comment });
+      const backendVote = type === "access-requests"
+        ? (vote === "approved" ? "approve" : "reject")
+        : vote;
+      await handler.fn(itemId, { vote: backendVote, comment });
       addToast(`Vote recorded: ${vote}`, "success");
       handler.setter((s) => s.filter((item) => String(item.id || item.request_id || item.update_id) !== String(itemId)));
     } catch (err) {

@@ -95,7 +95,6 @@ export default function ResearcherDashboardPage() {
   const [activityError, setActivityError] = useState(null);
 
   const [discoverFeed, setDiscoverFeed] = useState(null);
-  const [showAllFeed, setShowAllFeed] = useState(false);
   const [showAllRecent, setShowAllRecent] = useState(false);
 
   // Single source of truth — mirrors the backend's is_profile_complete() exactly.
@@ -546,7 +545,7 @@ export default function ResearcherDashboardPage() {
         ) : (
           <div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {feed.slice(0, showAllFeed ? 20 : 6).map((item) => (
+              {feed.slice(0, 6).map((item) => (
                 <div
                   key={item.id}
                   onClick={() => navigate(`/datasets/${item.id}`)}
@@ -586,17 +585,6 @@ export default function ResearcherDashboardPage() {
                 </div>
               ))}
             </div>
-            {feed.length > 6 && (
-              <div className="mt-4 text-center">
-                <button
-                  type="button"
-                  onClick={() => setShowAllFeed((prev) => !prev)}
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-gold-dark hover:text-navy px-4 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition cursor-pointer"
-                >
-                  <span>{showAllFeed ? "Show Less" : `View All (${feed.length} Recommendations)`}</span>
-                </button>
-              </div>
-            )}
           </div>
         )}
       </section>

@@ -161,7 +161,19 @@ export default function NotificationsPage() {
       handleMarkRead(notification.id);
     }
     if (notification.request_id) {
-      navigate(`/access-management/requests/${notification.request_id}`);
+      if (String(notification.link_path || "").includes("review-queue")) {
+        navigate(notification.link_path);
+      } else {
+        navigate(`/sharing/access-requests/${notification.request_id}/decision`);
+      }
+      return;
+    }
+    if (
+      String(notification.type || notification.notification_type || "").includes("access_request") &&
+      notification.link_path &&
+      !notification.link_path.startsWith("/api/")
+    ) {
+      navigate(notification.link_path);
       return;
     }
     const datasetId = getDatasetIdFromNotification(notification);
@@ -277,7 +289,16 @@ export default function NotificationsPage() {
 
                           <button
                             type="button"
-                            onClick={() => setExpandedNotifId(isExpanded ? null : n.id)}
+                            onClick={() => {
+                              const isAccessRequest =
+                                String(n.type || n.notification_type || "").includes("access_request") ||
+                                Boolean(n.request_id);
+                              if (isAccessRequest) {
+                                handleActionClick(n);
+                              } else {
+                                setExpandedNotifId(isExpanded ? null : n.id);
+                              }
+                            }}
                             className={`inline-flex items-center gap-1 border rounded-lg px-2.5 py-1 text-xs font-semibold transition cursor-pointer ${
                               isExpanded
                                 ? "bg-gold text-white border-gold shadow-xs"

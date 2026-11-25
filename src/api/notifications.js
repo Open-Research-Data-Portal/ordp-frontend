@@ -249,7 +249,13 @@ export function normalizeNotification(item, user) {
     item.request_id ||
     item.requestId ||
     item.access_request_id ||
-    (isAccessRequest ? (item.target_id || item.object_id || item.data?.request_id || item.data?.id) : null);
+    (isAccessRequest ? (
+      item.target_id ||
+      item.object_id ||
+      item.data?.request_id ||
+      item.data?.id ||
+      String(item.link_path || "").match(/access-requests\/([^/?]+)/)?.[1]
+    ) : null);
 
   // Determine user-friendly action title
   const title = getNotificationActionTitle(item, type, textBlob);
@@ -258,8 +264,13 @@ export function normalizeNotification(item, user) {
   // Resolve link_path for navigation
   const datasetId = getDatasetIdFromNotification(item);
   let link_path = item.link_path || item.action_url || item.action_link || item.url || null;
-  if (isAccessRequest && requestId) {
+  const reviewerAccessRequest = isAccessRequest && String(link_path || "").includes("/admin-panel/access-requests/");
+  if (reviewerAccessRequest) {
+    link_path = "/reviewer/review-queue?tab=access-requests";
+  } else if (isAccessRequest && requestId) {
     link_path = `/sharing/access-requests/${requestId}/decision`;
+  } else if (isAccessRequest && link_path && !link_path.startsWith("/api/")) {
+    link_path = link_path;
   } else if (datasetId) {
     link_path = `/datasets/${datasetId}`;
   } else if (!link_path && type.startsWith("category_")) {

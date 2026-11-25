@@ -1044,3 +1044,21 @@ export async function updateAdminLicensingSettings(default_license) {
   const { data } = await client.post("/admin-panel/settings/licensing/", { default_license });
   return data;
 }
+
+export async function createAdminCustomLicense(payload) {
+  const { data } = await client.post("/admin-panel/settings/licensing/licenses/", payload);
+  return data;
+}
+
+export async function updateAdminCustomLicense(licenseKey, payload) {
+  const { data } = await client.patch(
+    `/admin-panel/settings/licensing/licenses/${encodeURIComponent(licenseKey)}/`,
+    payload
+  );
+  return data;
+}
+
+export async function deleteAdminCustomLicense(licenseKey) {
+  const { data } = await client.delete(`/admin-panel/settings/licensing/licenses/${encodeURIComponent(licenseKey)}/`);
+  return data;
+}

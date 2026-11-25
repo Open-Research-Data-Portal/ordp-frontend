@@ -420,18 +420,23 @@ export default function ReviewerQueuePage() {
               )}
 
               {activeTab === "access-requests" && (
-                <VoteTable
-                  type="access-requests"
-                  items={accessRequests}
-                  emptyTitle="No pending access requests"
-                  emptyDesc="No restricted dataset access requests awaiting review."
-                  idKey="request_id"
-                  titleKey="dataset_title"
-                  descKey="purpose"
-                  actionId={actionId}
-                  onVote={handleVote}
-                  onEmptyAction={() => setTab("datasets")}
-                />
+                <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+                  <h3 className="text-lg font-bold text-navy">Access requests moved</h3>
+                  <p className="mx-auto mt-2 max-w-md text-sm text-slate-600">
+                    Review permission requests in Access Management. Legacy share-queue voting is no longer used.
+                  </p>
+                  <Link
+                    to="/access-management?tab=Access%20Requests"
+                    className="mt-5 inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
+                  >
+                    Open Access Management
+                  </Link>
+                  {accessRequests?.length > 0 && (
+                    <p className="mt-3 text-xs text-slate-500">
+                      {accessRequests.length} pending request{accessRequests.length === 1 ? "" : "s"} available there.
+                    </p>
+                  )}
+                </div>
               )}
 
               {activeTab === "my-reviews" && (
